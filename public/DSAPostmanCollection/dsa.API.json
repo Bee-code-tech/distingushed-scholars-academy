@@ -1,0 +1,461 @@
+{
+  "info": {
+    "_postman_id": "c72dd6f6-ff87-4be1-9b75-7570f93a1d99",
+    "name": "Dsa",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "48256743"
+  },
+  "item": [
+    {
+      "name": "auth",
+      "item": [
+        {
+          "name": "register",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"User Name\",\n    \"email\": \"codepulseacad@gmail.com\",\n    \"password\": \"password123\",\n    \"phoneNumber\": \"1234567890\",\n    \"level\": \"jamb\",\n    \"subjectsOfInterest\": [\"Mathematics\", \"English\", \"Physics\", \"Chemistry\"]\n  }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:5001/api/auth/register",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "5001",
+              "path": ["api", "auth", "register"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "verify",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": " {\n    \"email\": \"babawaleolatunji64@gmail.com\",\n    \"otp\": \"411270\"\n  }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{URL}}/auth/verify-otp",
+              "host": ["{{URL}}"],
+              "path": ["auth", "verify-otp"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "login",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "  {\n    \"email\": \"babawaleolatunji64@gmail.com\",\n    \"password\": \"newPassword123\"\n  }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{URL}}/auth/login",
+              "host": ["{{URL}}"],
+              "path": ["auth", "login"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "forgot",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": " {\n    \"email\": \"babawaleolatunji64@gmail.com\"\n  }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{URL}}/auth/forgot-password",
+              "host": ["{{URL}}"],
+              "path": ["auth", "forgot-password"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "reset-password",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": " {\n    \"newPassword\": \"newPassword123\"\n  }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{URL}}/auth/reset-password/{{token}}",
+              "host": ["{{URL}}"],
+              "path": ["auth", "reset-password", "{{token}}"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "program",
+      "item": [
+        {
+          "name": "create-program",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"JAMB Countdown\",\n    \"endDate\": \"2026-04-20T00:00:00.000Z\"\n  }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{URL}}/programs",
+              "host": ["{{URL}}"],
+              "path": ["programs"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "get-programs",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"JAMB Countdown\",\n    \"endDate\": \"2026-04-20T00:00:00.000Z\"\n  }"
+            },
+            "url": {
+              "raw": "{{URL}}/programs",
+              "host": ["{{URL}}"],
+              "path": ["programs"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "quizzes",
+      "item": [
+        {
+          "name": "create(admin)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{TOKEN}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"title\": \"JAMB Mock 2026\",\n    \"description\": \"Comprehensive mock for JAMB candidates\",\n    \"type\": \"general\",\n    \"isPaid\": false,\n    \n     \"accessCode\": \"DSA-123456\",\n    \"subjects\": [\n      {\n        \"name\": \"Physics\",\n        \"timeLimit\": 40,\n        \"questions\": [\n          {\n            \"questionText\": \"What is 2 + 2?\",\n            \"options\": [\"3\", \"4\", \"5\", \"6\"],\n            \"correctAnswer\": 3,\n            \"explanation\": \"Basic addition\",\n            \"marks\": 2\n          },\n          {\n            \"questionText\": \"What is 5 + 2?\",\n            \"options\": [\"3\", \"4\", \"5\", \"7\"],\n            \"correctAnswer\": 5,\n            \"explanation\": \"Basic addition\",\n            \"marks\": 2\n          }\n        ]\n      }\n    ]\n  }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{URL}}/quizzes",
+              "host": ["{{URL}}"],
+              "path": ["quizzes"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "get-quizzes(admin)",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{TOKEN}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"title\": \"JAMB Mock 2026\",\n    \"description\": \"Comprehensive mock for JAMB candidates\",\n    \"type\": \"general\",\n    \"isPaid\": true,\n    \"amount\": 5000,\n    \"subjects\": [\n      {\n        \"name\": \"Mathematics\",\n        \"timeLimit\": 40,\n        \"questions\": [\n          {\n            \"questionText\": \"What is 2 + 2?\",\n            \"options\": [\"3\", \"4\", \"5\", \"6\"],\n            \"correctAnswer\": \"4\",\n            \"explanation\": \"Basic addition\",\n            \"marks\": 2\n          },\n          {\n            \"questionText\": \"What is 5 + 2?\",\n            \"options\": [\"3\", \"4\", \"5\", \"7\"],\n            \"correctAnswer\": \"7\",\n            \"explanation\": \"Basic addition\",\n            \"marks\": 2\n          }\n        ]\n      }\n    ]\n  }"
+            },
+            "url": {
+              "raw": "{{URL}}/quizzes",
+              "host": ["{{URL}}"],
+              "path": ["quizzes"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "get-quizzes(student)",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5YWUyNTk5MjdiNjNlODc1ZTBjNjY5MCIsImlhdCI6MTc3MzAyMDYxOCwiZXhwIjoxNzc1NjEyNjE4fQ.Fc7L4PIOOPmjAsl-TZ56pHjfxToDu0Ysml8MYh4Cfdw",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"title\": \"JAMB Mock 2026\",\n    \"description\": \"Comprehensive mock for JAMB candidates\",\n    \"type\": \"general\",\n    \"isPaid\": true,\n    \"amount\": 5000,\n    \"subjects\": [\n      {\n        \"name\": \"Mathematics\",\n        \"timeLimit\": 40,\n        \"questions\": [\n          {\n            \"questionText\": \"What is 2 + 2?\",\n            \"options\": [\"3\", \"4\", \"5\", \"6\"],\n            \"correctAnswer\": \"4\",\n            \"explanation\": \"Basic addition\",\n            \"marks\": 2\n          },\n          {\n            \"questionText\": \"What is 5 + 2?\",\n            \"options\": [\"3\", \"4\", \"5\", \"7\"],\n            \"correctAnswer\": \"7\",\n            \"explanation\": \"Basic addition\",\n            \"marks\": 2\n          }\n        ]\n      }\n    ]\n  }"
+            },
+            "url": {
+              "raw": "{{URL}}/quizzes/link/{{link}}",
+              "host": ["{{URL}}"],
+              "path": ["quizzes", "link", "{{link}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "verify-code(student)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5YWUyNTk5MjdiNjNlODc1ZTBjNjY5MCIsImlhdCI6MTc3MzAyMDYxOCwiZXhwIjoxNzc1NjEyNjE4fQ.Fc7L4PIOOPmjAsl-TZ56pHjfxToDu0Ysml8MYh4Cfdw",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": " {\n    \"link\": \"333c4cb5dc6446957c63bd68\",\n    \"accessCode\": \"DSA-123456\"\n  }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{URL}}/quizzes/verify-code",
+              "host": ["{{URL}}"],
+              "path": ["quizzes", "verify-code"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "edit-quizzes(admin)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{TOKEN}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"title\": \"JAMB Mock 2026\",\n    \"description\": \"Comprehensive mock for JAMB candidates\",\n    \"type\": \"general\",\n    \"isPaid\": false,\n    \n     \"accessCode\": \"DSA-123456\",\n    \"subjects\": [\n      {\n        \"name\": \"Physics\",\n        \"timeLimit\": 40,\n        \"questions\": [\n          {\n            \"questionText\": \"What is 2 + 2?\",\n            \"options\": [\"3\", \"4\", \"5\", \"6\"],\n            \"correctAnswer\": \"4\",\n            \"explanation\": \"Basic addition\",\n            \"marks\": 2\n          },\n          {\n            \"questionText\": \"What is 5 + 2?\",\n            \"options\": [\"3\", \"4\", \"5\", \"7\"],\n            \"correctAnswer\": \"4\",\n            \"explanation\": \"Basic addition\",\n            \"marks\": 10\n          }\n        ]\n      }\n    ]\n  }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{URL}}/quizzes/{{id}}",
+              "host": ["{{URL}}"],
+              "path": ["quizzes", "{{id}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "delete-quizzes(admin)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{TOKEN}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "DELETE",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": ""
+            },
+            "url": {
+              "raw": "{{URL}}/quizzes/{{id}}",
+              "host": ["{{URL}}"],
+              "path": ["quizzes", "{{id}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "activate/deactivate-quizzes(admin)",
+          "request": {
+            "method": "GET",
+            "header": []
+          },
+          "response": []
+        },
+        {
+          "name": "submit-quiz(student)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5YWUyNTk5MjdiNjNlODc1ZTBjNjY5MCIsImlhdCI6MTc3MzAyMDYxOCwiZXhwIjoxNzc1NjEyNjE4fQ.Fc7L4PIOOPmjAsl-TZ56pHjfxToDu0Ysml8MYh4Cfdw",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"timeTaken\": 45,\n  \"answers\": [\n    {\n      \"questionId\": \"69ae2b449ad8d0aa0925535f\",\n      \"selectedOption\": 1\n    },\n    {\n      \"questionId\": \"69ae2b449ad8d0aa09255360\",\n      \"selectedOption\": 3\n    }\n  ]\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{URL}}/quizzes/{{id}}/submit",
+              "host": ["{{URL}}"],
+              "path": ["quizzes", "{{id}}", "submit"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "leaderboard",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5YWUyNTk5MjdiNjNlODc1ZTBjNjY5MCIsImlhdCI6MTc3MzAyMDYxOCwiZXhwIjoxNzc1NjEyNjE4fQ.Fc7L4PIOOPmjAsl-TZ56pHjfxToDu0Ysml8MYh4Cfdw",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{URL}}/quizzes/{{id}}/leaderboard",
+              "host": ["{{URL}}"],
+              "path": ["quizzes", "{{id}}", "leaderboard"]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "packages": {},
+        "requests": {},
+        "exec": [""]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "packages": {},
+        "requests": {},
+        "exec": [""]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "URL",
+      "value": ""
+    },
+    {
+      "key": "TOKEN",
+      "value": "",
+      "type": "default"
+    },
+    {
+      "key": "id",
+      "value": "",
+      "type": "default"
+    }
+  ]
+}
