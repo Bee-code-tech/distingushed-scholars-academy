@@ -195,14 +195,10 @@ import Hero02 from '../../imges/hero-02.jpg'
 import Hero03 from '../../imges/hero-03.jpg'
 
 const formulas = [
-  { text: 'E = mc²', top: '10%', left: '5%', rotate: -15 },
-  { text: 'H₂O + CO₂', top: '15%', left: '85%', rotate: 10 },
-  { text: 'a² + b² = c²', top: '75%', left: '8%', rotate: 20 },
-  { text: 'F = ma', top: '85%', left: '80%', rotate: -10 },
-  { text: '∫(x) dx', top: '40%', left: '92%', rotate: 15 },
-  { text: 'PV = nRT', top: '50%', left: '4%', rotate: -5 },
-  { text: 'Δy/Δx', top: '25%', left: '45%', rotate: 12 },
-  { text: 'λ = h/p', top: '70%', left: '40%', rotate: -8 },
+  { text: 'E = mc²', top: '12%', left: '5%', rotate: -15 },
+  { text: 'a² + b² = c²', top: '78%', left: '7%', rotate: 12 },
+  { text: '∫(x) dx', top: '18%', left: '88%', rotate: 10 },
+  { text: 'F = ma', top: '82%', left: '82%', rotate: -10 },
 ]
 
 export default function Hero() {
@@ -216,9 +212,7 @@ export default function Hero() {
         {formulas.map((formula, index) => (
           <div
             key={index}
-            data-aos='fade-in'
-            data-aos-delay={100 * index}
-            className='absolute font-serif italic text-blue-900 text-lg md:text-2xl whitespace-nowrap hidden sm:block opacity-[0.12]'
+            className='absolute font-serif italic text-blue-900 text-lg md:text-2xl whitespace-nowrap hidden sm:block opacity-[0.06]'
             style={{
               top: formula.top,
               left: formula.left,

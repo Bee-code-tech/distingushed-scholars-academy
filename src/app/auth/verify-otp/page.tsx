@@ -15,6 +15,8 @@ import {
   CheckCircle2,
 } from 'lucide-react'
 
+import { dsaApi } from '@/lib/api'
+import { setSession } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
 import {
   Form,
@@ -96,21 +98,14 @@ export default function VerifyOTP() {
     setApiSuccess(null)
 
     try {
-      const response = await fetch(
-        'https://api.distinguishedscholarsacademy.com/api/auth/send-otp',
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email }),
-        },
-      )
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.message || 'Failed to resend code')
+      await dsaApi.auth.sendOtp(email)
 
       setApiSuccess('A fresh verification code has been sent.')
       startCooldown()
-    } catch (error: any) {
-      setApiError(error.message)
+    } catch (error) {
+      setApiError(
+        error instanceof Error ? error.message : 'Failed to resend code',
+      )
     } finally {
       setIsResending(false)
     }
@@ -123,28 +118,25 @@ export default function VerifyOTP() {
     setIsLoading(true)
 
     try {
-      const response = await fetch(
-        'https://api.distinguishedscholarsacademy.com/api/auth/verify-otp',
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: email,
-            otp: values.otp,
-          }),
-        },
-      )
+      const data = await dsaApi.auth.verifyOtp(email, values.otp)
 
-      const data = await response.json()
-      if (!response.ok)
-        throw new Error(data.message || 'Invalid code. Please try again.')
-
-      localStorage.setItem('dsa_auth_token', data.token)
+      // Persist under the canonical key (`dsa_token`) so the dashboard and
+      // API client actually find the session. Previously stored as
+      // `dsa_auth_token`, which nothing else read — users got bounced to login.
+      if (data.token) {
+        setSession({
+          token: data.token,
+          user: data.user,
+          role: data.user?.role || 'student',
+        })
+      }
       localStorage.removeItem('dsa_pending_email')
       localStorage.removeItem('otp_expiry')
       router.push('/dashboard?welcome=true')
-    } catch (error: any) {
-      setApiError(error.message)
+    } catch (error) {
+      setApiError(
+        error instanceof Error ? error.message : 'Invalid code. Please try again.',
+      )
       form.setValue('otp', '')
     } finally {
       setIsLoading(false)

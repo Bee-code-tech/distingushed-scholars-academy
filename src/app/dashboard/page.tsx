@@ -323,6 +323,7 @@ import {
 
 // API Utility
 import { dsaApi } from '@/lib/api'
+import { getToken, clearSession } from '@/lib/auth'
 
 // UI Components
 import { Button } from '@/components/ui/button'
@@ -376,7 +377,7 @@ export default function AcademyDashboard() {
 
   // Memoized logout to prevent unnecessary re-renders
   const handleLogout = useCallback(() => {
-    localStorage.removeItem('dsa_token')
+    clearSession()
     router.push('/auth/signin')
   }, [router])
 
@@ -384,7 +385,7 @@ export default function AcademyDashboard() {
     setMounted(true)
 
     const initDashboard = async () => {
-      const token = localStorage.getItem('dsa_token')
+      const token = getToken()
 
       if (!token) {
         router.push('/auth/signin')

@@ -14,6 +14,7 @@ import {
   AlertCircle,
 } from 'lucide-react'
 
+import { dsaApi } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import {
   Form,
@@ -51,32 +52,9 @@ export default function ForgotPassword() {
     defaultValues: { email: '' },
   })
 
-  // Core function to call the API
-  const sendResetLink = async (email: string) => {
-    const response = await fetch(
-      'https://api.distinguishedscholarsacademy.com/api/auth/forgot-password',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      },
-    )
-
-    // Check if the response is actually JSON before parsing
-    const contentType = response.headers.get('content-type')
-    if (contentType && contentType.indexOf('application/json') !== -1) {
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.message || 'Something went wrong')
-      return data
-    } else {
-      // If server returns HTML (like a 404 or 500), handle it gracefully
-      if (!response.ok)
-        throw new Error(
-          `Server Error: ${response.status}. Please try again later.`,
-        )
-      return {}
-    }
-  }
+  // Core function to call the API (routed through the shared client, which
+  // already handles non-JSON error bodies and consistent error messages).
+  const sendResetLink = (email: string) => dsaApi.auth.forgotPassword(email)
 
   // STEP 1: Initial Submission
   async function onEmailSubmit(values: z.infer<typeof emailSchema>) {

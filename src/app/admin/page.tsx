@@ -396,6 +396,7 @@ import RevenueControls from './components/RevenueControls'
 import RolesPermissions from './components/RolesPermissions'
 import Settings from './components/Settings'
 import { AnimatePresence, motion } from 'framer-motion'
+import { isAdmin, clearSession } from '@/lib/auth'
 
 type AdminTab =
   | 'dashboard'
@@ -418,10 +419,8 @@ export default function AdminAdmin() {
   const router = useRouter()
 
   useEffect(() => {
-    // 1. Check for Auth
-    const userRole = localStorage.getItem('user_role')
-
-    if (userRole !== 'super_admin') {
+    // 1. Check for Auth (UX gate only — backend enforces the real check)
+    if (!isAdmin()) {
       // If not admin, kick them out
       router.push('/unauthorized')
     } else {
@@ -589,8 +588,8 @@ export default function AdminAdmin() {
       <div className='mt-auto pt-6 border-t border-white/10'>
         <button
           onClick={() => {
-            localStorage.removeItem('user_role')
-            router.push('/login')
+            clearSession()
+            router.push('/auth/signin')
           }}
           className='w-full flex items-center gap-3 px-4 py-3 rounded-xl text-rose-200/50 hover:bg-rose-500 hover:text-white transition-all group font-bold text-[11px] uppercase tracking-widest'
         >

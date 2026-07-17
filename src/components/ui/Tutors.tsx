@@ -105,7 +105,7 @@ export default function Tutors() {
             <div
               key={index}
               data-aos='fade-up'
-              data-aos-delay={index * 100}
+              data-aos-delay={index * 60}
               data-aos-duration='500'
               className='group relative p-1 bg-gray-50 rounded-[40px] hover:bg-white hover:shadow-[0_30px_60px_rgba(0,46,255,0.12)] transition-all duration-500 border border-transparent hover:border-blue-50'
             >
@@ -119,6 +119,7 @@ export default function Tutors() {
                       src={tutor.img}
                       alt={tutor.name}
                       fill
+                      sizes='(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw'
                       className='object-cover object-top grayscale-50 group-hover:grayscale-0 transition-all duration-500 group-hover:scale-110'
                     />
                   </div>

@@ -83,7 +83,7 @@ export default function WhyChooseDSA() {
               <div
                 key={`feature-${index}`}
                 data-aos='fade-up'
-                data-aos-delay={index * 100}
+                data-aos-delay={index * 60}
                 data-aos-duration='500'
                 className='group p-8 rounded-2xl bg-[#f8f9ff] border border-transparent hover:border-[#002EFF]/30 hover:bg-white hover:shadow-2xl transition-all duration-300 ease-out'
               >

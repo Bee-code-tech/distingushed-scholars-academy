@@ -106,6 +106,7 @@ export default function Header() {
                   src={DSALogo}
                   alt='DSA Logo'
                   fill
+                  sizes='48px'
                   className='object-contain'
                   priority
                 />

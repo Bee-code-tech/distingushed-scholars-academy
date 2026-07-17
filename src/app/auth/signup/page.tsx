@@ -41,6 +41,7 @@ import {
 import { Card, CardContent } from '@/components/ui/card'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { cn } from '@/lib/utils'
+import { dsaApi } from '@/lib/api'
 
 const SUBJECT_OPTIONS = [
   'Mathematics',
@@ -139,28 +140,18 @@ export default function DSASignUp() {
     setApiError(null)
     setIsLoading(true)
     try {
-      const response = await fetch(
-        'https://api.distinguishedscholarsacademy.com/api/auth/register',
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: values.fullname,
-            username: values.username.toLowerCase(),
-            email: values.email.toLowerCase(),
-            password: values.password,
-            phoneNumber: values.phone,
-            level: values.examType,
-            subjectsOfInterest: values.subjects,
-            role: 'student',
-            isDsaStudent: values.isDSA === 'yes',
-            dsaId: values.studentId || '',
-          }),
-        },
-      )
-
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.message || 'Registration failed')
+      await dsaApi.auth.register({
+        name: values.fullname,
+        username: values.username.toLowerCase(),
+        email: values.email.toLowerCase(),
+        password: values.password,
+        phoneNumber: values.phone,
+        level: values.examType,
+        subjectsOfInterest: values.subjects,
+        role: 'student',
+        isDsaStudent: values.isDSA === 'yes',
+        dsaId: values.studentId || '',
+      })
 
       localStorage.setItem('dsa_pending_email', values.email)
       router.push('/auth/verify-otp')

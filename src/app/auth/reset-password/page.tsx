@@ -15,6 +15,7 @@ import {
   AlertCircle,
 } from 'lucide-react'
 
+import { dsaApi } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import {
   Form,
@@ -78,44 +79,14 @@ export default function SetNewPassword() {
     setError('')
 
     try {
-      const response = await fetch(
-        `https://api.distinguishedscholarsacademy.com/api/auth/reset-password/${token}`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-          },
-          body: JSON.stringify({
-            newPassword: values.password,
-          }),
-        },
-      )
-
-      // --- ROBUST JSON CHECK ---
-      const contentType = response.headers.get('content-type')
-      let data
-
-      if (contentType && contentType.includes('application/json')) {
-        data = await response.json()
-      } else {
-        // Handle non-JSON responses (like HTML 404/500 pages)
-        throw new Error(
-          `Server returned an unexpected error (${response.status}). Please try again later.`,
-        )
-      }
-
-      if (!response.ok) {
-        throw new Error(
-          data.message ||
-            'Failed to reset password. The link may have expired.',
-        )
-      }
+      await dsaApi.auth.resetPassword({ newPassword: values.password, token })
 
       await new Promise((resolve) => setTimeout(resolve, 800))
-      router.push('/auth/login?reset=success')
-    } catch (err: any) {
-      setError(err.message || 'An unexpected error occurred.')
+      router.push('/auth/signin?reset=success')
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'An unexpected error occurred.',
+      )
     } finally {
       setLoading(false)
     }

@@ -250,7 +250,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Zap, Clock, BarChart2, Book, ArrowRight, LogIn } from 'lucide-react'
+import { Zap, Clock, BarChart2, Book, ArrowRight } from 'lucide-react'
 
 const quizFeatures = [
   {
@@ -296,37 +296,18 @@ export default function Quiz360Pro() {
       id='Quiz360Pro'
       className='w-full py-24 bg-white relative overflow-hidden'
     >
-      {/* --- ACADEMIC BACKGROUND ELEMENTS --- */}
-      <style jsx>{`
-        @keyframes float {
-          0%,
-          100% {
-            transform: translateY(0) rotate(var(--rot));
-          }
-          50% {
-            transform: translateY(-20px) rotate(var(--rot));
-          }
-        }
-        .formula-float {
-          animation: float 5s ease-in-out infinite;
-        }
-      `}</style>
-
-      <div className='absolute inset-0 pointer-events-none select-none overflow-hidden opacity-10'>
+      {/* --- ACADEMIC BACKGROUND ELEMENTS (static, subtle) --- */}
+      <div className='absolute inset-0 pointer-events-none select-none overflow-hidden opacity-[0.04]'>
         {bgFormulas.map((f, i) => (
           <div
             key={`formula-${i}`}
-            className='absolute font-serif italic text-[#002EFF] text-5xl formula-float'
-            style={
-              {
-                top: f.top,
-                left: f.left,
-                right: f.right,
-                '--rot': `${f.rotate}deg`,
-                animationDelay: `${i}s`,
-                animationDuration: `${5 + i}s`,
-              } as any
-            }
+            className='absolute font-serif italic text-[#002EFF] text-5xl'
+            style={{
+              top: f.top,
+              left: f.left,
+              right: f.right,
+              transform: `rotate(${f.rotate}deg)`,
+            }}
           >
             {f.text}
           </div>
@@ -403,12 +384,12 @@ export default function Quiz360Pro() {
           data-aos-delay='400'
           className='mt-16 flex justify-center'
         >
-          {/* Direct Link to Login - No Modal */}
+          {/* Goes to the Quiz360Pro landing page (explains the product before login) */}
           <Link
-            href='/auth/signin'
+            href='/quiz360pro'
             className='group px-12 py-5 bg-[#FCB900] text-black font-black rounded-2xl shadow-xl shadow-yellow-100 hover:bg-[#002EFF] hover:text-white transition-all duration-300 flex items-center gap-4 active:scale-95'
           >
-            START QUIZ NOW
+            EXPLORE QUIZ360PRO
             <ArrowRight
               size={22}
               className='group-hover:translate-x-2 transition-transform'

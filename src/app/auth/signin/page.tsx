@@ -38,6 +38,14 @@ import {
 } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Checkbox } from '@/components/ui/checkbox'
+import { dsaApi } from '@/lib/api'
+import {
+  setSession,
+  rememberEmail,
+  getRememberedEmail,
+  ADMIN_BYPASS_ENABLED,
+  DEV_ADMIN_EMAIL,
+} from '@/lib/auth'
 
 const loginSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
@@ -65,7 +73,7 @@ function LoginContent() {
 
   // Initialize form with remembered email & check query params
   useEffect(() => {
-    const rememberedEmail = localStorage.getItem('dsa_remembered_email')
+    const rememberedEmail = getRememberedEmail()
     if (rememberedEmail) {
       form.setValue('email', rememberedEmail)
       form.setValue('rememberMe', true)
@@ -77,6 +85,9 @@ function LoginContent() {
     if (searchParams.get('verified') === 'true') {
       setSuccessMsg('Account verified successfully! You can now log in.')
     }
+    if (searchParams.get('expired') === 'true') {
+      setError('Your session expired. Please log in again.')
+    }
   }, [searchParams, form])
 
   async function onSubmit(values: z.infer<typeof loginSchema>) {
@@ -85,59 +96,40 @@ function LoginContent() {
     setSuccessMsg('')
 
     try {
-      // --- ADMIN BYPASS LOGIC ---
+      // --- DEV-ONLY ADMIN BYPASS ---
+      // Disabled by default. Enable locally with NEXT_PUBLIC_ENABLE_ADMIN_BYPASS=true.
+      // Remove entirely once the backend admin-login endpoint is live.
       if (
-        values.email === 'admin@dsa.com' &&
+        ADMIN_BYPASS_ENABLED &&
+        values.email === DEV_ADMIN_EMAIL &&
         values.password === 'dsaadminpass'
       ) {
-        localStorage.setItem('user_role', 'super_admin')
-        localStorage.setItem('dsa_token', 'admin-session-active')
-        document.cookie = 'admin_token=true; path=/; max-age=3600; SameSite=Lax'
+        setSession({ token: 'admin-session-active', role: 'super_admin' })
         setSuccessMsg('ADMIN ACCESS GRANTED. REDIRECTING...')
         setTimeout(() => router.push('/admin'), 800)
         return
       }
 
-      // --- PRODUCTION API LOGIN ---
-      const response = await fetch(
-        'https://api.distinguishedscholarsacademy.com/api/auth/login',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-          },
-          body: JSON.stringify({
-            email: values.email,
-            password: values.password,
-          }),
-        },
-      )
+      // --- PRODUCTION API LOGIN (routed through the shared client) ---
+      const data = await dsaApi.auth.login({
+        email: values.email,
+        password: values.password,
+      })
 
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Invalid email or password.')
-      }
-
-      // Handle Success & Persistence
       if (data.token) {
-        localStorage.setItem('dsa_token', data.token)
-        localStorage.setItem('dsa_user', JSON.stringify(data.user))
-        localStorage.setItem('user_role', data.user.role || 'student')
-
-        if (values.rememberMe) {
-          localStorage.setItem('dsa_remembered_email', values.email)
-        } else {
-          localStorage.removeItem('dsa_remembered_email')
-        }
+        setSession({
+          token: data.token,
+          user: data.user,
+          role: data.user?.role || 'student',
+        })
+        rememberEmail(values.email, !!values.rememberMe)
       }
 
       setSuccessMsg('Login successful! Redirecting...')
       router.push('/dashboard')
       router.refresh()
-    } catch (err: any) {
-      setError(err.message)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Invalid email or password.')
     } finally {
       setLoading(false)
     }

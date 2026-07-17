@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
+import { setSession, ADMIN_BYPASS_ENABLED, DEV_ADMIN_EMAIL } from '@/lib/auth'
 
 interface InputFieldProps {
   label: string
@@ -46,13 +47,15 @@ export default function AdminLogin() {
 
     await new Promise((resolve) => setTimeout(resolve, 1500))
 
+    // DEV-ONLY bypass. Disabled unless NEXT_PUBLIC_ENABLE_ADMIN_BYPASS=true.
+    // Replace this whole branch with a real backend admin-login call.
     if (
+      ADMIN_BYPASS_ENABLED &&
       values.username === 'admin' &&
-      values.email === 'admin@dsa.com' &&
+      values.email === DEV_ADMIN_EMAIL &&
       values.password === 'dsaadminpass'
     ) {
-      localStorage.setItem('user_role', 'super_admin')
-      document.cookie = 'admin_token=true; path=/; max-age=3600; SameSite=Lax'
+      setSession({ token: 'admin-session-active', role: 'super_admin' })
       setIsSuccess(true)
 
       setTimeout(() => {

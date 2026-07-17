@@ -141,6 +141,7 @@ export default function Testimonials() {
                     src={testimonials[index].image}
                     alt={testimonials[index].name}
                     fill
+                    sizes='(max-width: 768px) 100vw, 50vw'
                     className='object-cover object-top transition-transform duration-1000 group-hover:scale-110'
                   />
                 </div>

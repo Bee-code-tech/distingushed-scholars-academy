@@ -65,7 +65,7 @@ export default function BlogPosts() {
             <div
               key={`blog-post-${index}`}
               data-aos='fade-up'
-              data-aos-delay={index * 100}
+              data-aos-delay={index * 60}
               data-aos-duration='500'
               className='group bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-sm hover:shadow-2xl transition-all duration-300'
             >
