@@ -10,6 +10,7 @@ import * as z from 'zod'
 import {
   GraduationCap,
   ArrowRight,
+  ArrowLeft,
   User,
   Eye,
   EyeOff,
@@ -164,6 +165,19 @@ export default function DSASignUp() {
 
   return (
     <div className='min-h-screen bg-[#F8FAFF] py-8 px-4 flex flex-col items-center'>
+      <div className='w-full max-w-xl mb-4'>
+        <Link
+          href='/'
+          className='inline-flex items-center gap-2 px-4 py-2 bg-white text-slate-500 hover:text-[#002EFF] rounded-xl shadow-sm border border-slate-100 text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 group'
+        >
+          <ArrowLeft
+            size={14}
+            className='group-hover:-translate-x-1 transition-transform'
+          />
+          Back to Home
+        </Link>
+      </div>
+
       <div className='text-center mb-6'>
         <motion.div
           initial={{ scale: 0.9, opacity: 0 }}

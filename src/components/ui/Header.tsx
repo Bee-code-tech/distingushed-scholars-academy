@@ -151,8 +151,7 @@ export default function Header() {
 
             <div className='flex items-center gap-4'>
               <Link
-                href='https://wa.link/7wim2w'
-                target='_blank'
+                href='/auth/signup'
                 className='hidden md:flex items-center gap-2 px-6 py-3 bg-[#002EFF] text-white rounded-2xl font-black text-xs uppercase hover:bg-blue-600 transition-all active:scale-95 group'
               >
                 Enrol Now{' '}
@@ -286,8 +285,8 @@ export default function Header() {
                     </p>
                   </div>
                   <Link
-                    href='https://wa.link/7wim2w'
-                    target='_blank'
+                    href='/auth/signup'
+                    onClick={() => setOpen(false)}
                     className='w-full py-4 bg-[#FCB900] text-black rounded-2xl font-black uppercase tracking-widest text-[11px] text-center flex items-center justify-center gap-2 shadow-lg hover:brightness-105 active:scale-95 transition-all'
                   >
                     Enrol Now <ArrowRight size={16} />
