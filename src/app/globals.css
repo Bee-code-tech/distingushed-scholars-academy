@@ -14,30 +14,74 @@
 }
 
 /*
- * Calmer scroll (AOS) animations.
- * AOS defaults slide elements ~100px on entry, which reads as distracting.
- * These overrides shrink the travel distance so cards simply fade in place
- * with only a subtle 8px nudge. The doubled attribute selector raises
+ * Scroll (AOS) entrance animations.
+ * AOS ships a ~100px slide, which overshoots and reads as jumpy. These tune the
+ * travel to a confident 45px glide — enough movement to feel alive, short enough
+ * that a card never reads as "flying in". The doubled attribute selector raises
  * specificity above AOS's own initial-state rules; the .aos-animate reset
  * (higher specificity still) keeps the final resting position untouched.
  */
 [data-aos='fade-up'][data-aos='fade-up'] {
-  transform: translate3d(0, 8px, 0);
+  transform: translate3d(0, 45px, 0);
 }
 [data-aos='fade-down'][data-aos='fade-down'] {
-  transform: translate3d(0, -8px, 0);
+  transform: translate3d(0, -45px, 0);
 }
 [data-aos='fade-right'][data-aos='fade-right'] {
-  transform: translate3d(-8px, 0, 0);
+  transform: translate3d(-45px, 0, 0);
 }
 [data-aos='fade-left'][data-aos='fade-left'] {
-  transform: translate3d(8px, 0, 0);
+  transform: translate3d(45px, 0, 0);
 }
 [data-aos='zoom-in'][data-aos='zoom-in'] {
-  transform: scale(0.99);
+  transform: scale(0.92);
 }
 [data-aos='zoom-out'][data-aos='zoom-out'] {
-  transform: scale(1.01);
+  transform: scale(1.08);
+}
+
+/* Floating formula wallpaper — see components/ui/FormulaBackdrop.tsx */
+@keyframes dsa-float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(var(--rot, 0deg));
+    filter: drop-shadow(0 0 4px var(--glow, transparent));
+  }
+  50% {
+    transform: translateY(-22px) rotate(calc(var(--rot, 0deg) + 5deg));
+    filter: drop-shadow(0 0 16px var(--glow, transparent));
+  }
+}
+.dsa-formula {
+  animation: dsa-float 8s ease-in-out infinite;
+  transform: rotate(var(--rot, 0deg));
+}
+
+/*
+ * Safety net: AOS is switched off for prefers-reduced-motion (see AOSProvider),
+ * but its stylesheet still applies `opacity: 0` to every [data-aos] element and
+ * nothing ever adds .aos-animate to reveal them — so the whole page renders
+ * blank for those users. Force the resting state instead of animating to it.
+ */
+@media (prefers-reduced-motion: reduce) {
+  [data-aos] {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+  /* Decorative loops (floating formulas, spinning rings, pulses) hold still. */
+  .dsa-formula,
+  .animate-bounce-slow,
+  [class*='animate-'] {
+    animation: none !important;
+  }
+  .dsa-formula {
+    transform: rotate(var(--rot, 0deg)) !important;
+  }
+  html,
+  body {
+    scroll-behavior: auto !important;
+  }
 }
 
 /* globals.css */

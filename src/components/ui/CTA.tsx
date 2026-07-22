@@ -50,7 +50,10 @@ export default function FinalCTA() {
         }
       `}</style>
 
-      <div className='absolute inset-0 pointer-events-none select-none overflow-hidden'>
+      <div
+        aria-hidden='true'
+        className='absolute inset-0 pointer-events-none select-none overflow-hidden'
+      >
         {/* Decorative Circles */}
         <div className='absolute top-[-10%] left-[-5%] w-64 h-64 border-4 border-white/10 rounded-full' />
         <div className='absolute bottom-[-10%] right-[-5%] w-96 h-96 border-8 border-white/10 rounded-full' />

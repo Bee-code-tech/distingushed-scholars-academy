@@ -6,6 +6,14 @@ import { Play, Youtube } from 'lucide-react'
 import Clip1 from '../../imges/JAMB-Students-Must-Know.jpg'
 import Clip2 from '../../imges/solubility.jpg'
 import Clip3 from '../../imges/5-COMMON-ENGLISH-MISTAKES.jpg'
+import FormulaBackdrop, { type Formula } from './FormulaBackdrop'
+
+const backdropFormulas: Formula[] = [
+  { text: 'λ = v/f', top: '9%', left: '3%', rotate: -13 },
+  { text: 'Noun + Verb', top: '30%', right: '4%', rotate: 10, tone: 'gold' },
+  { text: 'M₁V₁ = M₂V₂', top: '62%', left: '2%', rotate: 8 },
+  { text: 'a² = b² + c²', top: '84%', right: '5%', rotate: -9 },
+]
 
 const clips = [
   {
@@ -37,8 +45,13 @@ export default function WatchUs() {
   if (!mounted) return null
 
   return (
-    <section id='watch-us' className='w-full py-24 bg-[#f8faff]'>
-      <div className='max-w-7xl mx-auto px-10 md:px-20'>
+    <section
+      id='watch-us'
+      className='relative w-full py-24 bg-[#f8faff] overflow-hidden'
+    >
+      <FormulaBackdrop formulas={backdropFormulas} />
+
+      <div className='relative z-10 max-w-7xl mx-auto px-10 md:px-20'>
         {/* TITLE SECTION */}
         <div className='text-center mb-16'>
           <h2

@@ -10,6 +10,15 @@ import {
   ArrowRight,
 } from 'lucide-react'
 import Link from 'next/link'
+import FormulaBackdrop, { type Formula } from './FormulaBackdrop'
+
+const backdropFormulas: Formula[] = [
+  { text: 'v = u + at', top: '8%', left: '3%', rotate: -14 },
+  { text: 'log₁₀(x)', top: '20%', right: '4%', rotate: 11, tone: 'gold' },
+  { text: '2H₂ + O₂ → 2H₂O', top: '52%', left: '2%', rotate: 8 },
+  { text: 'dy/dx', top: '70%', right: '6%', rotate: -9 },
+  { text: 'sin²θ + cos²θ = 1', top: '88%', left: '8%', rotate: 12, tone: 'gold' },
+]
 
 const features = [
   {
@@ -54,8 +63,13 @@ export default function WhyChooseDSA() {
   if (!mounted) return null
 
   return (
-    <section id='why-dsa' className='w-full py-24 bg-white'>
-      <div className='max-w-7xl mx-auto px-10 md:px-20'>
+    <section
+      id='why-dsa'
+      className='relative w-full py-24 bg-white overflow-hidden'
+    >
+      <FormulaBackdrop formulas={backdropFormulas} />
+
+      <div className='relative z-10 max-w-7xl mx-auto px-10 md:px-20'>
         {/* SECTION TITLE */}
         <div
           data-aos='fade-up'

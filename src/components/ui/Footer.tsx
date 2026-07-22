@@ -10,7 +10,7 @@ import {
   CheckCircle2,
 } from 'lucide-react'
 import Link from 'next/link'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import AOS from 'aos'
 import 'aos/dist/aos.css'
 
@@ -32,6 +32,9 @@ const flyingFormulas = [
 ]
 
 export default function Footer() {
+  // The flying formulas are framer-motion driven, so the CSS reduced-motion
+  // guard in globals.css can't reach them — park them here instead.
+  const reduceMotion = useReducedMotion()
   const [mounted, setMounted] = useState(false)
   const [year, setYear] = useState<number>(2026)
   const [email, setEmail] = useState('')
@@ -63,25 +66,37 @@ export default function Footer() {
   return (
     <footer className='w-full bg-[#0a0e1a] text-gray-400 pt-16 pb-8 relative overflow-hidden'>
       {/* --- BACKGROUND ANIMATION: Only Formulas Move --- */}
-      <div className='absolute inset-0 pointer-events-none select-none overflow-hidden opacity-20 z-0'>
+      <div
+        aria-hidden='true'
+        className='absolute inset-0 pointer-events-none select-none overflow-hidden opacity-20 z-0'
+      >
         {flyingFormulas.map((f, i) => (
           <motion.div
             key={i}
-            initial={{
-              x: f.left.includes('-') ? '-10vw' : '100vw',
-              opacity: 0,
-            }}
-            animate={{
-              x: f.left.includes('-') ? '110vw' : '-110vw',
-              y: [0, -30, 30, 0],
-              opacity: [0, 1, 1, 0],
-            }}
-            transition={{
-              duration: f.duration,
-              repeat: Infinity,
-              delay: f.delay,
-              ease: 'linear',
-            }}
+            initial={
+              reduceMotion
+                ? { x: 0, opacity: 1 }
+                : { x: f.left.includes('-') ? '-10vw' : '100vw', opacity: 0 }
+            }
+            animate={
+              reduceMotion
+                ? { x: 0, opacity: 1 }
+                : {
+                    x: f.left.includes('-') ? '110vw' : '-110vw',
+                    y: [0, -30, 30, 0],
+                    opacity: [0, 1, 1, 0],
+                  }
+            }
+            transition={
+              reduceMotion
+                ? { duration: 0 }
+                : {
+                    duration: f.duration,
+                    repeat: Infinity,
+                    delay: f.delay,
+                    ease: 'linear',
+                  }
+            }
             className='absolute font-serif italic text-white text-sm md:text-xl whitespace-nowrap'
             style={{ top: f.top }}
           >

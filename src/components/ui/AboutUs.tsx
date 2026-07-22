@@ -49,7 +49,10 @@ export default function AboutDSA() {
       className='relative w-full py-16 md:py-24 bg-white overflow-hidden'
     >
       {/* --- PARALLAX BACKGROUND ELEMENTS --- */}
-      <div className='absolute inset-0 pointer-events-none opacity-10 select-none hidden md:block'>
+      <div
+        aria-hidden='true'
+        className='absolute inset-0 pointer-events-none opacity-10 select-none hidden md:block'
+      >
         <div
           className='absolute top-20 left-10 text-4xl font-serif italic text-[#002EFF]'
           style={{ transform: `translateY(${offset * 0.15}px) rotate(-10deg)` }}

@@ -10,6 +10,14 @@ import {
   CalendarCheck,
   Trophy,
 } from 'lucide-react'
+import FormulaBackdrop, { type Formula } from './FormulaBackdrop'
+
+const backdropFormulas: Formula[] = [
+  { text: 'n(A ∪ B)', top: '10%', left: '4%', rotate: 10 },
+  { text: 'ΔH = -ve', top: '26%', right: '5%', rotate: -12, tone: 'gold' },
+  { text: 'x = -b ± √(b²-4ac) / 2a', top: '58%', left: '3%', rotate: -8 },
+  { text: 'mRNA → Protein', top: '80%', right: '4%', rotate: 9 },
+]
 
 const features = [
   { title: 'LMS Access', icon: BookOpen },
@@ -32,8 +40,13 @@ export default function Features() {
   if (!mounted) return null
 
   return (
-    <section id='materials' className='w-full py-24 bg-white'>
-      <div className='max-w-7xl mx-auto px-10 md:px-20'>
+    <section
+      id='materials'
+      className='relative w-full py-24 bg-white overflow-hidden'
+    >
+      <FormulaBackdrop formulas={backdropFormulas} />
+
+      <div className='relative z-10 max-w-7xl mx-auto px-10 md:px-20'>
         {/* TITLE */}
         <div
           data-aos='fade-up'

@@ -297,7 +297,10 @@ export default function Quiz360Pro() {
       className='w-full py-24 bg-white relative overflow-hidden'
     >
       {/* --- ACADEMIC BACKGROUND ELEMENTS (static, subtle) --- */}
-      <div className='absolute inset-0 pointer-events-none select-none overflow-hidden opacity-[0.04]'>
+      <div
+        aria-hidden='true'
+        className='absolute inset-0 pointer-events-none select-none overflow-hidden opacity-[0.04]'
+      >
         {bgFormulas.map((f, i) => (
           <div
             key={`formula-${i}`}

@@ -10,6 +10,15 @@ import JAMB from '../../imges/jamb.jpeg'
 import Year1 from '../../imges/Year01.jpg'
 import SUMMER from '../../imges/Summer-Coaching.jpg'
 import Skills from '../../imges/skillAcquisition.jpg'
+import FormulaBackdrop, { type Formula } from './FormulaBackdrop'
+
+const backdropFormulas: Formula[] = [
+  { text: 'P(A|B)', top: '7%', left: '3%', rotate: -11 },
+  { text: 'E = hf', top: '22%', right: '4%', rotate: 13, tone: 'gold' },
+  { text: '∑(x - x̄)²', top: '48%', left: '2%', rotate: 9 },
+  { text: 'CₙH₂ₙ₊₂', top: '66%', right: '3%', rotate: -10 },
+  { text: 'Q = mcΔθ', top: '86%', left: '6%', rotate: 12, tone: 'gold' },
+]
 
 const programs = [
   {
@@ -54,8 +63,13 @@ export default function Programs() {
   if (!mounted) return null
 
   return (
-    <section id='programs' className='w-full py-24 bg-[#f8faff]'>
-      <div className='max-w-7xl mx-auto px-10 md:px-20'>
+    <section
+      id='programs'
+      className='relative w-full py-24 bg-[#f8faff] overflow-hidden'
+    >
+      <FormulaBackdrop formulas={backdropFormulas} />
+
+      <div className='relative z-10 max-w-7xl mx-auto px-10 md:px-20'>
         {/* TITLE */}
         <div
           data-aos='fade-up'

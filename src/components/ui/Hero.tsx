@@ -193,12 +193,15 @@ import Link from 'next/link'
 import Hero01 from '../../imges/hero-01.jpg'
 import Hero02 from '../../imges/hero-02.jpg'
 import Hero03 from '../../imges/hero-03.jpg'
+import FormulaBackdrop, { type Formula } from './FormulaBackdrop'
 
-const formulas = [
-  { text: 'E = mc²', top: '12%', left: '5%', rotate: -15 },
-  { text: 'a² + b² = c²', top: '78%', left: '7%', rotate: 12 },
-  { text: '∫(x) dx', top: '18%', left: '88%', rotate: 10 },
-  { text: 'F = ma', top: '82%', left: '82%', rotate: -10 },
+const formulas: Formula[] = [
+  { text: 'E = mc²', top: '12%', left: '4%', rotate: -15 },
+  { text: 'a² + b² = c²', top: '78%', left: '6%', rotate: 12, tone: 'gold' },
+  { text: '∫(x) dx', top: '18%', right: '5%', rotate: 10 },
+  { text: 'F = ma', top: '82%', right: '8%', rotate: -10 },
+  { text: 'PV = nRT', top: '46%', left: '2%', rotate: 8 },
+  { text: 'H₂SO₄', top: '58%', right: '3%', rotate: -12, tone: 'gold' },
 ]
 
 export default function Hero() {
@@ -208,21 +211,7 @@ export default function Hero() {
       className='relative w-full pt-32 pb-16 md:pt-40 md:pb-24 bg-[#f8f9ff] overflow-hidden'
     >
       {/* --- ACADEMIC FORMULA BACKGROUND --- */}
-      <div className='absolute inset-0 pointer-events-none select-none overflow-hidden'>
-        {formulas.map((formula, index) => (
-          <div
-            key={index}
-            className='absolute font-serif italic text-blue-900 text-lg md:text-2xl whitespace-nowrap hidden sm:block opacity-[0.06]'
-            style={{
-              top: formula.top,
-              left: formula.left,
-              transform: `rotate(${formula.rotate}deg)`,
-            }}
-          >
-            {formula.text}
-          </div>
-        ))}
-      </div>
+      <FormulaBackdrop formulas={formulas} opacity={0.14} />
 
       <div className='relative z-10 max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-12 items-center px-6'>
         {/* LEFT TEXT CONTENT */}

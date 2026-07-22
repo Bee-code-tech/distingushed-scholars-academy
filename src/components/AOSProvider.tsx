@@ -11,10 +11,10 @@ export default function AOSProvider({
 }) {
   useEffect(() => {
     AOS.init({
-      duration: 500,
+      duration: 800,
       once: true, // animate a card only the first time — no re-firing on every scroll
       mirror: false,
-      offset: 40,
+      offset: 80, // start the reveal a little before the card reaches the fold
       easing: 'ease-out-cubic',
       // Respect users who prefer reduced motion
       disable: () =>

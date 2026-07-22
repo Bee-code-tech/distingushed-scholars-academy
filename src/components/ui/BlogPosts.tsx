@@ -6,6 +6,14 @@ import { ArrowUpRight, Calendar } from 'lucide-react'
 import Blog1 from '../../imges/jamb.jpeg'
 import Blog2 from '../../imges/waec.jpeg'
 import Blog3 from '../../imges/Habits.png'
+import FormulaBackdrop, { type Formula } from './FormulaBackdrop'
+
+const backdropFormulas: Formula[] = [
+  { text: 'W = F × d', top: '8%', left: '4%', rotate: 11 },
+  { text: 'pH + pOH = 14', top: '28%', right: '3%', rotate: -10, tone: 'gold' },
+  { text: 'f(x) = ax + b', top: '60%', left: '3%', rotate: -12 },
+  { text: 'C₆H₁₂O₆', top: '85%', right: '5%', rotate: 9 },
+]
 
 const blogs = [
   {
@@ -41,8 +49,13 @@ export default function BlogPosts() {
   if (!mounted) return null
 
   return (
-    <section id='blog' className='w-full py-24 bg-[#f8faff]'>
-      <div className='max-w-7xl mx-auto px-10 md:px-20'>
+    <section
+      id='blog'
+      className='relative w-full py-24 bg-[#f8faff] overflow-hidden'
+    >
+      <FormulaBackdrop formulas={backdropFormulas} />
+
+      <div className='relative z-10 max-w-7xl mx-auto px-10 md:px-20'>
         {/* TITLE SECTION */}
         <div className='text-center mb-16'>
           <h2

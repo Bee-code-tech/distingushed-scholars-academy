@@ -83,7 +83,10 @@ export default function FAQs() {
         }
       `}</style>
 
-      <div className='absolute inset-0 pointer-events-none select-none hidden md:block'>
+      <div
+        aria-hidden='true'
+        className='absolute inset-0 pointer-events-none select-none hidden md:block'
+      >
         {backgroundFormulas.map((f, i) => (
           <div
             key={i}
