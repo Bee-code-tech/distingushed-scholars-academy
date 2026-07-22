@@ -88,7 +88,7 @@ const formSchema = z
   .refine(
     (data) => {
       if (data.examType === 'jamb') return data.subjects.length === 4
-      if (data.examType === 'waec')
+      if (data.examType === 'waec' || data.examType === 'neco')
         return data.subjects.length >= 8 && data.subjects.length <= 9
       if (data.examType === 'post utme') return data.subjects.length >= 1
       return data.subjects.length >= 4
@@ -133,7 +133,8 @@ export default function DSASignUp() {
 
   const getSubjectGuidance = () => {
     if (watchExam === 'jamb') return 'Select exactly 4 subjects'
-    if (watchExam === 'waec') return 'Select 8 to 9 subjects'
+    if (watchExam === 'waec' || watchExam === 'neco')
+      return 'Select 8 to 9 subjects'
     return 'Select your relevant subjects'
   }
 
@@ -409,7 +410,8 @@ export default function DSASignUp() {
                         </FormControl>
                         <SelectContent>
                           <SelectItem value='jamb'>JAMB</SelectItem>
-                          <SelectItem value='waec'>WAEC / NECO</SelectItem>
+                          <SelectItem value='waec'>WAEC</SelectItem>
+                          <SelectItem value='neco'>NECO</SelectItem>
                           <SelectItem value='post utme'>Post-UTME</SelectItem>
                         </SelectContent>
                       </Select>

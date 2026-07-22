@@ -14,6 +14,16 @@ export interface User {
   avatarUrl?: string
   phone?: string
   createdAt?: string
+  // Exam track the student is preparing for. The backend stores this under
+  // `level` at registration; some responses echo it as `examType`. Kept loose
+  // (string) because the API is the source of truth — studentProfile.ts maps
+  // whatever comes back onto a known ExamTrack.
+  level?: string
+  examType?: string
+  // Study mode. `isDsaStudent` (a physical/on-campus DSA student) is what the
+  // signup form submits; `studyMode` is the resolved 'physical' | 'online'.
+  isDsaStudent?: boolean
+  studyMode?: string
 }
 
 /** Response returned by the login / register-verify endpoints. */

@@ -323,7 +323,16 @@ import {
 
 // API Utility
 import { dsaApi } from '@/lib/api'
-import { getToken, clearSession } from '@/lib/auth'
+import { getToken, getUser, clearSession } from '@/lib/auth'
+import { isDemoToken } from '@/lib/demoAccounts'
+import {
+  resolveStudentProfile,
+  DEFAULT_TRACK,
+  DEFAULT_MODE,
+  EXAM_TRACKS,
+  STUDY_MODES,
+  type StudentProfile,
+} from '@/lib/studentProfile'
 
 // UI Components
 import { Button } from '@/components/ui/button'
@@ -375,6 +384,15 @@ export default function AcademyDashboard() {
     avatar: '',
   })
 
+  // The resolved "role" (exam track + study mode) that specialises the UI.
+  // Seeded with sane defaults so the first paint is never blank.
+  const [student, setStudent] = useState<StudentProfile>(() => ({
+    track: DEFAULT_TRACK,
+    mode: DEFAULT_MODE,
+    trackConfig: EXAM_TRACKS[DEFAULT_TRACK],
+    modeConfig: STUDY_MODES[DEFAULT_MODE],
+  }))
+
   // Memoized logout to prevent unnecessary re-renders
   const handleLogout = useCallback(() => {
     clearSession()
@@ -393,8 +411,15 @@ export default function AcademyDashboard() {
       }
 
       try {
-        // FIXED: Passing token as the required argument
-        const profile = await dsaApi.auth.getProfile(token)
+        // Demo sessions carry their profile in localStorage — no API call.
+        const profile = isDemoToken(token)
+          ? getUser()
+          : await dsaApi.auth.getProfile(token)
+
+        if (!profile) {
+          handleLogout()
+          return
+        }
 
         setUser({
           name: profile.fullName || profile.username || 'Student',
@@ -404,6 +429,7 @@ export default function AcademyDashboard() {
             profile.avatarUrl ||
             `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.username || 'default'}`,
         })
+        setStudent(resolveStudentProfile(profile))
       } catch (error) {
         console.error('Session validation failed:', error)
         handleLogout()
@@ -489,11 +515,14 @@ export default function AcademyDashboard() {
           <span className='text-white font-black text-sm tracking-tighter uppercase leading-none'>
             DSA.Portal
           </span>
-          {user.isDSAite && (
-            <Badge className='bg-yellow-400 text-[#002EFF] text-[8px] py-0 h-4 w-fit mt-1'>
-              DSAite
+          <div className='flex items-center gap-1 mt-1'>
+            <Badge className='bg-yellow-400 text-[#002EFF] text-[8px] py-0 h-4 w-fit font-black'>
+              {student.trackConfig.label}
             </Badge>
-          )}
+            <Badge className='bg-white/15 text-white text-[8px] py-0 h-4 w-fit font-bold'>
+              {student.modeConfig.label}
+            </Badge>
+          </div>
         </div>
       </div>
 
@@ -605,7 +634,7 @@ export default function AcademyDashboard() {
                   {user.name}
                 </p>
                 <p className='text-[9px] text-zinc-400 font-bold uppercase'>
-                  {user.isDSAite ? 'DSAite Member' : 'Guest Student'}
+                  {student.trackConfig.label} · {student.modeConfig.label}
                 </p>
               </div>
               <Avatar className='h-9 w-9 border-2 border-white shadow-md'>
@@ -619,7 +648,11 @@ export default function AcademyDashboard() {
         <div className='flex-1 overflow-y-auto px-6 pb-6 custom-scrollbar'>
           <div className='max-w-400 mx-auto'>
             {activeView === 'overview' && (
-              <OverviewUI setView={setActiveView} isDSAite={user.isDSAite} />
+              <OverviewUI
+                setView={setActiveView}
+                isDSAite={user.isDSAite}
+                student={student}
+              />
             )}
             {activeView === 'resources' && (
               <ResourcesView isDSAite={user.isDSAite} />
@@ -630,7 +663,7 @@ export default function AcademyDashboard() {
             {activeView === 'history' && <QuizHistoryView />}
             {activeView === 'community' && <CommunityView />}
             {activeView === 'rankings' && <GlobalRankings />}
-            {activeView === 'schedule' && <ExamSchedule />}
+            {activeView === 'schedule' && <ExamSchedule mode={student.mode} />}
             {activeView === 'settings' && <SettingsView />}
           </div>
         </div>

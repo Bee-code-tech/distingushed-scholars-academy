@@ -14,46 +14,91 @@ import {
   CheckCircle2,
   AlertCircle,
 } from 'lucide-react'
+import type { StudyMode } from '@/lib/studentProfile'
 
-export default function ExamSchedule() {
-  const scheduleItems = [
-    {
-      day: 'MON',
-      date: '27 JAN',
-      title: 'Biology Live Quiz',
-      time: '10:00 AM',
-      status: 'live',
-      category: 'Interactive',
-      location: 'Main Portal',
-    },
-    {
-      day: 'WED',
-      date: '29 JAN',
-      title: 'Full CBT Simulation',
-      time: '02:30 PM',
-      status: 'upcoming',
-      category: 'Exam',
-      location: 'CBT Simulator',
-    },
-    {
-      day: 'FRI',
-      date: '31 JAN',
-      title: 'Physics Formula Review',
-      time: '09:00 AM',
-      status: 'upcoming',
-      category: 'Study',
-      location: 'Syllabus Mastery',
-    },
-    {
-      day: 'SUN',
-      date: '02 FEB',
-      title: 'Global Mock Ranking #4',
-      time: '04:00 PM',
-      status: 'upcoming',
-      category: 'Tournament',
-      location: 'Global Rankings',
-    },
-  ]
+// On-campus students see physical class venues; online students see live-portal
+// sessions and CBT mocks. Both share the same timeline UI.
+const PHYSICAL_SCHEDULE = [
+  {
+    day: 'MON',
+    date: '27 JUL',
+    title: 'Mathematics — Paper 2',
+    time: '09:00 AM',
+    status: 'live',
+    category: 'Class',
+    location: 'Hall B, DSA Campus',
+  },
+  {
+    day: 'WED',
+    date: '29 JUL',
+    title: 'Full CBT Simulation',
+    time: '02:30 PM',
+    status: 'upcoming',
+    category: 'Exam',
+    location: 'Computer Lab, DSA Campus',
+  },
+  {
+    day: 'FRI',
+    date: '31 JUL',
+    title: 'Physics Practical',
+    time: '10:00 AM',
+    status: 'upcoming',
+    category: 'Practical',
+    location: 'Science Lab, DSA Campus',
+  },
+  {
+    day: 'SAT',
+    date: '01 AUG',
+    title: 'Weekend Revision Class',
+    time: '11:00 AM',
+    status: 'upcoming',
+    category: 'Study',
+    location: 'Hall A, DSA Campus',
+  },
+]
+
+const ONLINE_SCHEDULE = [
+  {
+    day: 'MON',
+    date: '27 JUL',
+    title: 'Biology Live Quiz',
+    time: '06:00 PM',
+    status: 'live',
+    category: 'Interactive',
+    location: 'Live on DSA Portal',
+  },
+  {
+    day: 'WED',
+    date: '29 JUL',
+    title: 'Full CBT Simulation',
+    time: '02:30 PM',
+    status: 'upcoming',
+    category: 'Exam',
+    location: 'CBT Simulator',
+  },
+  {
+    day: 'FRI',
+    date: '31 JUL',
+    title: 'Physics Formula Review',
+    time: '07:00 PM',
+    status: 'upcoming',
+    category: 'Live Class',
+    location: 'Zoom — link in portal',
+  },
+  {
+    day: 'SUN',
+    date: '02 AUG',
+    title: 'Global Mock Ranking #4',
+    time: '04:00 PM',
+    status: 'upcoming',
+    category: 'Tournament',
+    location: 'Global Rankings',
+  },
+]
+
+export default function ExamSchedule({ mode = 'online' }: { mode?: StudyMode }) {
+  const isPhysical = mode === 'physical'
+  const scheduleItems = isPhysical ? PHYSICAL_SCHEDULE : ONLINE_SCHEDULE
 
   return (
     <div className='max-w-4xl mx-auto space-y-6 animate-in slide-in-from-right-4 duration-500'>
@@ -64,7 +109,9 @@ export default function ExamSchedule() {
             <CalendarIcon size={24} /> Exam Schedule
           </h2>
           <p className='text-[10px] font-bold text-gray-400 uppercase tracking-widest'>
-            Your upcoming academic roadmap
+            {isPhysical
+              ? 'Your on-campus class timetable'
+              : 'Your live & online session roadmap'}
           </p>
         </div>
         <div className='flex gap-2'>
@@ -195,12 +242,12 @@ export default function ExamSchedule() {
         <AlertCircle className='text-orange-500 shrink-0 mt-0.5' size={18} />
         <div>
           <p className='text-[11px] font-black text-orange-700 uppercase'>
-            Proctor Notice
+            {isPhysical ? 'Campus Notice' : 'Proctor Notice'}
           </p>
           <p className='text-[10px] font-bold text-orange-600/80 leading-relaxed'>
-            The mock schedules are synchronized with Nigerian Standard Time
-            (WAT). Ensure your device clock is set correctly to avoid missing
-            your session.
+            {isPhysical
+              ? 'Class times follow Nigerian Standard Time (WAT). Arrive 10 minutes early and bring your DSA student ID for attendance.'
+              : 'The mock schedules are synchronized with Nigerian Standard Time (WAT). Ensure your device clock is set correctly to avoid missing your session.'}
           </p>
         </div>
       </div>
