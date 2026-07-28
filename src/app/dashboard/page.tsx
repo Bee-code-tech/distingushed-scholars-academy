@@ -327,6 +327,7 @@ import { getToken, getUser, clearSession } from '@/lib/auth'
 import { isDemoToken } from '@/lib/demoAccounts'
 import {
   resolveStudentProfile,
+  applyProgramDates,
   DEFAULT_TRACK,
   DEFAULT_MODE,
   EXAM_TRACKS,
@@ -389,6 +390,7 @@ export default function AcademyDashboard() {
   const [student, setStudent] = useState<StudentProfile>(() => ({
     track: DEFAULT_TRACK,
     mode: DEFAULT_MODE,
+    department: null,
     trackConfig: EXAM_TRACKS[DEFAULT_TRACK],
     modeConfig: STUDY_MODES[DEFAULT_MODE],
   }))
@@ -429,7 +431,18 @@ export default function AcademyDashboard() {
             profile.avatarUrl ||
             `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.username || 'default'}`,
         })
-        setStudent(resolveStudentProfile(profile))
+        const resolved = resolveStudentProfile(profile)
+        setStudent(resolved)
+
+        // Exam dates live in the backend (POST /api/programs) so the owner can
+        // update a countdown without a deploy. Best-effort: if the call fails
+        // the built-in dates in studentProfile.ts stand.
+        dsaApi.programs
+          .getAll()
+          .then((programs) => setStudent(applyProgramDates(resolved, programs)))
+          .catch(() => {
+            /* keep built-in dates */
+          })
       } catch (error) {
         console.error('Session validation failed:', error)
         handleLogout()

@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import { ArrowRight, MessageCircle, GraduationCap } from 'lucide-react'
 
 // Academic symbols for the final push
@@ -109,11 +110,9 @@ export default function FinalCTA() {
           className='mt-12 flex flex-col sm:flex-row justify-center items-center gap-6'
         >
           {/* Primary CTA */}
-          <a
+          <Link
             className='group w-full sm:w-auto px-12 py-6 bg-[#FCB900] text-black font-black text-lg rounded-2xl flex items-center justify-center gap-3 hover:bg-white hover:scale-105 transition-all shadow-[0_20px_40px_rgba(252,185,0,0.3)] active:scale-95'
-            href='https://wa.link/7wim2w'
-            target='_blank'
-            rel='noopener noreferrer'
+            href='/auth/signup'
           >
             <GraduationCap size={28} />
             ENROL NOW
@@ -121,18 +120,16 @@ export default function FinalCTA() {
               size={22}
               className='group-hover:translate-x-2 transition-transform'
             />
-          </a>
+          </Link>
 
           {/* Secondary CTA */}
-          <a
+          <Link
             className='w-full sm:w-auto px-12 py-6 border-2 border-white/30 text-white font-black text-lg rounded-2xl hover:bg-white hover:text-[#002EFF] hover:border-white transition-all flex items-center justify-center gap-3 active:scale-95'
-            href='https://wa.link/xtiui2'
-            target='_blank'
-            rel='noopener noreferrer'
+            href='/auth/signup'
           >
             <MessageCircle size={28} />
             FREE CLASSES
-          </a>
+          </Link>
         </div>
 
         {/* Social Proof */}

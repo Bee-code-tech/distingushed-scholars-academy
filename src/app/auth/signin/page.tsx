@@ -43,6 +43,7 @@ import {
   setSession,
   rememberEmail,
   getRememberedEmail,
+  dashboardPathForRole,
   ADMIN_BYPASS_ENABLED,
   DEV_ADMIN_EMAIL,
 } from '@/lib/auth'
@@ -120,14 +121,15 @@ function LoginContent() {
       // and this block once the real backend is connected.
       const demo = findDemoAccount(values.email, values.password)
       if (demo) {
+        const role = demo.profile.role || 'student'
         setSession({
           token: `${DEMO_TOKEN_PREFIX}${demo.profile.username}`,
           user: demo.profile,
-          role: 'student',
+          role,
         })
         rememberEmail(values.email, !!values.rememberMe)
         setSuccessMsg('Demo login successful! Redirecting...')
-        router.push('/dashboard')
+        router.push(dashboardPathForRole(role))
         return
       }
 
@@ -137,17 +139,18 @@ function LoginContent() {
         password: values.password,
       })
 
+      const role = data.user?.role || 'student'
       if (data.token) {
         setSession({
           token: data.token,
           user: data.user,
-          role: data.user?.role || 'student',
+          role,
         })
         rememberEmail(values.email, !!values.rememberMe)
       }
 
       setSuccessMsg('Login successful! Redirecting...')
-      router.push('/dashboard')
+      router.push(dashboardPathForRole(role))
       router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Invalid email or password.')

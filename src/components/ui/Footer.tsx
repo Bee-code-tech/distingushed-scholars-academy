@@ -227,6 +227,15 @@ export default function Footer() {
               Distinguished Scholars Academy
             </span>
             . <br className='md:hidden' /> Built for excellence.
+            <span className='mx-2 text-gray-700 hidden md:inline'>·</span>
+            <br className='md:hidden' />
+            {/* Low-key entry point for staff so they don't type the URL. */}
+            <Link
+              href='/adminLogin'
+              className='text-gray-600 hover:text-[#FCB900] transition-colors'
+            >
+              Staff Login
+            </Link>
           </p>
 
           <div className='flex items-center gap-3'>

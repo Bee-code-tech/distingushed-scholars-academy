@@ -227,20 +227,19 @@ export default function Hero() {
           </div>
 
           <h1 className='text-3xl md:text-4xl font-black text-gray-900 leading-[1.1] tracking-tight'>
-            Empowering Students to <br />
-            <span className='text-[#002EFF]'>Excel in UTME & WAEC</span>
+            Score Higher in JAMB, WAEC &amp; NECO <br />
+            <span className='text-[#002EFF]'>and Secure Admission</span>
           </h1>
 
           <p className='text-sm md:text-base text-gray-600 mt-6 max-w-md mx-auto md:mx-0 leading-relaxed font-medium'>
-            Join thousands of scholars learning faster, scoring higher, and
-            building academic confidence with the DSA learning system.
+            Structured lessons, weekly assessments, CBT practice, mentorship and
+            daily accountability — everything a student needs to improve their
+            scores and gain university admission.
           </p>
 
           <div className='flex flex-col sm:flex-row items-center justify-center md:justify-start gap-4 mt-10'>
             <Link
-              href='https://wa.link/7wim2w'
-              target='_blank'
-              rel='noopener noreferrer'
+              href='/auth/signin'
               className='w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-4 bg-[#002EFF] text-white rounded-2xl font-bold transition-all hover:bg-blue-700 active:scale-95 text-sm shadow-xl shadow-blue-200 group'
             >
               Start Learning
@@ -251,13 +250,11 @@ export default function Hero() {
             </Link>
 
             <Link
-              href='https://wa.link/xtiui2'
-              target='_blank'
-              rel='noopener noreferrer'
+              href='/auth/signup'
               className='w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-4 border-2 border-gray-200 text-gray-700 bg-white rounded-2xl font-bold transition-all hover:border-[#FCB900] hover:text-black active:scale-95 text-sm'
             >
               <Play size={16} fill='currentColor' />
-              Join Free Classes
+              Book a Free Class
             </Link>
           </div>
         </div>

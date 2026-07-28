@@ -20,6 +20,7 @@ import {
   CheckCircle2,
   BookOpen,
   ShieldCheck,
+  Users,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -43,23 +44,30 @@ import { Card, CardContent } from '@/components/ui/card'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { cn } from '@/lib/utils'
 import { dsaApi } from '@/lib/api'
+import { rememberEnrolmentChoice } from '@/lib/studentProfile'
 
-const SUBJECT_OPTIONS = [
-  'Mathematics',
+// JAMB UTME subjects — English is compulsory, students pick 3 more (4 total).
+// Trimmed to the core subjects students actually register for.
+const JAMB_SUBJECTS = [
   'English Language',
+  'Mathematics',
   'Physics',
   'Chemistry',
   'Biology',
+  'Agricultural Science',
   'Economics',
   'Government',
-  'Literature',
   'Commerce',
-  'CRS/IRS',
-  'Agric Science',
+  'Financial Accounting',
+  'Literature in English',
   'Geography',
-  'Accounting',
-  'Civic Education',
-  'Further Maths',
+]
+
+// WAEC / NECO register by department rather than individual subjects.
+const STREAMS = [
+  { id: 'science', label: 'Science' },
+  { id: 'art', label: 'Art' },
+  { id: 'commercial', label: 'Commercial' },
 ]
 
 const formSchema = z
@@ -76,10 +84,17 @@ const formSchema = z
     email: z.string().email('Invalid email'),
     password: z.string().min(6, 'Min. 6 characters'),
     confirmPassword: z.string(),
+    // Who is registering. Tutors are created by an admin, so only these two
+    // self-register here.
+    accountType: z.enum(['student', 'guardian']),
     examType: z.string().min(1, 'Select an exam'),
     subjects: z.array(z.string()),
+    // WAEC/NECO register by department instead of individual subjects.
+    stream: z.string().optional(),
     isDSA: z.enum(['yes', 'no']),
     studentId: z.string().optional(),
+    // Guardians link to the student they oversee.
+    wardId: z.string().optional(),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: 'Passwords do not match',
@@ -87,15 +102,41 @@ const formSchema = z
   })
   .refine(
     (data) => {
+      // Guardians have no academic fields.
+      if (data.accountType === 'guardian') return true
+      // WAEC/NECO validate the department, not the subject count (see below).
+      if (data.examType === 'waec' || data.examType === 'neco') return true
       if (data.examType === 'jamb') return data.subjects.length === 4
-      if (data.examType === 'waec' || data.examType === 'neco')
-        return data.subjects.length >= 8 && data.subjects.length <= 9
       if (data.examType === 'post utme') return data.subjects.length >= 1
       return data.subjects.length >= 4
     },
     {
       message: 'Invalid number of subjects for selected exam',
       path: ['subjects'],
+    },
+  )
+  .refine(
+    (data) => {
+      if (data.accountType === 'guardian') return true
+      if (data.examType === 'waec' || data.examType === 'neco') {
+        return ['science', 'art', 'commercial'].includes(data.stream ?? '')
+      }
+      return true
+    },
+    {
+      message: 'Select your department',
+      path: ['stream'],
+    },
+  )
+  .refine(
+    (data) => {
+      // A guardian must name the ward they're registering to monitor.
+      if (data.accountType === 'guardian') return (data.wardId ?? '').length >= 3
+      return true
+    },
+    {
+      message: "Enter your ward's username or student ID",
+      path: ['wardId'],
     },
   )
 
@@ -115,10 +156,13 @@ export default function DSASignUp() {
       email: '',
       password: '',
       confirmPassword: '',
+      accountType: 'student',
       examType: 'jamb',
       isDSA: 'no',
       subjects: [],
+      stream: '',
       studentId: '',
+      wardId: '',
     },
   })
 
@@ -126,6 +170,12 @@ export default function DSASignUp() {
   const watchIsDSA = watch('isDSA')
   const watchExam = watch('examType')
   const selectedSubjects = watch('subjects')
+  const selectedStream = watch('stream')
+  const accountType = watch('accountType')
+
+  const isGuardian = accountType === 'guardian'
+  // WAEC & NECO pick a department; JAMB & Post-UTME pick subjects.
+  const usesStream = watchExam === 'waec' || watchExam === 'neco'
 
   useEffect(() => {
     if (selectedSubjects.length > 0) trigger('subjects')
@@ -133,8 +183,6 @@ export default function DSASignUp() {
 
   const getSubjectGuidance = () => {
     if (watchExam === 'jamb') return 'Select exactly 4 subjects'
-    if (watchExam === 'waec' || watchExam === 'neco')
-      return 'Select 8 to 9 subjects'
     return 'Select your relevant subjects'
   }
 
@@ -142,6 +190,24 @@ export default function DSASignUp() {
     setApiError(null)
     setIsLoading(true)
     try {
+      if (values.accountType === 'guardian') {
+        // Guardians self-register; tutors are created by an admin.
+        await dsaApi.auth.register({
+          name: values.fullname,
+          username: values.username.toLowerCase(),
+          email: values.email.toLowerCase(),
+          password: values.password,
+          phoneNumber: values.phone,
+          role: 'parent',
+          // Links the guardian to their student. The backend does not persist
+          // this yet — see docs/backend-requests.md.
+          wardId: values.wardId || '',
+        })
+        localStorage.setItem('dsa_pending_email', values.email)
+        router.push('/auth/verify-otp')
+        return
+      }
+
       await dsaApi.auth.register({
         name: values.fullname,
         username: values.username.toLowerCase(),
@@ -149,10 +215,26 @@ export default function DSASignUp() {
         password: values.password,
         phoneNumber: values.phone,
         level: values.examType,
-        subjectsOfInterest: values.subjects,
+        // WAEC/NECO send their department; JAMB/Post-UTME send their subjects.
+        subjectsOfInterest: usesStream
+          ? values.stream
+            ? [values.stream]
+            : []
+          : values.subjects,
         role: 'student',
         isDsaStudent: values.isDSA === 'yes',
         dsaId: values.studentId || '',
+      })
+
+      // The backend does not persist `isDsaStudent`, so remember the
+      // physical/online choice here — the dashboard falls back to it when
+      // /auth/me returns nothing for study mode. See lib/studentProfile.ts.
+      rememberEnrolmentChoice({
+        track: values.examType,
+        mode: values.isDSA === 'yes' ? 'physical' : 'online',
+        department: usesStream
+          ? (values.stream as 'science' | 'art' | 'commercial')
+          : undefined,
       })
 
       localStorage.setItem('dsa_pending_email', values.email)
@@ -190,10 +272,12 @@ export default function DSASignUp() {
           </div>
         </motion.div>
         <h1 className='text-2xl font-black text-slate-900'>
-          Student Registration
+          {isGuardian ? 'Guardian Registration' : 'Student Registration'}
         </h1>
         <p className='text-slate-500 text-sm font-medium'>
-          Join the Distinguished Scholars Academy
+          {isGuardian
+            ? 'Create an account to monitor your ward'
+            : 'Join the Distinguished Scholars Academy'}
         </p>
       </div>
 
@@ -201,6 +285,31 @@ export default function DSASignUp() {
         <CardContent className='p-6 md:p-8'>
           <Form {...form}>
             <form onSubmit={handleSubmit(onSubmit)} className='space-y-8'>
+              {/* Account type — students & guardians self-register here.
+                  Tutors are created by an admin. */}
+              <div className='grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-xl'>
+                {(
+                  [
+                    { id: 'student', label: 'Student' },
+                    { id: 'guardian', label: 'Guardian / Parent' },
+                  ] as const
+                ).map((opt) => (
+                  <button
+                    key={opt.id}
+                    type='button'
+                    onClick={() => setValue('accountType', opt.id)}
+                    className={cn(
+                      'py-2.5 rounded-lg text-[11px] font-black uppercase tracking-wide transition-all',
+                      accountType === opt.id
+                        ? 'bg-white text-[#002EFF] shadow-sm'
+                        : 'text-slate-400 hover:text-slate-600',
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+
               {/* Personal Identity */}
               <div className='space-y-4'>
                 <div className='flex items-center gap-2 border-b border-slate-50 pb-2'>
@@ -383,7 +492,9 @@ export default function DSASignUp() {
                 </div>
               </div>
 
-              {/* Academic */}
+              {/* Academic — students only */}
+              {!isGuardian && (
+              <>
               <div className='space-y-4'>
                 <div className='flex items-center gap-2 border-b border-slate-50 pb-2'>
                   <BookOpen size={14} className='text-[#002EFF]' />
@@ -419,46 +530,77 @@ export default function DSASignUp() {
                   )}
                 />
 
-                <div className='space-y-3'>
-                  <div className='flex justify-between items-center'>
+                {usesStream ? (
+                  // --- WAEC / NECO: pick a department ---
+                  <div className='space-y-3'>
                     <p className='text-[10px] text-slate-400 font-bold uppercase'>
-                      {getSubjectGuidance()}
+                      Select your department
                     </p>
-                    <span
-                      className={cn(
-                        'text-[10px] font-black px-2 py-0.5 rounded-full',
-                        selectedSubjects.length > 0
-                          ? 'bg-blue-50 text-blue-600'
-                          : 'bg-slate-50 text-slate-400',
-                      )}
-                    >
-                      {selectedSubjects.length} SELECTED
-                    </span>
+                    <div className='grid grid-cols-1 sm:grid-cols-3 gap-2'>
+                      {STREAMS.map((s) => (
+                        <div
+                          key={s.id}
+                          onClick={() =>
+                            setValue('stream', s.id, { shouldValidate: true })
+                          }
+                          className={cn(
+                            'cursor-pointer py-3 px-3 rounded-lg border text-xs font-bold transition-all text-center',
+                            selectedStream === s.id
+                              ? 'bg-blue-50 border-[#002EFF] text-[#002EFF]'
+                              : 'bg-white border-slate-100 text-slate-600 hover:bg-slate-50',
+                          )}
+                        >
+                          {s.label}
+                        </div>
+                      ))}
+                    </div>
+                    <FormMessage className='text-[10px]'>
+                      {form.formState.errors.stream?.message}
+                    </FormMessage>
                   </div>
-                  <div className='grid grid-cols-2 lg:grid-cols-4 gap-2'>
-                    {SUBJECT_OPTIONS.map((sub) => (
-                      <div
-                        key={sub}
-                        onClick={() => {
-                          const curr = [...selectedSubjects]
-                          const idx = curr.indexOf(sub)
-                          if (idx > -1) curr.splice(idx, 1)
-                          else curr.push(sub)
-                          setValue('subjects', curr, { shouldValidate: true })
-                        }}
+                ) : (
+                  // --- JAMB / Post-UTME: pick subjects ---
+                  <div className='space-y-3'>
+                    <div className='flex justify-between items-center'>
+                      <p className='text-[10px] text-slate-400 font-bold uppercase'>
+                        {getSubjectGuidance()}
+                      </p>
+                      <span
                         className={cn(
-                          'cursor-pointer py-2 px-3 rounded-lg border text-[10px] font-bold transition-all text-center truncate',
-                          selectedSubjects.includes(sub)
-                            ? 'bg-blue-50 border-[#002EFF] text-[#002EFF]'
-                            : 'bg-white border-slate-100 text-slate-600 hover:bg-slate-50',
+                          'text-[10px] font-black px-2 py-0.5 rounded-full',
+                          selectedSubjects.length > 0
+                            ? 'bg-blue-50 text-blue-600'
+                            : 'bg-slate-50 text-slate-400',
                         )}
                       >
-                        {sub}
-                      </div>
-                    ))}
+                        {selectedSubjects.length} SELECTED
+                      </span>
+                    </div>
+                    <div className='grid grid-cols-2 lg:grid-cols-4 gap-2'>
+                      {JAMB_SUBJECTS.map((sub) => (
+                        <div
+                          key={sub}
+                          onClick={() => {
+                            const curr = [...selectedSubjects]
+                            const idx = curr.indexOf(sub)
+                            if (idx > -1) curr.splice(idx, 1)
+                            else curr.push(sub)
+                            setValue('subjects', curr, { shouldValidate: true })
+                          }}
+                          className={cn(
+                            'cursor-pointer py-2 px-3 rounded-lg border text-[10px] font-bold transition-all text-center truncate',
+                            selectedSubjects.includes(sub)
+                              ? 'bg-blue-50 border-[#002EFF] text-[#002EFF]'
+                              : 'bg-white border-slate-100 text-slate-600 hover:bg-slate-50',
+                          )}
+                        >
+                          {sub}
+                        </div>
+                      ))}
+                    </div>
+                    <FormMessage className='text-[10px]' />
                   </div>
-                  <FormMessage className='text-[10px]' />
-                </div>
+                )}
               </div>
 
               {/* Physical Student ID */}
@@ -522,6 +664,43 @@ export default function DSASignUp() {
                   )}
                 </AnimatePresence>
               </div>
+              </>
+              )}
+
+              {/* Ward link — guardians only */}
+              {isGuardian && (
+                <div className='space-y-4'>
+                  <div className='flex items-center gap-2 border-b border-slate-50 pb-2'>
+                    <Users size={14} className='text-[#002EFF]' />
+                    <h2 className='text-[10px] font-black uppercase tracking-widest text-slate-400'>
+                      Your Ward
+                    </h2>
+                  </div>
+                  <FormField
+                    control={control}
+                    name='wardId'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className='text-[10px] font-bold text-slate-500'>
+                          WARD&apos;S USERNAME / STUDENT ID
+                        </FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            placeholder='e.g. johndoe123 or DSA-2024-001'
+                            className='h-11 rounded-lg bg-slate-50 border-transparent'
+                          />
+                        </FormControl>
+                        <p className='text-[10px] text-slate-400 font-medium'>
+                          Enter the username or ID your child registered with, so
+                          we can link you to their progress.
+                        </p>
+                        <FormMessage className='text-[10px]' />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              )}
 
               {apiError && (
                 <div className='p-3 bg-rose-50 border border-rose-100 rounded-xl text-rose-600 text-[10px] font-bold text-center'>

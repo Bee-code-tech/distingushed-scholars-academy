@@ -119,7 +119,7 @@ export default function Programs() {
 
                 <div className='mt-6 pt-5 border-t border-gray-50 flex justify-between items-center'>
                   <Link
-                    href='https://wa.link/7wim2w'
+                    href='/auth/signup'
                     className='text-[#002EFF] font-bold text-sm flex items-center gap-1 hover:gap-2 transition-all'
                   >
                     Enrol Now <ArrowRight size={16} />
