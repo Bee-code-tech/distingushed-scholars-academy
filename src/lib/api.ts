@@ -95,12 +95,28 @@ export const dsaApi = {
         body: JSON.stringify(payload),
       }).then((r) => handleResponse<AuthResponse | { message: string }>(r)),
 
-    sendOtp: (email: string) =>
-      fetch(`${BASE_URL}/auth/send-otp`, {
+    /**
+     * Resend the verification code.
+     *
+     * BACKEND GAP: `/auth/send-otp` is not implemented — the live API returns
+     * 404 and it is absent from the OpenAPI spec. The call is kept so this
+     * starts working the moment the endpoint ships; until then a 404 is
+     * translated into a message a student can actually act on, instead of
+     * surfacing a raw "Cannot POST /api/auth/send-otp".
+     */
+    sendOtp: async (email: string) => {
+      const r = await fetch(`${BASE_URL}/auth/send-otp`, {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify({ email }),
-      }).then((r) => handleResponse<{ message: string }>(r)),
+      })
+      if (r.status === 404) {
+        throw new Error(
+          'Resending codes is not available yet. Please use the code already sent to your email.',
+        )
+      }
+      return handleResponse<{ message: string }>(r)
+    },
 
     verifyOtp: (email: string, otp: string) =>
       fetch(`${BASE_URL}/auth/verify-otp`, {
@@ -130,11 +146,29 @@ export const dsaApi = {
         body: JSON.stringify({ newPassword: payload.newPassword }),
       }).then((r) => handleResponse<{ message: string }>(r)),
 
+    /**
+     * Current logged-in user.
+     *
+     * The endpoint is `/auth/me` — `/auth/profile` does not exist on the
+     * backend and returns 404 (verified against the live API), which logged
+     * every student straight back out.
+     *
+     * The API wraps payloads as `{ success, data }` (same envelope as
+     * /programs), but login returns the user under `user`. Unwrap either so
+     * this keeps working whichever shape comes back.
+     */
     getProfile: (token?: string) =>
-      fetch(`${BASE_URL}/auth/profile`, {
+      fetch(`${BASE_URL}/auth/me`, {
         method: 'GET',
         headers: getHeaders(token),
-      }).then((r) => handleResponse<User>(r)),
+      })
+        .then((r) =>
+          handleResponse<User | { data?: User; user?: User }>(r),
+        )
+        .then((res) => {
+          const body = res as { data?: User; user?: User }
+          return (body.data ?? body.user ?? res) as User
+        }),
   },
 
   quizzes: {
@@ -183,10 +217,19 @@ export const dsaApi = {
         body: JSON.stringify(payload),
       }).then((r) => handleResponse<Program>(r)),
 
+    /**
+     * All program countdowns.
+     *
+     * The API answers with the `{ success, count, data }` envelope, so unwrap
+     * `data` here — callers just want the array. Tolerates a bare array too in
+     * case the shape is ever simplified.
+     */
     getAll: () =>
       fetch(`${BASE_URL}/programs`, {
         method: 'GET',
         headers: getHeaders(),
-      }).then((r) => handleResponse<Program[]>(r)),
+      })
+        .then((r) => handleResponse<Program[] | { data?: Program[] }>(r))
+        .then((res) => (Array.isArray(res) ? res : (res?.data ?? []))),
   },
 }

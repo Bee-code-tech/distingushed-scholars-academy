@@ -12,6 +12,16 @@ const ROLE_KEY = 'user_role'
 const REMEMBER_EMAIL_KEY = 'dsa_remembered_email'
 const ADMIN_COOKIE = 'admin_token'
 
+/**
+ * How long a session cookie survives, in seconds. Seven days so staff aren't
+ * bounced back to the login screen mid-session (the old 1-hour value meant
+ * re-logging in several times a day).
+ *
+ * NOTE: this only controls how long the browser keeps the cookie. Real expiry
+ * must be enforced by the backend on the JWT — see the warning at the top.
+ */
+const SESSION_MAX_AGE = 60 * 60 * 24 * 7
+
 const isBrowser = () => typeof window !== 'undefined'
 
 export function getToken(): string | null {
@@ -44,6 +54,24 @@ export function isAdmin(): boolean {
   return role === 'admin' || role === 'super_admin'
 }
 
+/**
+ * Where a user lands after login, based on their role. Central so the sign-in
+ * page and any guard redirect stay in sync.
+ */
+export function dashboardPathForRole(role?: UserRole | null): string {
+  switch (role) {
+    case 'tutor':
+      return '/tutor'
+    case 'parent':
+      return '/guardian'
+    case 'admin':
+    case 'super_admin':
+      return '/admin'
+    default:
+      return '/dashboard'
+  }
+}
+
 /** Persist a successful login. Also sets the cookie the middleware reads. */
 export function setSession(params: {
   token: string
@@ -57,7 +85,7 @@ export function setSession(params: {
   const resolvedRole = role || user?.role || 'student'
   localStorage.setItem(ROLE_KEY, resolvedRole)
   // Cookie is what middleware.ts checks for route protection.
-  document.cookie = `${ADMIN_COOKIE}=true; path=/; max-age=3600; SameSite=Lax`
+  document.cookie = `${ADMIN_COOKIE}=true; path=/; max-age=${SESSION_MAX_AGE}; SameSite=Lax`
 }
 
 /** Clear all session state (logout, or an invalid/expired token). */

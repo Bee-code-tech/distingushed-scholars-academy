@@ -207,7 +207,7 @@ export default function FAQs() {
             <p className='text-gray-500 font-bold text-sm uppercase tracking-widest'>
               Still have questions?
               <a
-                href='https://wa.link/7wim2w'
+                href='#contact'
                 className='text-[#002EFF] ml-2 hover:underline inline-flex items-center gap-1'
               >
                 Chat with an expert{' '}

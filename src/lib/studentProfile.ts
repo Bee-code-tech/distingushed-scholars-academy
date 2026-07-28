@@ -19,6 +19,13 @@ import type { User } from './types'
 
 export type ExamTrack = 'jamb' | 'waec' | 'neco'
 export type StudyMode = 'physical' | 'online'
+export type Department = 'science' | 'art' | 'commercial'
+
+export const DEPARTMENT_LABELS: Record<Department, string> = {
+  science: 'Science',
+  art: 'Art',
+  commercial: 'Commercial',
+}
 
 export interface ExamTrackConfig {
   id: ExamTrack
@@ -118,8 +125,17 @@ export const DEFAULT_MODE: StudyMode = 'online'
 export interface StudentProfile {
   track: ExamTrack
   mode: StudyMode
+  /** WAEC/NECO only — the student's department. Null for JAMB/Post-UTME. */
+  department: Department | null
   trackConfig: ExamTrackConfig
   modeConfig: StudyModeConfig
+}
+
+/** Read a department from a raw string, or null if it isn't one. */
+function normaliseDepartment(raw?: string | null): Department | null {
+  const v = (raw ?? '').toString().trim().toLowerCase()
+  if (v === 'science' || v === 'art' || v === 'commercial') return v
+  return null
 }
 
 /**
@@ -141,24 +157,120 @@ export function normaliseTrack(raw?: string | null): ExamTrack {
  * `isDsaStudent: true`, which the backend may echo as `isDSAite`. An explicit
  * `studyMode` string wins if present.
  */
-export function normaliseMode(user?: Partial<User> | null): StudyMode {
+export function normaliseMode(user?: Partial<User> | null): StudyMode | null {
   const explicit = (user?.studyMode ?? '').toString().trim().toLowerCase()
   if (explicit === 'physical' || explicit === 'online') return explicit
-  if (user?.isDsaStudent || user?.isDSAite) return 'physical'
-  return DEFAULT_MODE
+  if (user?.isDsaStudent === true || user?.isDSAite === true) return 'physical'
+  if (user?.isDsaStudent === false || user?.isDSAite === false) return 'online'
+  return null
+}
+
+// --- Local fallback for the enrolment choice --------------------------------
+//
+// BACKEND GAP: POST /api/auth/register does not accept `isDsaStudent`, so the
+// physical/online choice a student makes at signup is not persisted server-side
+// and never comes back on /auth/me. Without a fallback every student would
+// resolve to "online" and on-campus students would lose their timetable view.
+//
+// We therefore remember the choice in this browser at signup and use it only
+// when the API says nothing. Remove once the backend stores study mode.
+
+const ENROLMENT_KEY = 'dsa_enrolment_choice'
+
+export function rememberEnrolmentChoice(choice: {
+  track?: string
+  mode?: StudyMode
+  department?: Department
+}): void {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem(ENROLMENT_KEY, JSON.stringify(choice))
+  } catch {
+    // Storage unavailable (private mode) — the API values still apply.
+  }
+}
+
+export function getEnrolmentChoice(): {
+  track?: string
+  mode?: StudyMode
+  department?: Department
+} {
+  if (typeof window === 'undefined') return {}
+  try {
+    return JSON.parse(localStorage.getItem(ENROLMENT_KEY) || '{}')
+  } catch {
+    return {}
+  }
 }
 
 /** Build the full StudentProfile the dashboard renders from. */
 export function resolveStudentProfile(
   user?: Partial<User> | null,
 ): StudentProfile {
-  const track = normaliseTrack(user?.level ?? user?.examType)
-  const mode = normaliseMode(user)
+  const remembered = getEnrolmentChoice()
+
+  // The API is authoritative; the remembered choice only fills real gaps.
+  const rawTrack = user?.level ?? user?.examType ?? remembered.track
+  const track = normaliseTrack(rawTrack)
+  const mode = normaliseMode(user) ?? remembered.mode ?? DEFAULT_MODE
+
+  // WAEC/NECO carry a department. The backend stores it as the single entry in
+  // subjectsOfInterest; the remembered choice is the fallback (same gap as
+  // study mode — see rememberEnrolmentChoice).
+  const department =
+    track === 'waec' || track === 'neco'
+      ? (normaliseDepartment(user?.subjectsOfInterest?.[0]) ??
+        remembered.department ??
+        null)
+      : null
+
   return {
     track,
     mode,
+    department,
     trackConfig: EXAM_TRACKS[track],
     modeConfig: STUDY_MODES[mode],
+  }
+}
+
+// --- Live exam dates from the backend ----------------------------------------
+
+/**
+ * Override the built-in exam dates with whatever the backend holds.
+ *
+ * GET /api/programs returns entries like
+ *   { name: 'JAMB Countdown', endDate: '2026-04-20T00:00:00.000Z' }
+ * so the owner can change a countdown via POST /api/programs instead of a code
+ * deploy. A program is matched to a track by looking for the track name inside
+ * the program name (case-insensitive).
+ *
+ * Any track with no matching program keeps its EXAM_TRACKS default, so a
+ * partially-populated backend (today only JAMB exists) degrades cleanly.
+ */
+export function applyProgramDates(
+  profile: StudentProfile,
+  programs?: Array<{ name?: string; endDate?: string }> | null,
+): StudentProfile {
+  if (!programs?.length) return profile
+
+  const match = programs.find(
+    (p) =>
+      typeof p?.name === 'string' &&
+      typeof p?.endDate === 'string' &&
+      p.name.toLowerCase().includes(profile.track),
+  )
+  if (!match?.endDate) return profile
+
+  const when = new Date(match.endDate)
+  if (Number.isNaN(when.getTime())) return profile
+
+  return {
+    ...profile,
+    trackConfig: {
+      ...profile.trackConfig,
+      nextExamDate: match.endDate,
+      examLabel: `${profile.trackConfig.label} ${when.getFullYear()}`,
+    },
   }
 }
 

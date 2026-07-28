@@ -15,6 +15,9 @@ import RapidQuiz from '@/components/ui/RapidQuiz'
 import CTA from '@/components/ui/CTA'
 import FAQs from '@/components/ui/FAQs'
 import Footer from '@/components/ui/Footer'
+import StatsCounter from '@/components/ui/StatsCounter'
+import AdmissionsTimeline from '@/components/ui/AdmissionsTimeline'
+import WhatsAppFab from '@/components/ui/WhatsAppFab'
 
 export default function HomePage() {
   const [hasMounted, setHasMounted] = useState(false)
@@ -33,6 +36,8 @@ export default function HomePage() {
       <Header />
 
       <Hero />
+
+      <StatsCounter />
 
       <section id='about'>
         <AboutUs />
@@ -62,6 +67,8 @@ export default function HomePage() {
         <BlogPosts />
       </section>
 
+      <AdmissionsTimeline />
+
       <CTA />
 
       <section id='faq'>
@@ -69,6 +76,8 @@ export default function HomePage() {
       </section>
 
       <Footer />
+
+      <WhatsAppFab />
     </main>
   )
 }

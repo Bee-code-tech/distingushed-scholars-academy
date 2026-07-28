@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import {
   examCountdown,
+  DEPARTMENT_LABELS,
   type StudentProfile,
   type Countdown,
 } from '@/lib/studentProfile'
@@ -158,6 +159,11 @@ export default function OverviewUI({
                 <ModeIcon size={11} className='mr-1' />
                 {modeConfig.label}
               </Badge>
+              {student.department && (
+                <Badge className='bg-white/15 text-white border-none font-bold px-3 py-1'>
+                  {DEPARTMENT_LABELS[student.department]}
+                </Badge>
+              )}
             </div>
             <h1 className='text-3xl md:text-4xl font-black uppercase italic tracking-tight'>
               Road to{' '}
@@ -286,7 +292,10 @@ export default function OverviewUI({
                 Your Track
               </p>
               <p className='text-[11px] font-black text-gray-800 leading-none'>
-                {trackConfig.fullName} · {trackConfig.subjectRule}
+                {trackConfig.fullName}
+                {student.department
+                  ? ` · ${DEPARTMENT_LABELS[student.department]} Department`
+                  : ` · ${trackConfig.subjectRule}`}
               </p>
             </div>
           </Card>

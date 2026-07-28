@@ -24,6 +24,9 @@ export interface User {
   // signup form submits; `studyMode` is the resolved 'physical' | 'online'.
   isDsaStudent?: boolean
   studyMode?: string
+  // JAMB/Post-UTME students send their chosen subjects here; WAEC/NECO students
+  // send their department (a single 'science' | 'art' | 'commercial' value).
+  subjectsOfInterest?: string[]
 }
 
 /** Response returned by the login / register-verify endpoints. */
@@ -84,7 +87,12 @@ export interface Quiz {
 
 export interface QuizAnswer {
   questionId: string
-  selectedOptionId: string | null
+  /**
+   * Index of the chosen option (0-based), NOT an option id.
+   * The backend contract is `{ questionId, selectedOption: integer }` —
+   * see POST /api/quizzes/{id}/submit. Null means unanswered.
+   */
+  selectedOption: number | null
 }
 
 export interface QuizSubmission {
