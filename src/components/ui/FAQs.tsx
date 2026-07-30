@@ -7,7 +7,7 @@ const faqs = [
   {
     question: 'Do you teach UTME & WAEC students?',
     answer:
-      'Yes! We provide physical classes at our centre in Ibadan, located near the University of Ibadan, Oyo State.',
+      'Yes — UTME (JAMB) and WAEC are core to what we do. We prepare students for JAMB, WAEC and Post-UTME, plus after-school and undergraduate (100 & 200 level) support, through structured lessons, weekly assessments and mentorship — available online and on-campus at our centre in Ibadan.',
   },
   {
     question: 'Are classes online or physical?',
@@ -20,9 +20,9 @@ const faqs = [
       'Absolutely. Every enrolled student gets access to our curated study bank, which includes simplified PDF notes, e-books, and high-yield past question compilations.',
   },
   {
-    question: 'How do I join the Rapid Quiz?',
+    question: 'How do I access the student portal?',
     answer:
-      'Once you are registered, you can log in to our Rapid Quiz portal. It’s designed to simulate the real CBT environment, helping you build the speed and accuracy needed for 300+ scores.',
+      'After registering and completing the one-time portal access fee, verify your account and log in to your dashboard. From there you can view your class timetable, mark your attendance, and join live online classes.',
   },
   {
     question: 'Do you offer free orientation classes?',
@@ -207,7 +207,9 @@ export default function FAQs() {
             <p className='text-gray-500 font-bold text-sm uppercase tracking-widest'>
               Still have questions?
               <a
-                href='#contact'
+                href='https://wa.link/7wim2w'
+                target='_blank'
+                rel='noopener noreferrer'
                 className='text-[#002EFF] ml-2 hover:underline inline-flex items-center gap-1'
               >
                 Chat with an expert{' '}

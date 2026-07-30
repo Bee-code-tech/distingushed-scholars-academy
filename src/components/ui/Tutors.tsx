@@ -11,30 +11,70 @@ import Timilehin from '../../imges/Mr. Timilehin.jpg'
 
 const tutors = [
   {
+    name: 'Dr. Phils',
+    subject: 'Biology',
+    img: DrPhils,
+    formula: 'ATP → ADP',
+    credentials: [
+      '🎓 MBBS Student, University of Ibadan',
+      '🏛️ College of Medicine, University of Ibadan',
+      '👨‍💼 Founder, Distinguished Scholars Academy',
+    ],
+  },
+  {
+    name: 'Dr. Jay',
+    subject: 'Chemistry',
+    img: DhocthorJay,
+    formula: 'pH = -log[H+]',
+    credentials: [
+      '🎓 MBBS Student, University of Ibadan',
+      '🏛️ College of Medicine, University of Ibadan',
+      '👨‍💼 Co-founder, Distinguished Scholars Academy',
+    ],
+  },
+  {
     name: 'Mr. Timilehin',
     subject: 'Physics',
     img: Timilehin,
     formula: 'g = 9.8m/s²',
+    credentials: [
+      '🎓 MBBS Student, University of Ilorin',
+      '🏛️ College of Health Sciences',
+      '⚡ Passionate about simplifying Physics for UTME & WAEC students',
+    ],
   },
   {
     name: 'Miss Betty',
     subject: 'English',
     img: MissBetty,
     formula: 'Subject + Verb',
+    credentials: [
+      '🎓 Doctor of Pharmacy (Pharm.D) Student',
+      '🏛️ Faculty of Pharmacy, University of Ibadan',
+      '📖 Dedicated to helping students master English Language',
+    ],
   },
-  { name: 'Mr. Hakeem', subject: 'Mathematics', img: Hakeem, formula: 'Σx/n' },
   {
-    name: 'Dr. Jay',
-    subject: 'Chemistry',
-    img: DhocthorJay,
-    formula: 'pH = -log[H+]',
+    name: 'Mr. Hakeem',
+    subject: 'Mathematics',
+    img: Hakeem,
+    formula: 'Σx/n',
+    credentials: [
+      '🎓 Electrical Engineering Student',
+      '🏛️ Faculty of Technology, University of Ibadan',
+      '📐 Passionate about making Mathematics simple and practical',
+    ],
   },
-  { name: 'Dr. Phils', subject: 'Biology', img: DrPhils, formula: 'ATP → ADP' },
   {
     name: 'Mr. Emmanuel',
     subject: 'Chemistry',
     img: Emmanuel,
     formula: 'PV = nRT',
+    credentials: [
+      '🎓 MBBS Student',
+      '🏛️ College of Health Sciences, Obafemi Awolowo University (OAU)',
+      '🧪 Passionate about making Chemistry simple and exam-focused',
+    ],
   },
 ]
 
@@ -142,10 +182,17 @@ export default function Tutors() {
                   {tutor.subject}
                 </div>
 
-                {/* Social/Bio Hint */}
-                <p className='mt-4 text-gray-400 text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity duration-300'>
-                  Ready to help you excel in {tutor.subject}
-                </p>
+                {/* Credentials */}
+                <div className='mt-5 space-y-1.5 text-left'>
+                  {tutor.credentials.map((line) => (
+                    <p
+                      key={line}
+                      className='text-[11px] text-gray-500 font-medium leading-snug'
+                    >
+                      {line}
+                    </p>
+                  ))}
+                </div>
               </div>
             </div>
           ))}

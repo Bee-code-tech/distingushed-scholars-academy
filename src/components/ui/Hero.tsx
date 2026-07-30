@@ -185,11 +185,48 @@
 
 'use client'
 
+import { useState, useEffect, type ReactNode } from 'react'
 import { ArrowRight, Play, GraduationCap } from 'lucide-react'
 import Link from 'next/link'
 
 import FormulaBackdrop, { type Formula } from './FormulaBackdrop'
 import HeroSlideshow from './HeroSlideshow'
+
+// Rotating hero headlines. Index 0 is the current one; it cycles through the
+// others every few seconds. `idx` starts at 0 on server + client (no hydration
+// mismatch); rotation begins after mount.
+const HEADLINES: ReactNode[] = [
+  <>
+    Score Higher in JAMB, WAEC &amp; Post-UTME{' '}
+    <span className='text-[#002EFF]'>and Secure Admission</span>
+  </>,
+  <>
+    Helping Students Score Higher in JAMB, WAEC &amp; Post-UTME —{' '}
+    <span className='text-[#002EFF]'>and Secure University Admission</span>
+  </>,
+  <>
+    <span className='text-[#002EFF]'>Nigeria&apos;s Result-Focused</span>{' '}
+    Learning Academy for JAMB, WAEC &amp; University Success
+  </>,
+]
+
+function HeadlineCarousel() {
+  const [idx, setIdx] = useState(0)
+  useEffect(() => {
+    const id = setInterval(() => setIdx((i) => (i + 1) % HEADLINES.length), 4500)
+    return () => clearInterval(id)
+  }, [])
+  return (
+    <h1 className='text-3xl md:text-4xl font-black text-gray-900 leading-[1.15] tracking-tight min-h-[6.5rem] md:min-h-[7rem]'>
+      <span
+        key={idx}
+        className='block animate-in fade-in slide-in-from-bottom-1 duration-700'
+      >
+        {HEADLINES[idx]}
+      </span>
+    </h1>
+  )
+}
 
 // The 13 academy photos, split across the three hero slots.
 const img = (n: number) => `/hero/hero-${String(n).padStart(2, '0')}.jpeg`
@@ -228,15 +265,12 @@ export default function Hero() {
             </span>
           </div>
 
-          <h1 className='text-3xl md:text-4xl font-black text-gray-900 leading-[1.1] tracking-tight'>
-            Score Higher in JAMB, WAEC <br /> &amp; Post-UTME <br />
-            <span className='text-[#002EFF]'>and Secure Admission</span>
-          </h1>
+          <HeadlineCarousel />
 
           <p className='text-sm md:text-base text-gray-600 mt-6 max-w-md mx-auto md:mx-0 leading-relaxed font-medium'>
-            Structured lessons, weekly assessments, CBT practice, mentorship and
-            daily accountability — everything a student needs to improve their
-            scores and gain university admission.
+            Join over 2,000 students who have improved their scores through
+            structured lessons, weekly assessments, CBT practice, mentorship, and
+            accountability.
           </p>
 
           <div className='flex flex-col sm:flex-row items-center justify-center md:justify-start gap-4 mt-10'>

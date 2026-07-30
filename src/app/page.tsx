@@ -18,6 +18,7 @@ import Footer from '@/components/ui/Footer'
 import StatsCounter from '@/components/ui/StatsCounter'
 import AdmissionsTimeline from '@/components/ui/AdmissionsTimeline'
 import WhatsAppFab from '@/components/ui/WhatsAppFab'
+import MeetFounder from '@/components/ui/MeetFounder'
 
 export default function HomePage() {
   const [hasMounted, setHasMounted] = useState(false)
@@ -42,6 +43,8 @@ export default function HomePage() {
       <section id='about'>
         <AboutUs />
       </section>
+
+      <MeetFounder />
 
       <Features />
 

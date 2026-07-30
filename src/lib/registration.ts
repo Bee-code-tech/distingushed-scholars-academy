@@ -11,6 +11,7 @@ export const CLASS_LEVELS = [
   'SS1',
   'SS2',
   'SS3',
+  'Jambite/Aspirant',
   '100 Level',
   '200 Level',
 ] as const

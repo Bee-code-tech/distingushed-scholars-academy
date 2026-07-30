@@ -116,7 +116,7 @@ export default function AboutDSA() {
               className='absolute -bottom-6 -left-4 md:-bottom-8 md:-left-8 bg-white p-4 md:p-6 shadow-2xl rounded-[20px] md:rounded-[30px] flex items-center gap-3 border border-gray-50 z-10'
             >
               <div className='bg-[#FCB900] w-10 h-10 md:w-16 md:h-16 rounded-xl text-white font-black text-lg md:text-3xl flex items-center justify-center'>
-                10+
+                5+
               </div>
               <div className='flex flex-col'>
                 <span className='text-[10px] md:text-sm font-black text-black uppercase'>
@@ -145,9 +145,12 @@ export default function AboutDSA() {
           </h2>
 
           <p className='text-gray-500 mt-6 leading-relaxed text-base md:text-lg font-medium'>
-            DSA is an educational institution dedicated to raising excellent
-            students through effective teaching, consistent practice, and
-            result-driven mentorship.
+            Founded in 2021, Distinguished Scholars Academy was created with one
+            mission — to make quality academic coaching accessible to every
+            determined student. Since then, we&apos;ve helped thousands of
+            students prepare for JAMB, WAEC, Post-UTME, and university courses
+            through structured teaching, mentorship, and technology-driven
+            learning.
           </p>
 
           <div className='mt-8 p-6 border-l-8 border-[#FCB900] bg-gray-50 rounded-r-2xl'>
