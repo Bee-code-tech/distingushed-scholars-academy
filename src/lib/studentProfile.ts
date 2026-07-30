@@ -1,5 +1,5 @@
 // Central definition of the two "roles" that shape the student dashboard:
-//   1. Exam track  — JAMB, WAEC or NECO
+//   1. Exam track  — JAMB, WAEC or Post-UTME
 //   2. Study mode  — Physical (on-campus) or Online
 //
 // Everything the dashboard needs to specialise itself (titles, countdown dates,
@@ -17,7 +17,7 @@ import {
 } from 'lucide-react'
 import type { User } from './types'
 
-export type ExamTrack = 'jamb' | 'waec' | 'neco'
+export type ExamTrack = 'jamb' | 'waec' | 'postutme'
 export type StudyMode = 'physical' | 'online'
 export type Department = 'science' | 'art' | 'commercial'
 
@@ -86,15 +86,15 @@ export const EXAM_TRACKS: Record<ExamTrack, ExamTrackConfig> = {
     totalTopics: 60,
     tagline: 'Excellence is not an act, but a habit. Keep practising.',
   },
-  neco: {
-    id: 'neco',
-    label: 'NECO',
-    fullName: 'NECO SSCE',
+  postutme: {
+    id: 'postutme',
+    label: 'Post-UTME',
+    fullName: 'Post-UTME Screening',
     icon: FlaskConical,
-    nextExamDate: '2027-06-16T09:00:00+01:00',
-    examLabel: 'SSCE 2027',
-    subjectRule: '8–9 subjects — English & Maths compulsory',
-    totalTopics: 60,
+    nextExamDate: '2027-08-30T09:00:00+01:00',
+    examLabel: 'Post-UTME 2027',
+    subjectRule: '4 subjects — matches your intended course',
+    totalTopics: 40,
     tagline: 'Small daily improvements are the key to staggering results.',
   },
 }
@@ -125,7 +125,7 @@ export const DEFAULT_MODE: StudyMode = 'online'
 export interface StudentProfile {
   track: ExamTrack
   mode: StudyMode
-  /** WAEC/NECO only — the student's department. Null for JAMB/Post-UTME. */
+  /** WAEC only — the student's department. Null for JAMB/Post-UTME. */
   department: Department | null
   trackConfig: ExamTrackConfig
   modeConfig: StudyModeConfig
@@ -139,14 +139,13 @@ function normaliseDepartment(raw?: string | null): Department | null {
 }
 
 /**
- * Map a raw backend string onto a known ExamTrack. Handles the current API
- * values (`jamb`, `waec`, `post utme`) plus `neco` for when the backend starts
- * distinguishing it. Post-UTME students are prepping for the same UTME content,
- * so they fall under the JAMB track. Anything unknown defaults to JAMB.
+ * Map a raw backend string onto a known ExamTrack. Handles the API values
+ * (`jamb`, `waec`, `post utme`). Post-UTME is checked before JAMB because
+ * "post utme" also contains "utme". Anything unknown defaults to JAMB.
  */
 export function normaliseTrack(raw?: string | null): ExamTrack {
   const v = (raw ?? '').toString().trim().toLowerCase()
-  if (v.includes('neco')) return 'neco'
+  if (v.includes('post')) return 'postutme'
   if (v.includes('waec') || v.includes('wassce')) return 'waec'
   if (v.includes('jamb') || v.includes('utme')) return 'jamb'
   return DEFAULT_TRACK
@@ -214,11 +213,11 @@ export function resolveStudentProfile(
   const track = normaliseTrack(rawTrack)
   const mode = normaliseMode(user) ?? remembered.mode ?? DEFAULT_MODE
 
-  // WAEC/NECO carry a department. The backend stores it as the single entry in
-  // subjectsOfInterest; the remembered choice is the fallback (same gap as
-  // study mode — see rememberEnrolmentChoice).
+  // WAEC carries a department (Science/Art/Commercial). The backend stores it as
+  // the single entry in subjectsOfInterest; the remembered choice is the
+  // fallback (same gap as study mode — see rememberEnrolmentChoice).
   const department =
-    track === 'waec' || track === 'neco'
+    track === 'waec'
       ? (normaliseDepartment(user?.subjectsOfInterest?.[0]) ??
         remembered.department ??
         null)

@@ -5,7 +5,6 @@ import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
 
 import WAEC from '../../imges/waec.jpeg'
-import NECO from '../../imges/neco.jpeg'
 import JAMB from '../../imges/jamb.jpeg'
 import Year1 from '../../imges/Year01.jpg'
 import SUMMER from '../../imges/Summer-Coaching.jpg'
@@ -32,9 +31,9 @@ const programs = [
     desc: 'Master all WAEC subjects with detailed explanations, practice sessions, and revision plans.',
   },
   {
-    name: 'Full NECO Preparation',
-    img: NECO,
-    desc: 'Comprehensive NECO coaching covering theory, objectives, practicals, and exam drills.',
+    name: 'Full Post-UTME Preparation',
+    img: JAMB,
+    desc: 'Targeted Post-UTME screening prep — course-specific subjects, past questions, and mock screenings.',
   },
   {
     name: 'Summer Coaching',

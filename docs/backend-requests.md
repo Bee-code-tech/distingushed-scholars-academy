@@ -104,6 +104,71 @@ data today — but they are all placeholders until these endpoints exist.
 
 ---
 
+## 4. Attendance — activate & self-check-in — MEDIUM
+
+**Model (important — students mark themselves).** Attendance is **self-check-in**,
+not tutor-marked:
+
+1. A **tutor/admin activates** attendance for the day (opens a window).
+2. While it is open, each **student marks *themselves* present** from their own
+   dashboard. **The server records the time** of that check-in — do not trust a
+   client-supplied timestamp.
+3. The **tutor/admin monitor** who has checked in and when; they can close the
+   window.
+4. Students also **view their own record** (rate, present/absent, streak, days).
+
+It is all **mock/local data today — nothing persists**.
+
+**Requested endpoints** (all auth-required; roles enforced server-side):
+
+```
+POST /api/attendance/sessions        activate attendance for today (tutor/admin)
+      body: { date: "2026-07-30", classId? }
+      → { active: true, date, activatedAt }
+
+DELETE /api/attendance/sessions/:date   close the window (tutor/admin)
+
+GET  /api/attendance/sessions/current   is attendance open right now?
+      → { active, date, activatedAt }        (any authenticated user)
+
+POST /api/attendance/check-in        STUDENT marks THEMSELVES present
+      body: {}                               ← studentId comes from the JWT, NOT the body
+      → { status: "present", at: "<server timestamp>" }
+      · 409 if already checked in today · 403 if the window is not open
+
+GET  /api/attendance/check-ins?date=…   who has checked in (tutor/admin)
+      → [ { studentId, name, at } ]          (live roster for the day)
+
+GET  /api/attendance/me              the logged-in student's own record + rate
+      → { rate, present, absent, days: [ { date, status, at? } ] }
+```
+
+**Data model.** A check-in `{ studentId, date, status: "present", at }` where
+`at` is the **server** time; and a per-day (per-class) session `{ date,
+activatedAt, activatedBy, closedAt? }` so any user can tell whether today is
+open.
+
+**Security.**
+- Only `tutor`/`admin` may activate/close a session and read the full check-in
+  list.
+- A student may **only check *themselves* in** — derive `studentId` from the JWT,
+  never from the request body — and read **only their own** record.
+- Check-in is allowed **only while the window is open**, is **idempotent** (one
+  per student per day), and the **timestamp is set server-side**.
+
+**Acceptance criteria.**
+- Tutor activates → a student can check in and gets back the server time; the
+  tutor's list shows that student with that time.
+- A student cannot check in when the window is closed (403), cannot check in
+  twice (409), and cannot check in as anyone else.
+- A student sees only their own record.
+
+**Current frontend state.** Fully built with placeholder data: tutor & admin
+"Activate + monitor" screen, student "Mark Me Present" self-check-in with a
+timestamp. It swaps onto these endpoints with no redesign.
+
+---
+
 ## For reference — already handled on the frontend, no backend action needed
 
 These were frontend bugs against your (correct) API; fixed on our side:

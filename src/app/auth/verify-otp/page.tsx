@@ -16,7 +16,9 @@ import {
 } from 'lucide-react'
 
 import { dsaApi } from '@/lib/api'
-import { setSession } from '@/lib/auth'
+import { setSession, dashboardPathForRole } from '@/lib/auth'
+import { DEMO_TOKEN_PREFIX } from '@/lib/demoAccounts'
+import type { UserRole } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import {
   Form,
@@ -34,8 +36,12 @@ import {
 import { Card, CardContent } from '@/components/ui/card'
 
 const formSchema = z.object({
-  otp: z.string().length(6, 'Enter the full 6-digit code'),
+  otp: z.string().length(4, 'Enter the full 4-digit code'),
 })
+
+// Demo verification code. The real flow will verify against the backend; for
+// now any account activates with this code. Keep in sync with the hint shown.
+const DEMO_OTP = '1111'
 
 const RESEND_COOLDOWN = 180
 
@@ -117,12 +123,44 @@ export default function VerifyOTP() {
     setApiSuccess(null)
     setIsLoading(true)
 
+    // Demo verification: the code is 1111. Establish the session from the
+    // profile stashed at registration and open the right dashboard by role.
+    if (values.otp === DEMO_OTP) {
+      let pending: {
+        email?: string
+        username?: string
+        role?: string
+      } | null = null
+      try {
+        pending = JSON.parse(localStorage.getItem('dsa_pending_user') || 'null')
+      } catch {
+        pending = null
+      }
+      const role = (pending?.role as UserRole) || 'student'
+      setSession({
+        token: `${DEMO_TOKEN_PREFIX}${pending?.username || 'student'}`,
+        user: pending
+          ? {
+              email: pending.email || email,
+              username: pending.username,
+              role,
+              ...(pending as object),
+            }
+          : { email, role },
+        role,
+      })
+      localStorage.removeItem('dsa_pending_email')
+      localStorage.removeItem('dsa_pending_user')
+      localStorage.removeItem('otp_expiry')
+      setApiSuccess('Verified! Loading your dashboard…')
+      router.push(dashboardPathForRole(role))
+      setIsLoading(false)
+      return
+    }
+
     try {
       const data = await dsaApi.auth.verifyOtp(email, values.otp)
 
-      // Persist under the canonical key (`dsa_token`) so the dashboard and
-      // API client actually find the session. Previously stored as
-      // `dsa_auth_token`, which nothing else read — users got bounced to login.
       if (data.token) {
         setSession({
           token: data.token,
@@ -132,11 +170,9 @@ export default function VerifyOTP() {
       }
       localStorage.removeItem('dsa_pending_email')
       localStorage.removeItem('otp_expiry')
-      router.push('/dashboard?welcome=true')
-    } catch (error) {
-      setApiError(
-        error instanceof Error ? error.message : 'Invalid code. Please try again.',
-      )
+      router.push(dashboardPathForRole(data.user?.role || 'student'))
+    } catch {
+      setApiError('Invalid code. Please enter 1111 to continue.')
       form.setValue('otp', '')
     } finally {
       setIsLoading(false)
@@ -160,6 +196,9 @@ export default function VerifyOTP() {
         </h1>
         <p className='text-[10px] font-bold text-gray-400 mt-2 uppercase tracking-[0.2em]'>
           We sent a code to <span className='text-[#002EFF]'>{email}</span>
+        </p>
+        <p className='text-[10px] font-black text-[#FCB900] mt-1 uppercase tracking-widest'>
+          Demo code: 1111
         </p>
       </div>
 
@@ -202,12 +241,12 @@ export default function VerifyOTP() {
                     <FormControl>
                       {/* FIXED: Using direct child pattern to prevent the 'undefined (reading 0)' crash */}
                       <InputOTP
-                        maxLength={6}
+                        maxLength={4}
                         {...field}
                         onComplete={() => form.handleSubmit(onSubmit)()}
                       >
                         <InputOTPGroup className='gap-2 md:gap-3'>
-                          {[0, 1, 2, 3, 4, 5].map((idx) => (
+                          {[0, 1, 2, 3].map((idx) => (
                             <InputOTPSlot
                               key={idx}
                               index={idx}

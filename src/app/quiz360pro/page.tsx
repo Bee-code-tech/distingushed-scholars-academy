@@ -42,7 +42,7 @@ const services = [
   {
     icon: BarChart2,
     title: 'Huge Question Bank',
-    desc: 'Thousands of past questions filterable by year, subject, topic, difficulty and institution across JAMB, WAEC, NECO and Post-UTME.',
+    desc: 'Thousands of past questions filterable by year, subject, topic, difficulty and institution across JAMB, WAEC and Post-UTME.',
   },
   {
     icon: Brain,
@@ -81,7 +81,7 @@ const jambSteps = [
 ]
 
 const jambBenefits = [
-  'JAMB, WAEC, NECO & Post-UTME — all in one place',
+  'JAMB, WAEC & Post-UTME — all in one place',
   'Beat exam anxiety by rehearsing the real CBT experience',
   'Fix weak topics with targeted, verified practice',
   'Build speed so you finish every section on time',
@@ -236,7 +236,7 @@ export default function Quiz360ProLanding() {
               data-aos-delay='200'
               className='mt-5 text-gray-500 max-w-2xl mx-auto font-medium'
             >
-              Whether you are preparing for JAMB, WAEC, NECO or a Post-UTME
+              Whether you are preparing for JAMB, WAEC or a Post-UTME
               screening, Quiz360Pro gives every student the same powerful tools.
             </p>
           </div>

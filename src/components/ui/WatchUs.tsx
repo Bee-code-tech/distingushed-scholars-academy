@@ -24,7 +24,7 @@ const clips = [
   },
   {
     title:
-      'Solubility Product (Ksp) Made Easy | Chemistry Tutorial for WAEC, JAMB, NECO',
+      'Solubility Product (Ksp) Made Easy | Chemistry Tutorial for WAEC, JAMB, Post-UTME',
     img: Clip2,
     link: 'https://youtu.be/SxDwqL3GHy0?si=HBBeDwlP9l6cTwfU',
   },

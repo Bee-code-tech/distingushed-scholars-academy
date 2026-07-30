@@ -1,10 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   LayoutDashboard,
   Users,
   CalendarDays,
+  CalendarCheck,
   FileText,
   BarChart3,
   Loader2,
@@ -21,16 +22,11 @@ import DashboardShell, {
   type NavItem,
 } from '@/components/dashboard/DashboardShell'
 import { useDashboardSession } from '@/components/dashboard/useDashboardSession'
+import TakeAttendance from '@/components/dashboard/TakeAttendance'
+import TimetableEditor from '@/components/dashboard/TimetableEditor'
+import { getStudents, type StoredStudent } from '@/lib/studentsStore'
 
 // --- Mock data (replace with API once tutor endpoints exist) ----------------
-
-const STUDENTS = [
-  { name: 'Ada Obi', track: 'JAMB', avg: 82, progress: 68, trend: 'up' },
-  { name: 'Bola Ade', track: 'WAEC', avg: 74, progress: 55, trend: 'up' },
-  { name: 'Chidi Eze', track: 'JAMB', avg: 61, progress: 40, trend: 'down' },
-  { name: 'Dupe Ola', track: 'NECO', avg: 88, progress: 79, trend: 'up' },
-  { name: 'Emeka Nwa', track: 'WAEC', avg: 69, progress: 47, trend: 'down' },
-]
 
 const CLASSES = [
   { day: 'MON', date: '28 JUL', title: 'Mathematics — Algebra', time: '9:00 AM', where: 'Hall B, Campus', mode: 'physical', live: true },
@@ -55,6 +51,8 @@ const SUBJECT_PERF = [
 const NAV: NavItem[] = [
   { key: 'overview', label: 'Overview', icon: LayoutDashboard },
   { key: 'students', label: 'My Students', icon: Users },
+  { key: 'attendance', label: 'Take Attendance', icon: CalendarCheck },
+  { key: 'timetable', label: 'Timetable', icon: CalendarDays },
   { key: 'schedule', label: 'Class Schedule', icon: CalendarDays },
   { key: 'quizzes', label: 'Quizzes', icon: FileText },
   { key: 'analytics', label: 'Analytics', icon: BarChart3 },
@@ -83,6 +81,10 @@ function TrackBadge({ track }: { track: string }) {
 export default function TutorDashboard() {
   const { user, loading, logout } = useDashboardSession('tutor')
   const [view, setView] = useState('overview')
+  // Loaded on the client (localStorage) — includes any student registered on
+  // this browser, so the roster reflects real sign-ups.
+  const [students, setStudents] = useState<StoredStudent[]>([])
+  useEffect(() => setStudents(getStudents()), [])
 
   if (loading || !user) {
     return (
@@ -123,7 +125,7 @@ export default function TutorDashboard() {
           </section>
 
           <div className='grid grid-cols-2 md:grid-cols-4 gap-4'>
-            <StatTile label='My Students' value={STUDENTS.length} icon={Users} tint='bg-blue-50 text-blue-600' />
+            <StatTile label='My Students' value={students.length} icon={Users} tint='bg-blue-50 text-blue-600' />
             <StatTile label='Classes / wk' value={CLASSES.length} icon={CalendarDays} tint='bg-emerald-50 text-emerald-600' />
             <StatTile label='Quizzes' value={QUIZZES.length} icon={FileText} tint='bg-amber-50 text-amber-600' />
             <StatTile label='To Grade' value={pendingGrading} icon={CheckCircle2} tint='bg-rose-50 text-rose-600' />
@@ -137,8 +139,8 @@ export default function TutorDashboard() {
               </button>
             </div>
             <div className='space-y-2'>
-              {STUDENTS.filter((s) => s.avg < 70).map((s) => (
-                <div key={s.name} className='flex items-center justify-between p-3 rounded-2xl bg-rose-50/50'>
+              {students.filter((s) => (s.avg ?? 100) < 70).map((s) => (
+                <div key={s.key} className='flex items-center justify-between p-3 rounded-2xl bg-rose-50/50'>
                   <div className='flex items-center gap-2'>
                     <span className='text-xs font-black text-gray-800'>{s.name}</span>
                     <TrackBadge track={s.track} />
@@ -156,21 +158,40 @@ export default function TutorDashboard() {
           <h2 className='text-2xl font-black text-[#002EFF] italic uppercase'>My Students</h2>
           <Card className='rounded-3xl border-none shadow-sm bg-white overflow-hidden'>
             <div className='grid grid-cols-12 px-5 py-3 bg-slate-50 text-[9px] font-black uppercase text-gray-400'>
-              <span className='col-span-5'>Student</span>
+              <span className='col-span-4'>Student</span>
               <span className='col-span-2'>Track</span>
+              <span className='col-span-2'>Mode</span>
               <span className='col-span-2'>Avg</span>
-              <span className='col-span-3'>Progress</span>
+              <span className='col-span-2'>Progress</span>
             </div>
-            {STUDENTS.map((s) => (
-              <div key={s.name} className='grid grid-cols-12 items-center px-5 py-4 border-t border-slate-50'>
-                <span className='col-span-5 text-xs font-black text-gray-800'>{s.name}</span>
-                <span className='col-span-2'><TrackBadge track={s.track} /></span>
-                <span className={`col-span-2 text-xs font-black ${s.avg >= 70 ? 'text-emerald-600' : 'text-rose-500'}`}>
-                  {s.avg}%
+            {students.map((s) => (
+              <div key={s.key} className='grid grid-cols-12 items-center px-5 py-4 border-t border-slate-50'>
+                <span className='col-span-4 text-xs font-black text-gray-800'>
+                  {s.name}
+                  {s.isNew && (
+                    <span className='ml-2 text-[8px] font-black uppercase text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded'>
+                      New
+                    </span>
+                  )}
                 </span>
-                <div className='col-span-3'>
+                <span className='col-span-2'><TrackBadge track={s.track} /></span>
+                <span className='col-span-2'>
+                  {s.mode ? (
+                    <Badge
+                      className={`text-[8px] font-black ${s.mode === 'physical' ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-[#002EFF]'}`}
+                    >
+                      {s.mode === 'physical' ? 'On-Campus' : 'Online'}
+                    </Badge>
+                  ) : (
+                    <span className='text-[10px] font-bold text-slate-300'>—</span>
+                  )}
+                </span>
+                <span className={`col-span-2 text-xs font-black ${s.avg == null ? 'text-slate-400' : s.avg >= 70 ? 'text-emerald-600' : 'text-rose-500'}`}>
+                  {s.avg == null ? '—' : `${s.avg}%`}
+                </span>
+                <div className='col-span-2'>
                   <div className='h-2 bg-slate-100 rounded-full overflow-hidden'>
-                    <div className='h-full bg-[#002EFF] rounded-full' style={{ width: `${s.progress}%` }} />
+                    <div className='h-full bg-[#002EFF] rounded-full' style={{ width: `${s.progress ?? 0}%` }} />
                   </div>
                 </div>
               </div>
@@ -178,6 +199,10 @@ export default function TutorDashboard() {
           </Card>
         </div>
       )}
+
+      {view === 'attendance' && <TakeAttendance />}
+
+      {view === 'timetable' && <TimetableEditor />}
 
       {view === 'schedule' && (
         <div className='space-y-4'>

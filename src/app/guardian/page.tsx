@@ -82,8 +82,17 @@ export default function GuardianDashboard() {
   const [view, setView] = useState('overview')
 
   const track = EXAM_TRACKS[WARD.track]
-  const [time, setTime] = useState<Countdown>(() => examCountdown(track.nextExamDate))
+  // Static initial value to avoid a hydration mismatch (examCountdown uses
+  // Date.now()); the real value is computed on the client in the effect.
+  const [time, setTime] = useState<Countdown>({
+    days: 0,
+    hours: 0,
+    minutes: 0,
+    seconds: 0,
+    elapsed: false,
+  })
   useEffect(() => {
+    setTime(examCountdown(track.nextExamDate))
     const id = setInterval(() => setTime(examCountdown(track.nextExamDate)), 1000)
     return () => clearInterval(id)
   }, [track.nextExamDate])

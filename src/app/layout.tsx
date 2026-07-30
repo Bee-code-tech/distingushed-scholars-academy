@@ -12,26 +12,26 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title:
-    'Distinguished Scholars Academy | JAMB, WAEC & NECO Tutorial in Nigeria',
+    'Distinguished Scholars Academy | JAMB, WAEC & Post-UTME Tutorial in Nigeria',
   description:
-    'Distinguished Scholars Academy helps Nigerian students prepare for JAMB (UTME), WAEC, NECO and Post-UTME with structured lessons, CBT practice, weekly assessments and mentorship — online and on-campus in Ibadan.',
+    'Distinguished Scholars Academy helps Nigerian students prepare for JAMB (UTME), WAEC and Post-UTME with structured lessons, CBT practice, weekly assessments and mentorship — online and on-campus in Ibadan.',
   keywords: [
     'JAMB tutorial in Nigeria',
     'WAEC lessons',
-    'NECO coaching',
     'Post-UTME preparation',
+    'Post-UTME coaching',
     'online JAMB classes',
     'CBT practice',
     'UTME preparation',
     'university tutorials',
     '100-level tutorials',
-    'JAMB WAEC NECO Ibadan',
+    'JAMB WAEC Post-UTME Ibadan',
   ],
   openGraph: {
     title:
-      'Distinguished Scholars Academy | JAMB, WAEC & NECO Tutorial in Nigeria',
+      'Distinguished Scholars Academy | JAMB, WAEC & Post-UTME Tutorial in Nigeria',
     description:
-      'Structured lessons, CBT practice, weekly assessments and mentorship to help students score higher in JAMB, WAEC and NECO and secure university admission.',
+      'Structured lessons, CBT practice, weekly assessments and mentorship to help students score higher in JAMB, WAEC and Post-UTME and secure university admission.',
     type: 'website',
   },
   icons: {

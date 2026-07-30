@@ -185,15 +185,17 @@
 
 'use client'
 
-import { ArrowRight, Play } from 'lucide-react'
-import Image from 'next/image'
+import { ArrowRight, Play, GraduationCap } from 'lucide-react'
 import Link from 'next/link'
 
-// Assuming folder name is corrected to 'images'
-import Hero01 from '../../imges/hero-01.jpg'
-import Hero02 from '../../imges/hero-02.jpg'
-import Hero03 from '../../imges/hero-03.jpg'
 import FormulaBackdrop, { type Formula } from './FormulaBackdrop'
+import HeroSlideshow from './HeroSlideshow'
+
+// The 13 academy photos, split across the three hero slots.
+const img = (n: number) => `/hero/hero-${String(n).padStart(2, '0')}.jpeg`
+const MAIN_IMAGES = [1, 2, 3, 4, 5].map(img)
+const TOP_IMAGES = [6, 7, 8, 9].map(img)
+const BOTTOM_IMAGES = [10, 11, 12, 13].map(img)
 
 const formulas: Formula[] = [
   { text: 'E = mc²', top: '12%', left: '4%', rotate: -15 },
@@ -227,7 +229,7 @@ export default function Hero() {
           </div>
 
           <h1 className='text-3xl md:text-4xl font-black text-gray-900 leading-[1.1] tracking-tight'>
-            Score Higher in JAMB, WAEC &amp; NECO <br />
+            Score Higher in JAMB, WAEC <br /> &amp; Post-UTME <br />
             <span className='text-[#002EFF]'>and Secure Admission</span>
           </h1>
 
@@ -259,7 +261,7 @@ export default function Hero() {
           </div>
         </div>
 
-        {/* RIGHT IMAGE SECTION */}
+        {/* RIGHT IMAGE SECTION — three photo slots, each its own carousel */}
         <div
           data-aos='zoom-in'
           data-aos-duration='700'
@@ -268,88 +270,48 @@ export default function Hero() {
           {/* Animated Background Ring */}
           <div className='absolute w-[110%] h-[110%] border-2 border-dashed border-blue-100 rounded-full -z-10 animate-[spin_30s_linear_infinite]' />
 
-          {/* Main Profile Image */}
-          {/* FIXED: Added 'relative' to ensure Image fill works */}
+          {/* Main carousel */}
           <div className='relative w-64 h-64 md:w-80 md:h-80 bg-[#FCB900] rounded-3xl rotate-3 flex items-center justify-center shadow-2xl'>
             <div className='relative w-full h-full -rotate-3 overflow-hidden rounded-3xl border-4 border-white'>
-              <Image
-                src={Hero01}
-                fill
-                className='object-cover'
-                alt='Main Students'
-                priority
+              <HeroSlideshow
+                images={MAIN_IMAGES}
                 sizes='(max-width: 768px) 256px, 320px'
+                interval={4000}
+                priority
               />
             </div>
 
-            {/* Floating Accents */}
+            {/* Floating Accent */}
             <div className='absolute -top-4 -right-4 w-12 h-12 bg-[#002EFF] rounded-2xl flex items-center justify-center shadow-lg -rotate-12 animate-bounce'>
               <GraduationCap className='text-white' size={24} />
             </div>
           </div>
 
-          {/* Secondary Floating Images */}
-          <div
-            data-aos='fade-up'
-            data-aos-delay='500'
-            className='absolute -left-4 top-0 md:-left-12'
-          >
-            {/* FIXED: Added 'relative' */}
+          {/* Top-left carousel */}
+          <div className='absolute -left-4 top-0 md:-left-12'>
             <div className='relative w-20 h-20 md:w-28 md:h-28 rounded-2xl border-4 border-white shadow-xl overflow-hidden rotate-[-10deg]'>
-              <Image
-                src={Hero02}
-                fill
-                className='object-cover'
-                alt='Student 1'
+              <HeroSlideshow
+                images={TOP_IMAGES}
                 sizes='(max-width: 768px) 80px, 112px'
+                interval={4500}
+                startDelay={1500}
               />
             </div>
           </div>
 
-          <div
-            data-aos='fade-down'
-            data-aos-delay='700'
-            className='absolute -right-4 bottom-0 md:-right-8'
-          >
-            {/* FIXED: Added 'relative' */}
+          {/* Bottom-right carousel */}
+          <div className='absolute -right-4 bottom-0 md:-right-8'>
             <div className='relative w-24 h-24 md:w-32 md:h-32 rounded-2xl border-4 border-white shadow-xl overflow-hidden rotate-10'>
-              <Image
-                src={Hero03}
-                fill
-                className='object-cover'
-                alt='Student 2'
+              <HeroSlideshow
+                images={BOTTOM_IMAGES}
                 sizes='(max-width: 768px) 96px, 128px'
+                interval={5000}
+                startDelay={3000}
               />
             </div>
           </div>
         </div>
       </div>
     </section>
-  )
-}
-
-function GraduationCap({
-  className,
-  size,
-}: {
-  className?: string
-  size?: number
-}) {
-  return (
-    <svg
-      xmlns='http://www.w3.org/2000/svg'
-      width={size}
-      height={size}
-      viewBox='0 0 24 24'
-      fill='none'
-      stroke='currentColor'
-      strokeWidth='2'
-      strokeLinecap='round'
-      strokeLinejoin='round'
-      className={className}
-    >
-      <path d='M22 10v6M2 10l10-5 10 5-10 5z' />
-      <path d='M6 12v5c3 3 9 3 12 0v-5' />
-    </svg>
   )
 }

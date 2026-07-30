@@ -375,6 +375,8 @@ import {
   AlertTriangle,
   Search,
   X,
+  UserPlus,
+  CalendarCheck,
 } from 'lucide-react'
 
 // UI Components
@@ -389,6 +391,9 @@ import MyQuizzes from '../admin/components/myQuizzes/page'
 import Library from './components/Library'
 import Analytics from './components/Analytics'
 import StudentManagement from './components/StudentManagement'
+import CreateTutor from './components/CreateTutor'
+import TakeAttendance from '@/components/dashboard/TakeAttendance'
+import TimetableEditor from '@/components/dashboard/TimetableEditor'
 import LiveMonitoring from './components/LiveMonitoring'
 import Announcements from './components/Announcements'
 import Leaderboard from './components/Leaderboard'
@@ -405,6 +410,9 @@ type AdminTab =
   | 'my-quizzes'
   | 'analytics'
   | 'students'
+  | 'create-tutor'
+  | 'attendance'
+  | 'timetable'
   | 'monitoring'
   | 'broadcast'
   | 'leaderboard'
@@ -467,6 +475,21 @@ export default function AdminAdmin() {
         { id: 'analytics' as AdminTab, label: 'Analytics', icon: BarChart3 },
         { id: 'students' as AdminTab, label: 'Students', icon: Users },
         {
+          id: 'create-tutor' as AdminTab,
+          label: 'Create Tutor',
+          icon: UserPlus,
+        },
+        {
+          id: 'attendance' as AdminTab,
+          label: 'Take Attendance',
+          icon: CalendarCheck,
+        },
+        {
+          id: 'timetable' as AdminTab,
+          label: 'Timetable',
+          icon: CalendarCheck,
+        },
+        {
           id: 'monitoring' as AdminTab,
           label: 'Live Monitoring',
           icon: Activity,
@@ -508,6 +531,12 @@ export default function AdminAdmin() {
         return <Analytics />
       case 'students':
         return <StudentManagement />
+      case 'create-tutor':
+        return <CreateTutor />
+      case 'attendance':
+        return <TakeAttendance />
+      case 'timetable':
+        return <TimetableEditor />
       case 'monitoring':
         return <LiveMonitoring />
       case 'broadcast':

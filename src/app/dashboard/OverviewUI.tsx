@@ -11,10 +11,10 @@ import {
   CheckCircle2,
   Flame,
   Target,
-  Rocket,
   MapPin,
   Video,
   CalendarClock,
+  CalendarCheck,
 } from 'lucide-react'
 import {
   examCountdown,
@@ -132,9 +132,17 @@ export default function OverviewUI({
   const { trackConfig, modeConfig } = student
   const ModeIcon = modeConfig.icon
 
-  const [time, setTime] = useState<Countdown>(() =>
-    examCountdown(trackConfig.nextExamDate),
-  )
+  // Start with a static value so the server-rendered HTML matches the first
+  // client render (examCountdown uses Date.now(), which would otherwise differ
+  // by a second and cause a hydration mismatch). The real value is computed on
+  // the client in the effect below.
+  const [time, setTime] = useState<Countdown>({
+    days: 0,
+    hours: 0,
+    minutes: 0,
+    seconds: 0,
+    elapsed: false,
+  })
 
   useEffect(() => {
     setTime(examCountdown(trackConfig.nextExamDate))
@@ -174,10 +182,10 @@ export default function OverviewUI({
             </p>
             <div className='flex gap-3'>
               <Button
-                onClick={() => setView('quiz360')}
+                onClick={() => setView('attendance')}
                 className='bg-[#FCB900] text-[#002EFF] font-black rounded-xl text-[10px] px-8 h-10 shadow-lg shadow-yellow-400/20 active:scale-95 transition-transform'
               >
-                LAUNCH QUIZ360 <Rocket className='ml-2' size={14} />
+                VIEW ATTENDANCE <CalendarCheck className='ml-2' size={14} />
               </Button>
 
               {isDSAite && (

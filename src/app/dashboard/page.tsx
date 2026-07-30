@@ -304,21 +304,18 @@ import { useRouter } from 'next/navigation'
 import {
   LayoutDashboard,
   Zap,
-  BookOpen,
-  Trophy,
   Calendar,
   Settings,
   LogOut,
   Menu,
   Search,
   GraduationCap,
-  Rocket,
   Bell,
   Library,
-  History,
   Users,
   Lock,
   Loader2,
+  CalendarCheck,
 } from 'lucide-react'
 
 // API Utility
@@ -349,26 +346,22 @@ import { Badge } from '@/components/ui/badge'
 
 // Page Components
 import SyllabusMastery from './syllabus/page'
-import ExamSimulator from './simulator/page'
-import Quiz360Portal from './quiz360/page'
-import GlobalRankings from './rankings/page'
 import ExamSchedule from './schedule/page'
 import SettingsView from './settings/page'
 import OverviewUI from './OverviewUI'
 import ResourcesView from './resources/page'
-import QuizHistoryView from './history/page'
 import CommunityView from './community/page'
+import StudentAttendance from '@/components/dashboard/StudentAttendance'
+import Timetable from '@/components/dashboard/Timetable'
 
 type ViewState =
   | 'overview'
   | 'syllabus'
-  | 'simulator'
-  | 'rankings'
+  | 'attendance'
+  | 'timetable'
   | 'schedule'
   | 'settings'
-  | 'quiz360'
   | 'resources'
-  | 'history'
   | 'community'
 
 export default function AcademyDashboard() {
@@ -456,18 +449,20 @@ export default function AcademyDashboard() {
 
   const navigation = [
     { icon: LayoutDashboard, label: 'Overview', view: 'overview' as ViewState },
+    {
+      icon: CalendarCheck,
+      label: 'Attendance',
+      view: 'attendance' as ViewState,
+    },
+    { icon: Calendar, label: 'Timetable', view: 'timetable' as ViewState },
     { icon: Library, label: 'E-Learning', view: 'resources' as ViewState },
     { icon: Zap, label: 'Syllabus Mastery', view: 'syllabus' as ViewState },
-    { icon: BookOpen, label: 'Exam Simulator', view: 'simulator' as ViewState },
-    { icon: Rocket, label: 'Quiz360 Pro', view: 'quiz360' as ViewState },
-    { icon: History, label: 'Quiz History', view: 'history' as ViewState },
     {
       icon: Users,
       label: 'Community',
       view: 'community' as ViewState,
       premium: true,
     },
-    { icon: Trophy, label: 'Global Rankings', view: 'rankings' as ViewState },
     { icon: Calendar, label: 'Exam Schedule', view: 'schedule' as ViewState },
     { icon: Settings, label: 'Settings', view: 'settings' as ViewState },
   ]
@@ -667,15 +662,19 @@ export default function AcademyDashboard() {
                 student={student}
               />
             )}
+            {activeView === 'attendance' && <StudentAttendance />}
+            {activeView === 'timetable' && (
+              <Timetable
+                track={student.track}
+                mode={student.mode}
+                department={student.department}
+              />
+            )}
             {activeView === 'resources' && (
               <ResourcesView isDSAite={user.isDSAite} />
             )}
             {activeView === 'syllabus' && <SyllabusMastery />}
-            {activeView === 'simulator' && <ExamSimulator />}
-            {activeView === 'quiz360' && <Quiz360Portal />}
-            {activeView === 'history' && <QuizHistoryView />}
             {activeView === 'community' && <CommunityView />}
-            {activeView === 'rankings' && <GlobalRankings />}
             {activeView === 'schedule' && <ExamSchedule mode={student.mode} />}
             {activeView === 'settings' && <SettingsView />}
           </div>

@@ -24,7 +24,7 @@ export interface User {
   // signup form submits; `studyMode` is the resolved 'physical' | 'online'.
   isDsaStudent?: boolean
   studyMode?: string
-  // JAMB/Post-UTME students send their chosen subjects here; WAEC/NECO students
+  // JAMB/Post-UTME students send their chosen subjects here; WAEC students
   // send their department (a single 'science' | 'art' | 'commercial' value).
   subjectsOfInterest?: string[]
 }

@@ -187,7 +187,7 @@ export default function AdminLogin() {
               size={14}
               className='group-hover:-translate-x-1 transition-transform'
             />
-            Return to Dashboard
+            Back to Home
           </Link>
         </motion.div>
       </motion.div>

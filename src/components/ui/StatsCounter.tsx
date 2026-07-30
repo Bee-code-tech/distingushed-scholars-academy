@@ -3,18 +3,14 @@
 import { GraduationCap, Trophy, Users, Star } from 'lucide-react'
 
 /**
- * Social-proof counter strip.
- *
- * ⚠️ OWNER: the values below are PLACEHOLDERS ("—") on purpose. Replace each
- * with a REAL, verifiable figure before launch — do NOT ship invented numbers.
- * If a metric isn't tracked yet, remove that item rather than guessing.
- * Example once you have real data: value: '2,000+'.
+ * Social-proof counter strip. Figures below were supplied by the academy —
+ * update them here as they change.
  */
 const STATS = [
-  { icon: GraduationCap, label: 'Students Trained', value: '—' },
-  { icon: Trophy, label: 'Admissions Secured', value: '—' },
-  { icon: Users, label: 'Experienced Tutors', value: '—' },
-  { icon: Star, label: 'Student Satisfaction', value: '—' },
+  { icon: GraduationCap, label: 'Students Trained', value: '2,000+' },
+  { icon: Trophy, label: 'Admissions Secured', value: '1,000+' },
+  { icon: Users, label: 'Experienced Tutors', value: '30+' },
+  { icon: Star, label: 'Student Satisfaction', value: '4.9/5' },
 ]
 
 export default function StatsCounter() {
