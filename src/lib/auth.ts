@@ -109,12 +109,15 @@ export function getRememberedEmail(): string | null {
 }
 
 /**
- * Dev-only admin bypass. Off by default; enable in a local .env with
- * NEXT_PUBLIC_ENABLE_ADMIN_BYPASS=true. NEVER enable in production — the
- * backend should own admin auth. Kept only so the panel is reachable while
- * the real admin login endpoint is being built.
+ * Temporary admin bypass so the panel is reachable everywhere (including the
+ * live site) while there is no backend admin auth yet.
+ *
+ * ⚠️ TEMPORARY: enabled by default. Once the database-backed admin login is
+ * integrated, REMOVE this bypass entirely (the credentials are readable in the
+ * source, so this is not real security). Until then it can be switched OFF
+ * without a code change by setting NEXT_PUBLIC_ENABLE_ADMIN_BYPASS=false.
  */
 export const ADMIN_BYPASS_ENABLED =
-  process.env.NEXT_PUBLIC_ENABLE_ADMIN_BYPASS === 'true'
+  process.env.NEXT_PUBLIC_ENABLE_ADMIN_BYPASS !== 'false'
 
 export const DEV_ADMIN_EMAIL = 'admin@dsa.com'

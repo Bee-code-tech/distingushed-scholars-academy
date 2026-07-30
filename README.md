@@ -47,6 +47,25 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## 🔐 Admin Access
+
+The admin panel is at **`/adminLogin`** (a discreet "Staff Login" link is also in
+the site footer).
+
+| Field       | Value           |
+| ----------- | --------------- |
+| Username    | `admin`         |
+| Email       | `admin@dsa.com` |
+| Access Key  | `dsaadminpass`  |
+
+> ⚠️ **Temporary bypass.** These credentials are hardcoded in the frontend and
+> work everywhere (local and live) while there is no backend admin auth yet.
+> You can switch it off without a code change by setting
+> `NEXT_PUBLIC_ENABLE_ADMIN_BYPASS=false` on the host and redeploying.
+>
+> This is **not** real security — anyone can read these from the source. Once the
+> database-backed admin login is integrated, **remove this bypass entirely.**
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
