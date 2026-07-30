@@ -1,189 +1,148 @@
 # Backend requests — from the frontend team
 
-Two API gaps are blocking student-facing features. The frontend has temporary
-workarounds in place, but both need a real backend change to work correctly for
-all users. Everything below was checked against the live API at
-`https://api.distinguishedscholarsacademy.com` and the OpenAPI docs at
-`/api-docs/`.
+The frontend is fully built and running on **browser-local / mock data**. These
+endpoints are what's needed to make it real. Items are ordered by urgency.
+
+> **Note:** the product **no longer has quizzes / CBT** — quiz features were
+> removed from the app, so **no quiz endpoints are needed** (any `/api/quizzes*`
+> work can be dropped from scope).
+
+Base API: `https://api.distinguishedscholarsacademy.com/api`
 
 ---
 
-## 1. Persist and return the student's study mode (physical vs online) — HIGH
+# 🔴 URGENT — the sign-up, payment & login flow
 
-**What's missing:** `POST /api/auth/register` accepts
+This is the core path and touches money, so it's first.
+
+## 1. Registration now collects much more — store & return it all
+
+`POST /api/auth/register` currently accepts only
 `{ name, email, password, phoneNumber, level, subjectsOfInterest, profilePic, role }`.
-There is no field for whether the student is an **on-campus (physical)** or
-**online** student. The signup form collects this ("Physical Student?") and
-sends `isDsaStudent: true/false`, but the API ignores it, and `GET /api/auth/me`
-never returns it.
+The multi-step signup now collects and sends **all** of the following — please
+store them and return them on `GET /api/auth/me`:
 
-**Why it matters:** the student dashboard is role-based. On-campus students get a
-class timetable + attendance view; online students get live-class links. With no
-stored value, **every student defaults to "online"** and on-campus students lose
-their campus features.
+| Field | Notes |
+| --- | --- |
+| `name`, `email`, `phoneNumber`, `password` | as today |
+| `gender` | Male / Female |
+| `dateOfBirth` | ISO date |
+| `stateOfResidence` | Nigerian state |
+| `school` | current school / institution |
+| `classLevel` | SS1, SS2, SS3, 100 Level, 200 Level |
+| `isDsaStudent` (boolean) | **physical (on-campus) vs online** — drives the whole dashboard |
+| `subjectsOfInterest` (string[]) | JAMB/Post-UTME: subjects · WAEC: a single department (`["science"]`/`["art"]`/`["commercial"]`) |
+| `programmes` (string[]) | e.g. WAEC Tutorials, JAMB Tutorials, Post-UTME Tutorials, After-School, etc. |
+| `guardianName`, `guardianPhone`, `guardianEmail` | parent/guardian contact |
+| `profilePic` | passport photo (currently sent as a base64 data URL) |
+| `paymentReference` | Paystack reference — see §2 |
+| `role` | always `student` from this form; **tutors are created by an admin**; guardians self-register with `role: parent` |
 
-**Requested change:**
-1. Accept `isDsaStudent` (boolean) on `POST /api/auth/register` and store it on
-   the user.
-2. Return it on `GET /api/auth/me` (and in the `user` object from
-   `/api/auth/login` and `/api/auth/verify-otp`).
+**Why it matters:** on-campus vs online, department, and programmes drive the
+dashboard, timetable, attendance and live-class views. Today the frontend
+remembers these in local storage as a fallback, so a student on a **different
+device** loses them until the API stores and returns them.
 
-A string `studyMode: "physical" | "online"` would be even better than a boolean,
-but `isDsaStudent` matching the existing signup payload is fine.
+## 2. Verify the Paystack payment (Portal Access Fee) — money
 
-**Current frontend workaround:** we remember the choice in the browser's local
-storage at signup and use it only when the API says nothing. This breaks if the
-student signs in on a **different device** — their on-campus status won't follow
-them until the API stores it.
+Every student pays a one-time **₦2,000 Portal Access Fee** via Paystack **before**
+the account is activated. The frontend opens the Paystack popup with the
+**public** key and sends the resulting `paymentReference`.
 
-**Same gap applies to WAEC/NECO department.** WAEC and NECO students pick a
-department (Science / Art / Commercial) at signup instead of individual subjects.
-We send it as the single value in `subjectsOfInterest` (e.g.
-`subjectsOfInterest: ["science"]`). Please **store and return `subjectsOfInterest`
-on `GET /api/auth/me`** so the dashboard can show the department. Same
-local-storage fallback and same cross-device limitation as study mode.
+**The backend must verify that reference with the Paystack SECRET key**
+(server-side, `GET https://api.paystack.co/transaction/verify/:reference`) and
+only then mark the account paid/active. **Do not trust the client** — a success
+callback can be faked. The secret key must live only in a backend env var.
 
----
+## 3. Return `role`, study mode, department & subjects on `GET /api/auth/me`
 
-## 2. Implement "resend OTP" — MEDIUM
+After login the frontend routes by `role`:
+`student → /dashboard`, `tutor → /tutor`, `parent → /guardian`, `admin → /admin`.
+`/auth/me` (and the `user` object from `/auth/login` and `/auth/verify-otp`) must
+return the true **`role`**, plus **`isDsaStudent`** and **`subjectsOfInterest`**
+so the dashboard shows the right mode and department.
 
-**What's missing:** the OTP verification screen has a "Resend code" button that
-calls `POST /api/auth/send-otp`. That endpoint returns **404** and is not in the
-API docs.
+## 4. OTP verification + resend
 
-```
-POST /api/auth/send-otp  →  404  "Cannot POST /api/auth/send-otp"
-```
-
-**Requested change:** add `POST /api/auth/send-otp` taking `{ email }` that
-re-issues a fresh OTP to that email (same code path as the one register already
-triggers). A `{ success, message }` response is fine.
-
-**Current frontend workaround:** the button now shows "Resending codes is not
-available yet — please use the code already sent to your email" instead of a raw
-error. It will start working automatically once this endpoint exists — no
-frontend change needed.
+- Real OTP verification on `POST /api/auth/verify-otp`. (The frontend currently
+  accepts a **demo code `1111`** as a stand-in — replace with real verification.)
+- Add `POST /api/auth/send-otp` taking `{ email }` to re-issue a code — it
+  currently **404s**. The "Resend code" button is wired and waiting for it.
 
 ---
 
-## 3. Tutor and Guardian portals — data endpoints — MEDIUM
+# Needed — role features (built, running on mock data)
 
-The frontend now has three role-based dashboards: **student** (live), **tutor**
-(`/tutor`), and **guardian/parent** (`/guardian`). Login already routes by the
-`role` on the user (`student` | `tutor` | `parent` | `admin`), so **please make
-sure `GET /api/auth/me` returns the correct `role`** for tutor and guardian
-accounts — that is the only thing needed for routing to work.
-
-The tutor and guardian dashboards currently render **mock data** because there
-are no endpoints for their content yet. To make them real, we need:
+## 5. Tutor & Guardian data
 
 **Tutor** (`role: "tutor"`):
-- **Assigned students** — the roster of students this tutor teaches, each with
-  name, exam track, average score, and progress.
-- **Tutor's classes** — the sessions they teach (title, date/time, venue or live
-  link, physical/online).
-- **Tutor's quizzes + submissions** — quizzes they created and, per quiz,
-  submission count and how many are graded (for the grading queue). The existing
-  `POST /api/quizzes` already supports creation; we just need a "list quizzes for
-  this tutor" + "submissions for a quiz" view.
-- **Class analytics** — average score per topic/subject across their students.
+- **Assigned students** — roster this tutor teaches (name, track, progress).
+- **Tutor's classes** — sessions they teach (title, day/time, venue or live link).
+- **Class analytics** — simple progress figures across their students.
 
 **Guardian** (`role: "parent"`):
-- **Ward link** — which student(s) this guardian is responsible for. Everything
-  else hangs off this. A guardian → student relationship is the key missing
-  piece.
-- **Ward performance** — the ward's average score, accuracy, topics completed,
-  and class rank.
-- **Ward attendance** — attendance record (mainly for on-campus students).
-- **Ward exam** — the ward's track; the countdown reuses `GET /api/programs`, so
-  no new work there.
-- **Fees** — the ward's fee items with amount, status (paid/due), and date.
+- **Ward link** — which student(s) a guardian oversees. **This relationship is the
+  key missing piece** — everything else hangs off it, and it must be verified
+  server-side (a guardian must not see a child's data just by typing a username).
+- **Ward performance, attendance, and fees** (amount, status paid/due, date).
 
-None of these block the current build — the dashboards work with placeholder
-data today — but they are all placeholders until these endpoints exist.
+## 6. Attendance — activate & self-check-in
 
----
+Attendance is **self-check-in**, not tutor-marked:
 
-## 4. Attendance — activate & self-check-in — MEDIUM
-
-**Model (important — students mark themselves).** Attendance is **self-check-in**,
-not tutor-marked:
-
-1. A **tutor/admin activates** attendance for the day (opens a window).
-2. While it is open, each **student marks *themselves* present** from their own
-   dashboard. **The server records the time** of that check-in — do not trust a
-   client-supplied timestamp.
-3. The **tutor/admin monitor** who has checked in and when; they can close the
-   window.
-4. Students also **view their own record** (rate, present/absent, streak, days).
-
-It is all **mock/local data today — nothing persists**.
-
-**Requested endpoints** (all auth-required; roles enforced server-side):
+1. A **tutor/admin activates** attendance for the day.
+2. Each **student marks *themselves* present** from their dashboard; **the server
+   records the time**.
+3. Tutor/admin **monitor** who checked in; students **view their own** record.
 
 ```
-POST /api/attendance/sessions        activate attendance for today (tutor/admin)
-      body: { date: "2026-07-30", classId? }
-      → { active: true, date, activatedAt }
-
-DELETE /api/attendance/sessions/:date   close the window (tutor/admin)
-
-GET  /api/attendance/sessions/current   is attendance open right now?
-      → { active, date, activatedAt }        (any authenticated user)
-
-POST /api/attendance/check-in        STUDENT marks THEMSELVES present
-      body: {}                               ← studentId comes from the JWT, NOT the body
-      → { status: "present", at: "<server timestamp>" }
-      · 409 if already checked in today · 403 if the window is not open
-
-GET  /api/attendance/check-ins?date=…   who has checked in (tutor/admin)
-      → [ { studentId, name, at } ]          (live roster for the day)
-
-GET  /api/attendance/me              the logged-in student's own record + rate
-      → { rate, present, absent, days: [ { date, status, at? } ] }
+POST   /api/attendance/sessions          activate today (tutor/admin) → { active, date, activatedAt }
+DELETE /api/attendance/sessions/:date     close the window (tutor/admin)
+GET    /api/attendance/sessions/current   is it open now? (any user)
+POST   /api/attendance/check-in           STUDENT marks self  (studentId from JWT, NOT body)
+                                          → { status: "present", at: <server time> }
+                                          · 403 if closed · 409 if already checked in
+GET    /api/attendance/check-ins?date=…   who checked in (tutor/admin)
+GET    /api/attendance/me                 student's own record + rate
 ```
 
-**Data model.** A check-in `{ studentId, date, status: "present", at }` where
-`at` is the **server** time; and a per-day (per-class) session `{ date,
-activatedAt, activatedBy, closedAt? }` so any user can tell whether today is
-open.
+**Security:** only tutor/admin activate/close & see the full list; a student may
+only check *themselves* in and read *their own* record; check-in only while open,
+idempotent, timestamp set **server-side**.
 
-**Security.**
-- Only `tutor`/`admin` may activate/close a session and read the full check-in
-  list.
-- A student may **only check *themselves* in** — derive `studentId` from the JWT,
-  never from the request body — and read **only their own** record.
-- Check-in is allowed **only while the window is open**, is **idempotent** (one
-  per student per day), and the **timestamp is set server-side**.
+## 7. Timetable + online-class link
 
-**Acceptance criteria.**
-- Tutor activates → a student can check in and gets back the server time; the
-  tutor's list shows that student with that time.
-- A student cannot check in when the window is closed (403), cannot check in
-  twice (409), and cannot check in as anyone else.
-- A student sees only their own record.
+- **Weekly timetable per track** (JAMB / WAEC / Post-UTME) that **admin/tutor
+  edit** and students view. A grid of `subject` per day × period.
+  Suggested: `GET/PUT /api/timetable/:track` with a `{ grid: string[][] }` body.
+- **Online class Google Meet link per track** — admin/tutor set it, the student's
+  "Join Live Class" button opens it. Suggested: a field on the track/timetable,
+  e.g. `meetLink`. (Later this could be an auto-generated Meet link via the
+  Google Calendar/Meet API — needs Google Workspace + server-side OAuth.)
 
-**Current frontend state.** Fully built with placeholder data: tutor & admin
-"Activate + monitor" screen, student "Mark Me Present" self-check-in with a
-timestamp. It swaps onto these endpoints with no redesign.
+## 8. Program countdowns
+
+Exam countdowns read from `GET /api/programs`. Only a (stale) "JAMB Countdown"
+exists. Please add entries whose `name` contains **"WAEC"** and **"Post-UTME"**,
+each with a future `endDate`, and refresh the JAMB one. Updating a countdown is
+just another `POST /api/programs` — no deploy.
 
 ---
 
-## For reference — already handled on the frontend, no backend action needed
+## Already handled on the frontend — no backend action
 
-These were frontend bugs against your (correct) API; fixed on our side:
-
-- We were calling `GET /api/auth/profile` (404). Corrected to **`/api/auth/me`**.
-- Quiz submission now sends the documented shape:
-  `{ timeTaken, answers: [{ questionId, selectedOption }] }` (integer option
-  index), per `POST /api/quizzes/{id}/submit`.
-- Exam countdowns now read from `GET /api/programs`. **Request:** the only entry
-  today is "JAMB Countdown" (and its `endDate` of 2026-04-20 has passed). To
-  drive the WAEC and NECO dashboards, please add program entries via
-  `POST /api/programs` whose `name` contains the word **"WAEC"** and **"NECO"**
-  respectively (we match the track by name), each with a future `endDate`.
-  Updating a countdown is then just another `POST /api/programs` — no deploy.
+- Was calling `GET /api/auth/profile` (404); corrected to **`/api/auth/me`**.
+- Countdowns now read from `GET /api/programs` (see §8 for the data still needed).
 
 ---
+
+## Cross-cutting security
+
+- Validate the JWT and role on **every** protected endpoint — never trust a role
+  or id from the client.
+- Tutor endpoints return only that tutor's data; guardian endpoints only that
+  guardian's **verified** wards; students read only their own records.
+- The admin panel currently uses a temporary frontend-only bypass — real admin
+  auth must move to the backend before production.
 
 *Questions on any of this: reply to whoever sent you this note.*

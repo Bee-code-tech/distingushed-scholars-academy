@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Card } from '@/components/ui/card'
-import { CalendarDays, Save, RotateCcw, Clock } from 'lucide-react'
+import { CalendarDays, Save, RotateCcw, Clock, Video } from 'lucide-react'
 import type { ExamTrack } from '@/lib/studentProfile'
 import {
   DAYS,
@@ -12,6 +12,7 @@ import {
   buildDefaultGrid,
   type TimetableGrid,
 } from '@/lib/timetable'
+import { getMeetLink, saveMeetLink } from '@/lib/liveClass'
 
 const TRACKS: { id: ExamTrack; label: string }[] = [
   { id: 'jamb', label: 'JAMB' },
@@ -27,10 +28,12 @@ const TRACKS: { id: ExamTrack; label: string }[] = [
 export default function TimetableEditor() {
   const [track, setTrack] = useState<ExamTrack>('jamb')
   const [grid, setGrid] = useState<TimetableGrid>([])
+  const [meetLink, setMeetLink] = useState('')
   const [saved, setSaved] = useState(false)
 
   useEffect(() => {
     setGrid(getEffectiveTimetable(track))
+    setMeetLink(getMeetLink(track))
     setSaved(false)
   }, [track])
 
@@ -45,6 +48,7 @@ export default function TimetableEditor() {
 
   const save = () => {
     saveTimetable(track, grid)
+    saveMeetLink(track, meetLink)
     setSaved(true)
   }
   const reset = () => {
@@ -94,6 +98,26 @@ export default function TimetableEditor() {
             {t.label}
           </button>
         ))}
+      </div>
+
+      {/* Online class — Google Meet link for this track */}
+      <div className='space-y-1.5'>
+        <label className='text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5'>
+          <Video size={13} className='text-[#002EFF]' /> Online Class — Google Meet Link
+        </label>
+        <input
+          value={meetLink}
+          onChange={(e) => {
+            setMeetLink(e.target.value)
+            setSaved(false)
+          }}
+          placeholder='https://meet.google.com/abc-defg-hij'
+          className='w-full h-11 px-3 rounded-lg bg-slate-50 border border-transparent focus:bg-white focus:border-[#002EFF]/30 outline-none text-sm font-medium transition-all'
+        />
+        <p className='text-[10px] font-bold text-slate-400'>
+          Online students on this track will open this link from their &ldquo;Join
+          Live Class&rdquo; button. Save to apply.
+        </p>
       </div>
 
       <Card className='rounded-3xl border-none shadow-sm bg-white overflow-x-auto'>

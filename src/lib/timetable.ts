@@ -23,6 +23,11 @@ export const SLOTS = [
   { label: 'Period 4', time: '2:00 – 3:30' },
 ] as const
 
+// Start time of each slot in minutes-from-midnight (aligned with SLOTS), and the
+// class length, so "next class" can compare against the current time.
+const SLOT_START = [8 * 60, 9 * 60 + 45, 11 * 60 + 30, 14 * 60]
+const CLASS_MINUTES = 90
+
 // Representative subjects used to seed a new timetable. JAMB & Post-UTME are
 // subject-based; WAEC is department-based.
 const SUBJECTS: Record<string, string[]> = {
@@ -80,6 +85,46 @@ export function getEffectiveTimetable(
   department: Department | null = null,
 ): TimetableGrid {
   return getSavedTimetable(track) ?? buildDefaultGrid(track, department)
+}
+
+export interface NextClass {
+  subject: string
+  day: string // e.g. "Monday"
+  time: string // e.g. "8:00 – 9:30"
+  when: string // "Today" | "Tomorrow" | day name
+  ongoing: boolean // true if the class is happening right now
+}
+
+/**
+ * The next (or currently-running) class from a timetable grid, based on the
+ * current day/time. Skips Sundays and empty periods; returns null if nothing is
+ * scheduled in the coming week.
+ */
+export function getNextClass(
+  grid: TimetableGrid,
+  now = new Date(),
+): NextClass | null {
+  const jsDay = now.getDay() // 0=Sun … 6=Sat
+  const nowMins = now.getHours() * 60 + now.getMinutes()
+
+  for (let offset = 0; offset < 7; offset++) {
+    const weekday = (jsDay + offset) % 7
+    if (weekday === 0) continue // Sunday — no classes
+    const dayIdx = weekday - 1 // Mon(1)→0 … Sat(6)→5
+    for (let slot = 0; slot < SLOTS.length; slot++) {
+      // Today: skip only periods that have already ended.
+      if (offset === 0 && nowMins >= SLOT_START[slot] + CLASS_MINUTES) continue
+      const subject = grid[slot]?.[dayIdx]?.trim()
+      if (!subject) continue
+      const when = offset === 0 ? 'Today' : offset === 1 ? 'Tomorrow' : DAYS[dayIdx]
+      const ongoing =
+        offset === 0 &&
+        nowMins >= SLOT_START[slot] &&
+        nowMins < SLOT_START[slot] + CLASS_MINUTES
+      return { subject, day: DAYS[dayIdx], time: SLOTS[slot].time, when, ongoing }
+    }
+  }
+  return null
 }
 
 const TINTS = [

@@ -22,6 +22,12 @@ import {
   type StudentProfile,
   type Countdown,
 } from '@/lib/studentProfile'
+import { getMeetLink } from '@/lib/liveClass'
+import {
+  getEffectiveTimetable,
+  getNextClass,
+  type NextClass,
+} from '@/lib/timetable'
 
 interface OverviewUIProps {
   setView: (view: any) => void
@@ -52,6 +58,20 @@ function SmallStat({ label, value, icon: Icon, color }: any) {
  * online students get a live-class join card. Same slot, different content.
  */
 function ModeCard({ student }: { student: StudentProfile }) {
+  // Google Meet link + next class from the timetable (client-only to avoid a
+  // hydration mismatch — getNextClass reads the current time).
+  const [meetLink, setMeetLink] = useState('')
+  const [next, setNext] = useState<NextClass | null>(null)
+  useEffect(() => {
+    setMeetLink(getMeetLink(student.track))
+    setNext(
+      getNextClass(getEffectiveTimetable(student.track, student.department)),
+    )
+  }, [student.track, student.department])
+
+  const title = next ? `${next.subject}` : 'No class scheduled'
+  const timing = next ? `${next.when} · ${next.time}` : 'Check your timetable'
+
   if (student.mode === 'physical') {
     return (
       <Card className='rounded-4xl p-6 bg-white border-none shadow-sm flex flex-col justify-between'>
@@ -65,15 +85,15 @@ function ModeCard({ student }: { student: StudentProfile }) {
         </div>
         <div className='space-y-1'>
           <h3 className='text-lg font-black text-gray-900 uppercase leading-tight'>
-            Mathematics — Paper 2
+            {title}
           </h3>
           <div className='flex items-center gap-2 text-gray-400'>
             <CalendarClock size={13} />
-            <span className='text-[11px] font-bold'>Tomorrow · 9:00 AM</span>
+            <span className='text-[11px] font-bold'>{timing}</span>
           </div>
           <div className='flex items-center gap-2 text-gray-400'>
             <MapPin size={13} />
-            <span className='text-[11px] font-bold'>Hall B, DSA Campus</span>
+            <span className='text-[11px] font-bold'>DSA Campus</span>
           </div>
         </div>
         <div className='mt-4 flex items-center justify-between p-3 bg-blue-50/60 rounded-2xl'>
@@ -106,20 +126,36 @@ function ModeCard({ student }: { student: StudentProfile }) {
       </div>
       <div className='space-y-1'>
         <h3 className='text-lg font-black text-gray-900 uppercase leading-tight'>
-          English — Comprehension
+          {title}
         </h3>
         <div className='flex items-center gap-2 text-gray-400'>
           <CalendarClock size={13} />
-          <span className='text-[11px] font-bold'>Today · 6:00 PM (WAT)</span>
+          <span className='text-[11px] font-bold'>{timing} (WAT)</span>
         </div>
         <div className='flex items-center gap-2 text-gray-400'>
           <Video size={13} />
-          <span className='text-[11px] font-bold'>Live on DSA Portal</span>
+          <span className='text-[11px] font-bold'>
+            {meetLink ? 'Live on Google Meet' : 'Live on DSA Portal'}
+          </span>
         </div>
       </div>
-      <Button className='mt-4 bg-[#002EFF] text-white font-black rounded-xl text-[10px] h-10 shadow-lg shadow-blue-200 active:scale-95 transition-transform'>
-        JOIN LIVE CLASS <Video className='ml-2' size={14} />
-      </Button>
+      {meetLink ? (
+        <a
+          href={meetLink}
+          target='_blank'
+          rel='noopener noreferrer'
+          className='mt-4 flex items-center justify-center bg-[#002EFF] text-white font-black rounded-xl text-[10px] h-10 shadow-lg shadow-blue-200 active:scale-95 transition-transform hover:bg-blue-700'
+        >
+          JOIN LIVE CLASS <Video className='ml-2' size={14} />
+        </a>
+      ) : (
+        <Button
+          disabled
+          className='mt-4 bg-slate-200 text-slate-400 font-black rounded-xl text-[10px] h-10 cursor-not-allowed'
+        >
+          LINK NOT SET YET <Video className='ml-2' size={14} />
+        </Button>
+      )}
     </Card>
   )
 }
