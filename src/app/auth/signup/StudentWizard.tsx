@@ -410,7 +410,7 @@ export default function StudentWizard() {
               {/* Class level */}
               <div className='space-y-1.5'>
                 <label className='text-[10px] font-bold text-slate-500 uppercase'>Current Class/Level *</label>
-                <div className='grid grid-cols-3 sm:grid-cols-5 gap-2'>
+                <div className='grid grid-cols-2 sm:grid-cols-4 gap-2'>
                   {CLASS_LEVELS.map((c) => (
                     <div key={c} onClick={() => setValue('classLevel', c, { shouldValidate: true })} className={pill(classLevel === c)}>
                       {c}
