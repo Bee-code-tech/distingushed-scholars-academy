@@ -353,8 +353,9 @@
 
 'use client'
 
-import React, { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation' 
+import React, { useState, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
+import { useSecureSession } from '@/components/dashboard/useSecureSession'
 import {
   LayoutDashboard,
   Users,
@@ -409,6 +410,27 @@ export default function AdminAdmin() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<AdminTab>('dashboard')
   const router = useRouter()
+
+  // End the admin session and return to sign-in.
+  const signOut = useCallback(() => {
+    clearSession()
+    router.replace('/auth/signin')
+  }, [router])
+
+  // Security: auto sign-out after 10 minutes idle, and trap the Back button so
+  // the admin can't leave the admin area without signing out.
+  useSecureSession({
+    onIdleTimeout: () => {
+      clearSession()
+      // Hard redirect so the logout lands cleanly on sign-in (avoids any SPA
+      // guard race while the admin route is unmounting).
+      if (typeof window !== 'undefined') {
+        window.location.replace('/auth/signin?expired=true')
+      }
+    },
+    idleMinutes: 10,
+    lockArea: true,
+  })
 
   useEffect(() => {
     // 1. Check for Auth (UX gate only — backend enforces the real check)
@@ -565,10 +587,7 @@ export default function AdminAdmin() {
 
       <div className='mt-auto pt-6 border-t border-white/10'>
         <button
-          onClick={() => {
-            clearSession()
-            router.push('/auth/signin')
-          }}
+          onClick={signOut}
           className='w-full flex items-center gap-3 px-4 py-3 rounded-xl text-rose-200/50 hover:bg-rose-500 hover:text-white transition-all group font-bold text-[11px] uppercase tracking-widest'
         >
           <LogOut
