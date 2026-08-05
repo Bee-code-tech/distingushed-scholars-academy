@@ -241,8 +241,9 @@ Unifies assignment + quiz/exam scores for analytics & "upload grades".
 `{ id, sessionId, studentId, status: present|late|absent, checkInAt }` — unique (sessionId, studentId).
 
 ### 2.12 Timetable / TimetableSlot
-Per track (and WAEC department). Either a grid blob or rows:
-`TimetableSlot { id, examTrack, department?, day (Mon–Sat), period (1–4), startTime, endTime, subject, tutorId?, mode: online|physical, venue?, meetLink?, updatedBy, updatedAt }`
+Per track (and WAEC department). **Admin-scheduled** (tutors/students read-only).
+Either a grid blob or rows:
+`TimetableSlot { id, examTrack, department?, day (Mon–Sat), period (1–4), startTime, endTime, subject, tutorId?, mode: online|physical, venue?, updatedBy (admin), updatedAt }`
 
 ### 2.13 LiveClass
 | Field | Type | Notes |
@@ -252,8 +253,8 @@ Per track (and WAEC department). Either a grid blob or rows:
 | `tutorId` | FK→User | host |
 | `title` | string | |
 | `scheduledStart`/`scheduledEnd` | date | |
-| `meetLink` | url | Google Meet |
-| `status` | enum | `scheduled` \| `live` \| `ended` |
+| `meetLink` | url | Google Meet — **admin-generated, tutor-uploaded** |
+| `status` | enum | `scheduled` \| `live` \| `ended` — **set by the tutor** |
 | `recordingUrl` | url? | becomes a `recording` CourseMaterial when ready |
 | `createdAt` | date | |
 
@@ -361,14 +362,20 @@ weighted formula incl. assignments/quizzes). Recompute on material completion.
 `GET /attendance/report?courseId=&from=&to=` (tutor → **downloadable CSV**). Full rules in backend-requests §6.
 
 ## 10. Timetable & live classes  *(spec'd — build)*
+
+> **Ownership (as built):** the **ADMIN** schedules the timetable and **generates
+> the Google Meet link** (externally, in Google Meet), then passes it to the
+> **TUTOR**, who **uploads** it and flips the class **live/ended**. Students and
+> tutors view the timetable **read-only**; students join when the tutor is live.
+
 | Method | Path | Who | Purpose |
 | --- | --- | --- | --- |
-| GET | `/timetable/:track` | any | grid (student view) |
-| PUT | `/timetable/:track` | tutor/admin | edit grid |
-| GET | `/live-classes?track=` | enrolled | upcoming/live |
-| POST | `/live-classes` | tutor | schedule (sets `meetLink`) |
-| PATCH | `/live-classes/:id/status` | tutor | live/ended (+recordingUrl) |
-| GET | `/live-classes/next?track=` | student | next class (drives "Join Live Class") |
+| GET | `/timetable/:track` | any | grid — students & tutors view (read-only) |
+| PUT | `/timetable/:track` | **admin only** | schedule/edit the grid |
+| GET | `/live-classes?track=` | enrolled/tutor | upcoming/live for the track |
+| PUT | `/live-classes/:track/link` | tutor | **upload the admin-generated Meet link** |
+| PATCH | `/live-classes/:track/status` | tutor | set `live` / `ended` (+`recordingUrl`) |
+| GET | `/live-classes/next?track=` | student | next class + join state (drives "Join Live Class") |
 
 ## 11. Announcements, messaging & forum
 
@@ -420,6 +427,10 @@ endpoints above work with **polling** (`GET /notifications?unread=true`, chat
 | Enroll, view materials, submit, take quizzes, check-in | ✅ own | — | — | — |
 | Create course/material/assignment/quiz, grade, host class, take attendance, announce | — | ✅ own courses | ✅ | per-permission |
 | Manage users/roles, verify manual payments, global settings | — | — | ✅ | per-permission |
+
+**Timetable & live classes:** the **admin** schedules the timetable and generates
+the Meet link; the **tutor** only uploads that link and sets the class live/ended
+(tutors do NOT edit the timetable). Enforce this split server-side.
 
 Tutor endpoints must scope to the tutor's **own** courses/students; student
 endpoints to the student's **own** enrollments/records; enforce on the server.
