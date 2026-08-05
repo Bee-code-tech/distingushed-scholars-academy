@@ -90,6 +90,24 @@ export function checkIn(key: string, name: string): CheckIn | null {
   return entry
 }
 
+/** Dates that had an attendance session with check-ins (proxy for sessions held). */
+export function getAttendanceDates(): string[] {
+  return Object.keys(readAll()).sort()
+}
+
+/** A student's attendance rate across all recorded days. */
+export function getStudentAttendance(key: string): {
+  present: number
+  total: number
+  rate: number
+} {
+  const all = readAll()
+  const dates = Object.keys(all)
+  const total = dates.length
+  const present = dates.filter((d) => all[d].some((c) => c.key === key)).length
+  return { present, total, rate: total ? Math.round((present / total) * 100) : 0 }
+}
+
 export function formatTime(iso: string): string {
   try {
     return new Date(iso).toLocaleTimeString('en-NG', {

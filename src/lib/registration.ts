@@ -20,6 +20,7 @@ export const LEARNING_MODES = ['Online', 'Physical'] as const
 
 // Step 3 — programmes a student can enrol in (multi-select).
 export const PROGRAMMES = [
+  'Summer Classes',
   'After-School Classes',
   'WAEC Tutorials',
   'JAMB Tutorials',

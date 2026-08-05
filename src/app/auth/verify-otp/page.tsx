@@ -15,7 +15,7 @@ import {
   CheckCircle2,
 } from 'lucide-react'
 
-import { dsaApi } from '@/lib/api'
+import { dsaApi, isBackendUnreachable } from '@/lib/api'
 import { setSession, dashboardPathForRole } from '@/lib/auth'
 import { DEMO_TOKEN_PREFIX } from '@/lib/demoAccounts'
 import type { UserRole } from '@/lib/types'
@@ -117,48 +117,44 @@ export default function VerifyOTP() {
     }
   }
 
+  // Establish a local demo session from the profile stashed at registration.
+  // Used ONLY as a preview fallback when the backend can't be reached yet.
+  const activateDemoSession = () => {
+    let pending: { email?: string; username?: string; role?: string } | null =
+      null
+    try {
+      pending = JSON.parse(localStorage.getItem('dsa_pending_user') || 'null')
+    } catch {
+      pending = null
+    }
+    const role = (pending?.role as UserRole) || 'student'
+    setSession({
+      token: `${DEMO_TOKEN_PREFIX}${pending?.username || 'student'}`,
+      user: pending
+        ? {
+            email: pending.email || email || '',
+            username: pending.username,
+            role,
+            ...(pending as object),
+          }
+        : { email: email || '', role },
+      role,
+    })
+    localStorage.removeItem('dsa_pending_email')
+    localStorage.removeItem('dsa_pending_user')
+    localStorage.removeItem('otp_expiry')
+    setApiSuccess('Verified! Loading your dashboard…')
+    router.push(dashboardPathForRole(role))
+  }
+
   async function onSubmit(values: z.infer<typeof formSchema>) {
     if (!email) return
     setApiError(null)
     setApiSuccess(null)
     setIsLoading(true)
 
-    // Demo verification: the code is 1111. Establish the session from the
-    // profile stashed at registration and open the right dashboard by role.
-    if (values.otp === DEMO_OTP) {
-      let pending: {
-        email?: string
-        username?: string
-        role?: string
-      } | null = null
-      try {
-        pending = JSON.parse(localStorage.getItem('dsa_pending_user') || 'null')
-      } catch {
-        pending = null
-      }
-      const role = (pending?.role as UserRole) || 'student'
-      setSession({
-        token: `${DEMO_TOKEN_PREFIX}${pending?.username || 'student'}`,
-        user: pending
-          ? {
-              email: pending.email || email,
-              username: pending.username,
-              role,
-              ...(pending as object),
-            }
-          : { email, role },
-        role,
-      })
-      localStorage.removeItem('dsa_pending_email')
-      localStorage.removeItem('dsa_pending_user')
-      localStorage.removeItem('otp_expiry')
-      setApiSuccess('Verified! Loading your dashboard…')
-      router.push(dashboardPathForRole(role))
-      setIsLoading(false)
-      return
-    }
-
     try {
+      // Real verification is the primary path (POST /api/auth/verify-otp).
       const data = await dsaApi.auth.verifyOtp(email, values.otp)
 
       if (data.token) {
@@ -169,11 +165,30 @@ export default function VerifyOTP() {
         })
       }
       localStorage.removeItem('dsa_pending_email')
+      localStorage.removeItem('dsa_pending_user')
       localStorage.removeItem('otp_expiry')
+      setApiSuccess('Verified! Loading your dashboard…')
       router.push(dashboardPathForRole(data.user?.role || 'student'))
-    } catch {
-      setApiError('Invalid code. Please enter 1111 to continue.')
-      form.setValue('otp', '')
+    } catch (err) {
+      // Only fall back to the demo code when the backend isn't reachable yet.
+      // A real server error (wrong/expired code) is shown as-is.
+      if (isBackendUnreachable(err)) {
+        if (values.otp === DEMO_OTP) {
+          activateDemoSession()
+        } else {
+          setApiError(
+            'Backend not connected — enter the demo code 1111 to preview.',
+          )
+          form.setValue('otp', '')
+        }
+      } else {
+        setApiError(
+          err instanceof Error
+            ? err.message
+            : 'Invalid or expired code. Please try again.',
+        )
+        form.setValue('otp', '')
+      }
     } finally {
       setIsLoading(false)
     }
@@ -264,7 +279,7 @@ export default function VerifyOTP() {
               <div className='space-y-4'>
                 <Button
                   type='submit'
-                  disabled={isLoading || otpValue.length < 6}
+                  disabled={isLoading || otpValue.length < 4}
                   className='w-full bg-[#002EFF] hover:bg-blue-700 h-16 rounded-[24px] font-black uppercase tracking-widest text-xs shadow-xl shadow-blue-100 transition-transform active:scale-95'
                 >
                   {isLoading ? (

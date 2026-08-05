@@ -64,6 +64,8 @@ export function dashboardPathForRole(role?: UserRole | null): string {
       return '/tutor'
     case 'parent':
       return '/guardian'
+    case 'staff':
+      return '/staff'
     case 'admin':
     case 'super_admin':
       return '/admin'

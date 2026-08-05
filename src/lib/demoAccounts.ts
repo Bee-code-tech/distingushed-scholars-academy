@@ -1,11 +1,14 @@
-// Static demo logins — one per student "role" (exam track × study mode).
+// Static demo logins for roles the backend can't create yet.
 //
-// PURPOSE: let the owner preview every dashboard variant without a running
-// backend. These are resolved entirely client-side by the sign-in page; no
-// network call is made and no real data is exposed.
+// PURPOSE: let the owner preview the tutor and guardian dashboards without a
+// backend for those roles. Resolved entirely client-side by the sign-in page as
+// a FALLBACK after the real API login fails (see the sign-in page + memory
+// "everything-live").
 //
-// SAFE TO DELETE once the real backend is connected. Nothing else depends on
-// this file except the demo branch in the sign-in page and the dashboard.
+// NOTE: student demo logins were removed — students are LIVE now (real
+// register/login/verify-otp against the backend), so there's no fake student
+// account. Delete this file entirely once tutor & guardian have real backend
+// auth too.
 
 import type { User } from './types'
 
@@ -26,86 +29,6 @@ export interface DemoAccount {
 const PASSWORD = 'demo1234'
 
 export const DEMO_ACCOUNTS: DemoAccount[] = [
-  {
-    email: 'jamb.online@dsa.demo',
-    password: PASSWORD,
-    profile: {
-      email: 'jamb.online@dsa.demo',
-      username: 'jamb_online',
-      fullName: 'Ada (JAMB · Online)',
-      role: 'student',
-      level: 'jamb',
-      isDsaStudent: false,
-      isDSAite: false,
-    },
-  },
-  {
-    email: 'jamb.campus@dsa.demo',
-    password: PASSWORD,
-    profile: {
-      email: 'jamb.campus@dsa.demo',
-      username: 'jamb_campus',
-      fullName: 'Bola (JAMB · On-Campus)',
-      role: 'student',
-      level: 'jamb',
-      isDsaStudent: true,
-      isDSAite: true,
-    },
-  },
-  {
-    email: 'waec.online@dsa.demo',
-    password: PASSWORD,
-    profile: {
-      email: 'waec.online@dsa.demo',
-      username: 'waec_online',
-      fullName: 'Chidi (WAEC · Online)',
-      role: 'student',
-      level: 'waec',
-      subjectsOfInterest: ['science'],
-      isDsaStudent: false,
-      isDSAite: false,
-    },
-  },
-  {
-    email: 'waec.campus@dsa.demo',
-    password: PASSWORD,
-    profile: {
-      email: 'waec.campus@dsa.demo',
-      username: 'waec_campus',
-      fullName: 'Dupe (WAEC · On-Campus)',
-      role: 'student',
-      level: 'waec',
-      subjectsOfInterest: ['commercial'],
-      isDsaStudent: true,
-      isDSAite: true,
-    },
-  },
-  {
-    email: 'postutme.online@dsa.demo',
-    password: PASSWORD,
-    profile: {
-      email: 'postutme.online@dsa.demo',
-      username: 'postutme_online',
-      fullName: 'Emeka (Post-UTME · Online)',
-      role: 'student',
-      level: 'post utme',
-      isDsaStudent: false,
-      isDSAite: false,
-    },
-  },
-  {
-    email: 'postutme.campus@dsa.demo',
-    password: PASSWORD,
-    profile: {
-      email: 'postutme.campus@dsa.demo',
-      username: 'postutme_campus',
-      fullName: 'Funke (Post-UTME · On-Campus)',
-      role: 'student',
-      level: 'post utme',
-      isDsaStudent: true,
-      isDSAite: true,
-    },
-  },
   {
     email: 'tutor@dsa.demo',
     password: PASSWORD,

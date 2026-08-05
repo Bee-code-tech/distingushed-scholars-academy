@@ -2,7 +2,13 @@
 // These describe the shapes exchanged with the backend API so that
 // components and the API client are type-checked instead of using `any`.
 
-export type UserRole = 'student' | 'tutor' | 'admin' | 'super_admin' | 'parent'
+export type UserRole =
+  | 'student'
+  | 'tutor'
+  | 'admin'
+  | 'super_admin'
+  | 'parent'
+  | 'staff'
 
 export interface User {
   id?: string
@@ -10,6 +16,9 @@ export interface User {
   fullName?: string
   email: string
   role?: UserRole
+  // For `role: 'staff'` — which staff role (secretary, auditor, …) they hold.
+  // Their permissions are resolved from this via staffStore.getRole().
+  staffRoleId?: string
   isDSAite?: boolean
   avatarUrl?: string
   phone?: string
@@ -36,6 +45,25 @@ export interface AuthResponse {
   message?: string
 }
 
+/**
+ * Data returned by POST /api/auth/register — the server initializes a Paystack
+ * transaction and hands back the details the browser needs to resume it.
+ */
+export interface RegisterInitData {
+  reference: string
+  studentId: string
+  price: number // kobo
+  currency: string
+  authorizationUrl: string
+  accessCode: string
+}
+
+export interface RegisterResponse {
+  success: boolean
+  message?: string
+  data?: RegisterInitData
+}
+
 // Registration fields are backend-defined and vary by form; keep this open.
 export interface RegisterPayload {
   email: string
@@ -51,6 +79,88 @@ export interface LoginPayload {
 export interface ResetPasswordPayload {
   newPassword: string
   token: string
+}
+
+// --- LMS domain (courses, materials, progress) ---
+// Mirrors docs/DSA-LMS-Backend-Spec.md §2. Runs on a browser-local store until
+// the backend ships the /courses + /materials endpoints (§4, §5).
+
+export type MaterialType =
+  | 'pdf'
+  | 'video'
+  | 'recording'
+  | 'syllabus'
+  | 'slide'
+  | 'link'
+
+export interface Course {
+  id: string
+  title: string
+  subject: string
+  examTrack: string // jamb | waec | postutme
+  department?: string // WAEC only
+  tutorId?: string
+  tutorName?: string
+  description?: string
+}
+
+export interface CourseMaterial {
+  id: string
+  courseId: string
+  title: string
+  type: MaterialType
+  url: string
+  description?: string
+  isDownloadable: boolean
+  durationLabel?: string // e.g. "12:40" for video/recording
+  createdAt: string
+}
+
+// --- Announcements & notifications (LMS §2.17–§2.18) ---
+
+export type AnnouncementScope = 'global' | 'track'
+
+export interface Announcement {
+  id: string
+  scope: AnnouncementScope
+  track?: string // when scope === 'track' (jamb | waec | postutme)
+  authorId?: string
+  authorName: string
+  title: string
+  body: string
+  createdAt: string
+}
+
+// --- Assignments & submissions (LMS §2.5–§2.6) ---
+
+export type SubmissionStatus = 'submitted' | 'late' | 'graded' | 'returned'
+
+export interface Assignment {
+  id: string
+  courseId: string
+  tutorId?: string
+  title: string
+  instructions: string
+  attachmentUrl?: string
+  maxScore: number
+  dueDate: string // ISO
+  allowLate: boolean
+  createdAt: string
+}
+
+export interface Submission {
+  id: string
+  assignmentId: string
+  studentId: string // student username/key
+  studentName?: string
+  fileUrl?: string
+  text?: string
+  status: SubmissionStatus
+  score?: number
+  feedback?: string
+  gradedBy?: string
+  submittedAt: string
+  gradedAt?: string
 }
 
 // --- Quiz / CBT domain ---

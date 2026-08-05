@@ -14,14 +14,17 @@ import {
   ChevronRight,
   Camera,
   Fingerprint,
-  Smartphone,
   Sparkles,
-  ShieldAlert,
   Check,
   Loader2,
+  AlertCircle,
+  Eye,
+  EyeOff,
 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Progress } from '@/components/ui/progress'
+import { dsaApi, isBackendUnreachable } from '@/lib/api'
+import { getUser, getToken } from '@/lib/auth'
+import { isDemoToken } from '@/lib/demoAccounts'
 
 export default function SettingsView() {
   const [activeTab, setActiveTab] = useState('Account Info')
@@ -29,28 +32,33 @@ export default function SettingsView() {
     'https://api.dicebear.com/7.x/avataaars/svg?seed=Felix',
   )
   const [showAvatarPicker, setShowAvatarPicker] = useState(false)
-  const [isSaving, setIsSaving] = useState(false)
-  const [saveSuccess, setSaveSuccess] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // Account Info fields (prefilled from the real profile).
+  const [fullname, setFullname] = useState('')
+  const [email, setEmail] = useState('')
+  const [institution, setInstitution] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveMsg, setSaveMsg] = useState('')
+  const [saveErr, setSaveErr] = useState('')
+
   const avatarSeeds = [
-    { name: 'Felix', style: 'avataaars' },
-    { name: 'Aneka', style: 'avataaars' },
-    { name: 'Max', style: 'avataaars' },
-    { name: 'Luna', style: 'avataaars' },
-    { name: 'Jack', style: 'avataaars' },
-    { name: 'Zoe', style: 'avataaars' },
-    { name: 'Oliver', style: 'open-peeps' },
-    { name: 'Sophia', style: 'open-peeps' },
-    { name: 'Liam', style: 'open-peeps' },
-    { name: 'Maya', style: 'open-peeps' },
-    { name: 'Noah', style: 'open-peeps' },
-    { name: 'Elena', style: 'open-peeps' },
+    { name: 'Felix', style: 'avataaars' }, { name: 'Aneka', style: 'avataaars' },
+    { name: 'Max', style: 'avataaars' }, { name: 'Luna', style: 'avataaars' },
+    { name: 'Jack', style: 'avataaars' }, { name: 'Zoe', style: 'avataaars' },
+    { name: 'Oliver', style: 'open-peeps' }, { name: 'Sophia', style: 'open-peeps' },
+    { name: 'Liam', style: 'open-peeps' }, { name: 'Maya', style: 'open-peeps' },
+    { name: 'Noah', style: 'open-peeps' }, { name: 'Elena', style: 'open-peeps' },
   ]
 
-  // --- PERSISTENCE LOGIC ---
   useEffect(() => {
-    const savedImg = localStorage.getItem('user-pfp')
+    const u = getUser()
+    if (u) {
+      setFullname(u.fullName || u.username || '')
+      setEmail(u.email || '')
+      setInstitution((u as { institution?: string }).institution || '')
+    }
+    const savedImg = localStorage.getItem('user-pfp') || u?.avatarUrl
     if (savedImg) setProfileImage(savedImg)
   }, [])
 
@@ -58,28 +66,43 @@ export default function SettingsView() {
     const file = event.target.files?.[0]
     if (file) {
       const reader = new FileReader()
-      reader.onloadend = () => {
-        const base64 = reader.result as string
-        setProfileImage(base64)
-      }
+      reader.onloadend = () => setProfileImage(reader.result as string)
       reader.readAsDataURL(file)
     }
   }
 
-  const handleSaveChanges = () => {
+  const handleSaveChanges = async () => {
+    setSaveMsg('')
+    setSaveErr('')
     setIsSaving(true)
-    // Simulate API Call
-    setTimeout(() => {
-      localStorage.setItem('user-pfp', profileImage)
+    // Always keep the avatar locally so the UI reflects the choice immediately.
+    localStorage.setItem('user-pfp', profileImage)
+
+    // Demo/preview sessions have no real backend user — save locally only.
+    if (isDemoToken(getToken())) {
       setIsSaving(false)
-      setSaveSuccess(true)
-      // Reset success state after 3 seconds
-      setTimeout(() => setSaveSuccess(false), 3000)
-    }, 800)
+      setSaveMsg('Saved in preview mode (no backend account).')
+      return
+    }
+
+    try {
+      await dsaApi.auth.updateDetails({
+        fullname,
+        email: email.toLowerCase(),
+        institution,
+        profilePic: profileImage,
+      })
+      setSaveMsg('Saved successfully.')
+    } catch (err) {
+      if (isBackendUnreachable(err)) setSaveMsg('Saved locally — server unreachable.')
+      else setSaveErr(err instanceof Error ? err.message : 'Could not save changes.')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   return (
-    <div className='max-w-3xl mx-auto space-y-4 animate-in fade-in duration-500 pb-10 scale-[0.98] origin-top'>
+    <div className='max-w-3xl mx-auto space-y-4 animate-in fade-in duration-500 pb-10'>
       {/* --- PROFILE HEADER --- */}
       <Card className='bg-white rounded-3xl border-none p-5 shadow-sm relative overflow-hidden'>
         <div className='absolute top-0 right-0 w-24 h-24 bg-[#002EFF]/5 rounded-bl-full pointer-events-none' />
@@ -88,7 +111,7 @@ export default function SettingsView() {
             <Avatar className='h-20 w-20 border-2 border-blue-50 shadow-lg transition-transform group-hover:scale-105'>
               <AvatarImage src={profileImage} className='object-cover' />
               <AvatarFallback className='bg-blue-100 text-[#002EFF] font-black text-sm'>
-                HS
+                {(fullname || 'D').charAt(0).toUpperCase()}
               </AvatarFallback>
             </Avatar>
             <button
@@ -100,42 +123,18 @@ export default function SettingsView() {
           </div>
 
           <div className='text-center md:text-left flex-1 space-y-0.5'>
-            <div className='flex items-center justify-center md:justify-start gap-2'>
-              <h2 className='text-lg font-black text-gray-800 uppercase italic leading-tight'>
-                Hilosthone Student
-              </h2>
-              <Badge className='bg-[#FCB900] text-[#002EFF] border-none font-black text-[8px] h-4'>
-                GOLD
-              </Badge>
-            </div>
-            <p className='text-[10px] font-bold text-gray-400'>
-              ID: 2026/DSA/042 • Science
-            </p>
-            <div className='pt-2 max-w-[180px] mx-auto md:mx-0'>
-              <div className='flex justify-between items-center mb-1'>
-                <span className='text-[8px] font-black text-[#002EFF] uppercase'>
-                  Profile Strength
-                </span>
-                <span className='text-[8px] font-black text-gray-400'>85%</span>
-              </div>
-              <Progress value={85} className='h-1 bg-blue-50' />
-            </div>
+            <h2 className='text-lg font-black text-gray-800 uppercase italic leading-tight'>
+              {fullname || 'Student'}
+            </h2>
+            <p className='text-[10px] font-bold text-gray-400'>{email}</p>
           </div>
         </div>
 
-        {/* --- EXPANDED AVATAR PICKER --- */}
         {showAvatarPicker && (
           <div className='mt-4 p-3 bg-blue-50/50 rounded-2xl animate-in zoom-in-95 duration-200 border border-blue-100'>
             <div className='flex items-center justify-between mb-2'>
-              <p className='text-[9px] font-black text-blue-600 uppercase'>
-                Character Gallery
-              </p>
-              <button
-                onClick={() => setShowAvatarPicker(false)}
-                className='text-[8px] font-black text-gray-400 hover:text-[#002EFF]'
-              >
-                CLOSE
-              </button>
+              <p className='text-[9px] font-black text-blue-600 uppercase'>Character Gallery</p>
+              <button onClick={() => setShowAvatarPicker(false)} className='text-[8px] font-black text-gray-400 hover:text-[#002EFF]'>CLOSE</button>
             </div>
             <div className='grid grid-cols-6 sm:grid-cols-8 gap-2'>
               {avatarSeeds.map((seed) => {
@@ -159,38 +158,16 @@ export default function SettingsView() {
             </div>
           </div>
         )}
-        <input
-          type='file'
-          ref={fileInputRef}
-          onChange={handleImageChange}
-          className='hidden'
-          accept='image/*'
-        />
+        <input type='file' ref={fileInputRef} onChange={handleImageChange} className='hidden' accept='image/*' />
       </Card>
 
       <div className='grid grid-cols-1 lg:grid-cols-3 gap-4'>
         {/* --- NAVIGATION --- */}
         <div className='space-y-1.5'>
-          {[
-            'Account Info',
-            'Security & Password',
-            'Notifications',
-            'Subscription',
-            'Privacy Settings',
-          ].map((label) => (
+          {['Account Info', 'Security & Password', 'Notifications', 'Subscription', 'Privacy Settings'].map((label) => (
             <SettingNavButton
               key={label}
-              icon={
-                label === 'Account Info'
-                  ? User
-                  : label === 'Security & Password'
-                    ? Lock
-                    : label === 'Notifications'
-                      ? Bell
-                      : label === 'Subscription'
-                        ? CreditCard
-                        : ShieldCheck
-              }
+              icon={label === 'Account Info' ? User : label === 'Security & Password' ? Lock : label === 'Notifications' ? Bell : label === 'Subscription' ? CreditCard : ShieldCheck}
               label={label}
               active={activeTab === label}
               onClick={() => setActiveTab(label)}
@@ -200,109 +177,144 @@ export default function SettingsView() {
 
         {/* --- CONTENT AREA --- */}
         <div className='lg:col-span-2'>
-          {activeTab === 'Account Info' ? (
-            <div className='space-y-4'>
-              <Card className='bg-white rounded-3xl border-none p-5 shadow-sm'>
-                <h3 className='text-[11px] font-black text-[#002EFF] uppercase mb-4 flex items-center gap-2'>
-                  <Fingerprint size={14} /> Personal Details
-                </h3>
-                <div className='space-y-3'>
-                  <div className='grid grid-cols-1 md:grid-cols-2 gap-3'>
-                    <div className='space-y-1'>
-                      <label className='text-[9px] font-black text-gray-400 uppercase ml-1'>
-                        Full Name
-                      </label>
-                      <Input
-                        className='h-8 rounded-lg border-gray-100 bg-gray-50/50 text-[11px] font-bold focus:bg-white'
-                        defaultValue='Hilosthone Student'
-                      />
-                    </div>
-                    <div className='space-y-1'>
-                      <label className='text-[9px] font-black text-gray-400 uppercase ml-1'>
-                        Email Address
-                      </label>
-                      <Input
-                        className='h-8 rounded-lg border-gray-100 bg-gray-50/50 text-[11px] font-bold focus:bg-white'
-                        defaultValue='hilo@dsa-portal.com'
-                      />
-                    </div>
-                  </div>
-                  <div className='space-y-1'>
-                    <label className='text-[9px] font-black text-gray-400 uppercase ml-1'>
-                      Target Institution
-                    </label>
-                    <Input
-                      className='h-8 rounded-lg border-gray-100 bg-gray-50/50 text-[11px] font-bold focus:bg-white'
-                      defaultValue='University of Lagos (UNILAG)'
-                    />
-                  </div>
-
-                  {/* --- DYNAMIC ACTION BUTTON --- */}
-                  <Button
-                    onClick={handleSaveChanges}
-                    disabled={isSaving}
-                    className={`transition-all duration-300 font-black text-[9px] rounded-lg px-8 h-8 shadow-md mt-2 w-full md:w-auto ${
-                      saveSuccess
-                        ? 'bg-emerald-500 hover:bg-emerald-600 text-white'
-                        : 'bg-[#002EFF] hover:bg-blue-700 text-white'
-                    }`}
-                  >
-                    {isSaving ? (
-                      <Loader2 size={14} className='animate-spin' />
-                    ) : saveSuccess ? (
-                      <span className='flex items-center gap-2'>
-                        <Check size={14} strokeWidth={3} /> SAVED SUCCESSFULLY
-                      </span>
-                    ) : (
-                      'SAVE CHANGES'
-                    )}
-                  </Button>
+          {activeTab === 'Account Info' && (
+            <Card className='bg-white rounded-3xl border-none p-5 shadow-sm'>
+              <h3 className='text-[11px] font-black text-[#002EFF] uppercase mb-4 flex items-center gap-2'>
+                <Fingerprint size={14} /> Personal Details
+              </h3>
+              {saveMsg && (
+                <div className='mb-3 flex items-center gap-2 p-2.5 rounded-xl bg-emerald-50 text-emerald-700 text-[10px] font-bold'>
+                  <Check size={13} /> {saveMsg}
                 </div>
-              </Card>
+              )}
+              {saveErr && (
+                <div className='mb-3 flex items-center gap-2 p-2.5 rounded-xl bg-rose-50 text-rose-600 text-[10px] font-bold'>
+                  <AlertCircle size={13} /> {saveErr}
+                </div>
+              )}
+              <div className='space-y-3'>
+                <div className='grid grid-cols-1 md:grid-cols-2 gap-3'>
+                  <Field label='Full Name' value={fullname} onChange={setFullname} />
+                  <Field label='Email Address' value={email} onChange={setEmail} type='email' />
+                </div>
+                <Field label='Institution' value={institution} onChange={setInstitution} placeholder='e.g. University of Lagos' />
 
-              <div className='grid grid-cols-2 gap-3'>
-                <Card className='p-3 rounded-2xl border-none bg-white shadow-sm flex items-center gap-3'>
-                  <div className='h-8 w-8 bg-orange-50 text-orange-500 rounded-lg flex items-center justify-center shrink-0'>
-                    <ShieldAlert size={14} />
-                  </div>
-                  <p className='text-[9px] font-black text-gray-800 leading-tight uppercase'>
-                    2FA <br />
-                    <span className='text-gray-400 font-bold lowercase'>
-                      Disabled
-                    </span>
-                  </p>
-                </Card>
-                <Card className='p-3 rounded-2xl border-none bg-white shadow-sm flex items-center gap-3'>
-                  <div className='h-8 w-8 bg-blue-50 text-[#002EFF] rounded-lg flex items-center justify-center shrink-0'>
-                    <Smartphone size={14} />
-                  </div>
-                  <p className='text-[9px] font-black text-gray-800 leading-tight uppercase'>
-                    Devices <br />
-                    <span className='text-gray-400 font-bold lowercase'>
-                      2 active
-                    </span>
-                  </p>
-                </Card>
+                <Button
+                  onClick={handleSaveChanges}
+                  disabled={isSaving}
+                  className='bg-[#002EFF] hover:bg-blue-700 text-white font-black text-[9px] rounded-lg px-8 h-9 shadow-md mt-2 w-full md:w-auto'
+                >
+                  {isSaving ? <Loader2 size={14} className='animate-spin' /> : 'SAVE CHANGES'}
+                </Button>
               </div>
-            </div>
-          ) : (
+            </Card>
+          )}
+
+          {activeTab === 'Security & Password' && <PasswordCard />}
+
+          {['Notifications', 'Subscription', 'Privacy Settings'].includes(activeTab) && (
             <Card className='bg-white rounded-3xl border-none p-10 shadow-sm flex flex-col items-center justify-center text-center space-y-3 min-h-[300px]'>
               <div className='h-12 w-12 bg-blue-50 rounded-full flex items-center justify-center text-[#002EFF] animate-pulse'>
                 <Sparkles size={24} />
               </div>
-              <h3 className='text-sm font-black text-gray-800 uppercase italic'>
-                {activeTab}
-              </h3>
-              <p className='text-[10px] font-bold text-gray-400 max-w-[200px]'>
-                We're currently building this section. Stay tuned!
-              </p>
-              <Badge className='bg-blue-50 text-[#002EFF] border-none font-black text-[8px]'>
-                COMING SOON
-              </Badge>
+              <h3 className='text-sm font-black text-gray-800 uppercase italic'>{activeTab}</h3>
+              <p className='text-[10px] font-bold text-gray-400 max-w-[200px]'>We&apos;re currently building this section. Stay tuned!</p>
+              <Badge className='bg-blue-50 text-[#002EFF] border-none font-black text-[8px]'>COMING SOON</Badge>
             </Card>
           )}
         </div>
       </div>
+    </div>
+  )
+}
+
+/* ---- Change password (real /auth/updatepassword) ---- */
+function PasswordCard() {
+  const [current, setCurrent] = useState('')
+  const [next, setNext] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [show, setShow] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState('')
+  const [err, setErr] = useState('')
+
+  const submit = async () => {
+    setMsg(''); setErr('')
+    if (next.length < 6) return setErr('New password must be at least 6 characters')
+    if (next !== confirm) return setErr('Passwords do not match')
+
+    if (isDemoToken(getToken())) {
+      return setErr('Password change is disabled in preview mode (no backend account).')
+    }
+    setBusy(true)
+    try {
+      await dsaApi.auth.updatePassword({ currentPassword: current, newPassword: next })
+      setMsg('Password updated successfully.')
+      setCurrent(''); setNext(''); setConfirm('')
+    } catch (e) {
+      if (isBackendUnreachable(e)) setErr('Cannot reach the server. Please try again.')
+      else setErr(e instanceof Error ? e.message : 'Could not update password.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Card className='bg-white rounded-3xl border-none p-5 shadow-sm'>
+      <h3 className='text-[11px] font-black text-[#002EFF] uppercase mb-4 flex items-center gap-2'>
+        <Lock size={14} /> Change Password
+      </h3>
+      {msg && <div className='mb-3 flex items-center gap-2 p-2.5 rounded-xl bg-emerald-50 text-emerald-700 text-[10px] font-bold'><Check size={13} /> {msg}</div>}
+      {err && <div className='mb-3 flex items-center gap-2 p-2.5 rounded-xl bg-rose-50 text-rose-600 text-[10px] font-bold'><AlertCircle size={13} /> {err}</div>}
+      <div className='space-y-3'>
+        <PwField label='Current Password' value={current} onChange={setCurrent} show={show} />
+        <div className='grid grid-cols-1 md:grid-cols-2 gap-3'>
+          <PwField label='New Password' value={next} onChange={setNext} show={show} />
+          <PwField label='Confirm New Password' value={confirm} onChange={setConfirm} show={show} />
+        </div>
+        <label className='flex items-center gap-2 text-[10px] font-bold text-slate-500'>
+          <button type='button' onClick={() => setShow(!show)} className='text-slate-400 hover:text-[#002EFF]'>
+            {show ? <EyeOff size={14} /> : <Eye size={14} />}
+          </button>
+          Show passwords
+        </label>
+        <Button onClick={submit} disabled={busy} className='bg-[#002EFF] hover:bg-blue-700 text-white font-black text-[9px] rounded-lg px-8 h-9 shadow-md mt-1 w-full md:w-auto'>
+          {busy ? <Loader2 size={14} className='animate-spin' /> : 'UPDATE PASSWORD'}
+        </Button>
+      </div>
+    </Card>
+  )
+}
+
+function Field({ label, value, onChange, type = 'text', placeholder }: {
+  label: string; value: string; onChange: (v: string) => void; type?: string; placeholder?: string
+}) {
+  return (
+    <div className='space-y-1'>
+      <label className='text-[9px] font-black text-gray-400 uppercase ml-1'>{label}</label>
+      <Input
+        type={type}
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+        className='h-9 rounded-lg border-gray-100 bg-gray-50/50 text-[11px] font-bold focus:bg-white'
+      />
+    </div>
+  )
+}
+
+function PwField({ label, value, onChange, show }: {
+  label: string; value: string; onChange: (v: string) => void; show: boolean
+}) {
+  return (
+    <div className='space-y-1'>
+      <label className='text-[9px] font-black text-gray-400 uppercase ml-1'>{label}</label>
+      <Input
+        type={show ? 'text' : 'password'}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className='h-9 rounded-lg border-gray-100 bg-gray-50/50 text-[11px] font-bold focus:bg-white'
+      />
     </div>
   )
 }
@@ -314,38 +326,17 @@ function SettingNavButton({ icon: Icon, label, active, onClick }: any) {
       className={`w-full flex items-center justify-between p-3 rounded-xl transition-all group ${active ? 'bg-[#002EFF] text-white shadow-md' : 'bg-white text-gray-500 hover:bg-blue-50'}`}
     >
       <div className='flex items-center gap-2.5'>
-        <Icon
-          size={14}
-          className={
-            active
-              ? 'text-[#FCB900]'
-              : 'text-gray-400 group-hover:text-[#002EFF]'
-          }
-        />
-        <span className='text-[10px] font-black uppercase italic tracking-tight'>
-          {label}
-        </span>
+        <Icon size={14} className={active ? 'text-[#FCB900]' : 'text-gray-400 group-hover:text-[#002EFF]'} />
+        <span className='text-[10px] font-black uppercase italic tracking-tight'>{label}</span>
       </div>
-      <ChevronRight
-        size={12}
-        className={active ? 'text-white/50' : 'text-gray-300'}
-      />
+      <ChevronRight size={12} className={active ? 'text-white/50' : 'text-gray-300'} />
     </button>
   )
 }
 
 function PlusIcon({ size }: { size: number }) {
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox='0 0 24 24'
-      fill='none'
-      stroke='currentColor'
-      strokeWidth='3'
-      strokeLinecap='round'
-      strokeLinejoin='round'
-    >
+    <svg width={size} height={size} viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='3' strokeLinecap='round' strokeLinejoin='round'>
       <line x1='12' y1='5' x2='12' y2='19'></line>
       <line x1='5' y1='12' x2='19' y2='12'></line>
     </svg>
