@@ -392,6 +392,7 @@ import Library from './components/Library'
 import Analytics from './components/Analytics'
 import StudentManagement from './components/StudentManagement'
 import CreateTutor from './components/CreateTutor'
+import CreateGuardian from './components/CreateGuardian'
 import TakeAttendance from '@/components/dashboard/TakeAttendance'
 import TimetableEditor from '@/components/dashboard/TimetableEditor'
 import LiveMonitoring from './components/LiveMonitoring'
@@ -411,6 +412,7 @@ type AdminTab =
   | 'analytics'
   | 'students'
   | 'create-tutor'
+  | 'create-guardian'
   | 'attendance'
   | 'timetable'
   | 'monitoring'
@@ -480,6 +482,11 @@ export default function AdminAdmin() {
           icon: UserPlus,
         },
         {
+          id: 'create-guardian' as AdminTab,
+          label: 'Create Guardian',
+          icon: Users,
+        },
+        {
           id: 'attendance' as AdminTab,
           label: 'Take Attendance',
           icon: CalendarCheck,
@@ -533,6 +540,8 @@ export default function AdminAdmin() {
         return <StudentManagement />
       case 'create-tutor':
         return <CreateTutor />
+      case 'create-guardian':
+        return <CreateGuardian />
       case 'attendance':
         return <TakeAttendance />
       case 'timetable':

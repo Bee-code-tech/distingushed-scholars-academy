@@ -38,7 +38,7 @@ import {
 } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Checkbox } from '@/components/ui/checkbox'
-import { dsaApi } from '@/lib/api'
+import { dsaApi, isBackendUnreachable } from '@/lib/api'
 import {
   setSession,
   rememberEmail,
@@ -52,6 +52,7 @@ import {
   DEMO_TOKEN_PREFIX,
   DEMO_ACCOUNTS,
 } from '@/lib/demoAccounts'
+import { findStaffLogin, getDemoStaff } from '@/lib/staffStore'
 
 const loginSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
@@ -96,44 +97,65 @@ function LoginContent() {
     }
   }, [searchParams, form])
 
+  // Local preview accounts — admin bypass, demo students/tutor/guardian, and
+  // admin-created staff. Kept as a FALLBACK because the backend has no
+  // tutor/guardian/staff/admin login yet; the live API is always tried first.
+  // Returns true if it handled the sign-in. Remove as those backend endpoints
+  // ship (demoAccounts.ts, staffStore auth, and the admin bypass).
+  const tryPreviewLogin = (values: z.infer<typeof loginSchema>): boolean => {
+    if (
+      ADMIN_BYPASS_ENABLED &&
+      values.email === DEV_ADMIN_EMAIL &&
+      values.password === 'dsaadminpass'
+    ) {
+      setSession({ token: 'admin-session-active', role: 'super_admin' })
+      setSuccessMsg('ADMIN ACCESS GRANTED. REDIRECTING...')
+      setTimeout(() => router.push('/admin'), 800)
+      return true
+    }
+
+    const demo = findDemoAccount(values.email, values.password)
+    if (demo) {
+      const role = demo.profile.role || 'student'
+      setSession({
+        token: `${DEMO_TOKEN_PREFIX}${demo.profile.username}`,
+        user: demo.profile,
+        role,
+      })
+      rememberEmail(values.email, !!values.rememberMe)
+      setSuccessMsg('Demo login successful! Redirecting...')
+      router.push(dashboardPathForRole(role))
+      return true
+    }
+
+    const staff = findStaffLogin(values.email, values.password)
+    if (staff) {
+      setSession({
+        token: `${DEMO_TOKEN_PREFIX}staff_${staff.id}`,
+        user: {
+          email: staff.email,
+          fullName: staff.name,
+          role: 'staff',
+          staffRoleId: staff.roleId,
+        },
+        role: 'staff',
+      })
+      rememberEmail(values.email, !!values.rememberMe)
+      setSuccessMsg('Staff login successful! Redirecting...')
+      router.push(dashboardPathForRole('staff'))
+      return true
+    }
+
+    return false
+  }
+
   async function onSubmit(values: z.infer<typeof loginSchema>) {
     setLoading(true)
     setError('')
     setSuccessMsg('')
 
     try {
-      // --- DEV-ONLY ADMIN BYPASS ---
-      // Disabled by default. Enable locally with NEXT_PUBLIC_ENABLE_ADMIN_BYPASS=true.
-      // Remove entirely once the backend admin-login endpoint is live.
-      if (
-        ADMIN_BYPASS_ENABLED &&
-        values.email === DEV_ADMIN_EMAIL &&
-        values.password === 'dsaadminpass'
-      ) {
-        setSession({ token: 'admin-session-active', role: 'super_admin' })
-        setSuccessMsg('ADMIN ACCESS GRANTED. REDIRECTING...')
-        setTimeout(() => router.push('/admin'), 800)
-        return
-      }
-
-      // --- STATIC DEMO LOGINS (client-side, no backend) ---
-      // Lets the owner preview each student role. Remove src/lib/demoAccounts.ts
-      // and this block once the real backend is connected.
-      const demo = findDemoAccount(values.email, values.password)
-      if (demo) {
-        const role = demo.profile.role || 'student'
-        setSession({
-          token: `${DEMO_TOKEN_PREFIX}${demo.profile.username}`,
-          user: demo.profile,
-          role,
-        })
-        rememberEmail(values.email, !!values.rememberMe)
-        setSuccessMsg('Demo login successful! Redirecting...')
-        router.push(dashboardPathForRole(role))
-        return
-      }
-
-      // --- PRODUCTION API LOGIN (routed through the shared client) ---
+      // Primary path — the live backend (POST /api/auth/login).
       const data = await dsaApi.auth.login({
         email: values.email,
         password: values.password,
@@ -141,11 +163,7 @@ function LoginContent() {
 
       const role = data.user?.role || 'student'
       if (data.token) {
-        setSession({
-          token: data.token,
-          user: data.user,
-          role,
-        })
+        setSession({ token: data.token, user: data.user, role })
         rememberEmail(values.email, !!values.rememberMe)
       }
 
@@ -153,7 +171,15 @@ function LoginContent() {
       router.push(dashboardPathForRole(role))
       router.refresh()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Invalid email or password.')
+      // Live login failed — fall back to local preview accounts (the only way
+      // to reach roles the backend can't create yet). If none match, show the
+      // real error (or a friendly one when the server is unreachable).
+      if (tryPreviewLogin(values)) return
+      if (isBackendUnreachable(err)) {
+        setError('Cannot reach the server. Please check your connection and try again.')
+      } else {
+        setError(err instanceof Error ? err.message : 'Invalid email or password.')
+      }
     } finally {
       setLoading(false)
     }
@@ -358,6 +384,27 @@ function LoginContent() {
                     className='px-3 py-2.5 rounded-xl bg-blue-50/60 hover:bg-[#002EFF] hover:text-white text-[#002EFF] text-[9px] font-black uppercase tracking-wide transition-all active:scale-95 disabled:opacity-50'
                   >
                     {acc.profile.fullName?.replace(/^\w+\s/, '')}
+                  </button>
+                ))}
+              </div>
+              <p className='text-center text-[9px] font-black uppercase tracking-[0.25em] text-gray-400 mb-3 mt-6'>
+                Staff logins · secretary / auditor
+              </p>
+              <div className='grid grid-cols-2 gap-2'>
+                {getDemoStaff().map((s) => (
+                  <button
+                    key={s.email}
+                    type='button'
+                    disabled={loading}
+                    onClick={() => {
+                      form.setValue('email', s.email)
+                      form.setValue('password', s.password)
+                      form.handleSubmit(onSubmit)()
+                    }}
+                    className='px-3 py-2.5 rounded-xl bg-amber-50/70 hover:bg-[#FCB900] hover:text-[#002EFF] text-amber-700 text-[9px] font-black uppercase tracking-wide transition-all active:scale-95 disabled:opacity-50'
+                  >
+                    {s.name.split(' ')[0]} ·{' '}
+                    {s.roleId.charAt(0).toUpperCase() + s.roleId.slice(1)}
                   </button>
                 ))}
               </div>

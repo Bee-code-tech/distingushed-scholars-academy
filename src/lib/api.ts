@@ -6,6 +6,7 @@ import type {
   AuthResponse,
   LoginPayload,
   RegisterPayload,
+  RegisterResponse,
   ResetPasswordPayload,
   User,
   Quiz,
@@ -86,14 +87,37 @@ const getHeaders = (token?: string, isJson = true): HeadersInit => {
   return headers
 }
 
+/**
+ * True when a fetch never reached the server (offline / CORS / backend not up
+ * yet), as opposed to an HTTP error the server actually returned (which should
+ * be surfaced to the user). Lets callers keep a local "preview" path while the
+ * backend is still being wired up without hiding real API errors.
+ */
+export function isBackendUnreachable(err: unknown): boolean {
+  if (err instanceof TypeError) return true // fetch() network-level failure
+  const m = err instanceof Error ? err.message.toLowerCase() : ''
+  return (
+    m.includes('failed to fetch') ||
+    m.includes('networkerror') ||
+    m.includes('load failed') ||
+    m.includes('network request failed')
+  )
+}
+
 export const dsaApi = {
   auth: {
+    /**
+     * Register a student. The backend creates a PENDING student, initializes a
+     * Paystack transaction, and returns `data: { accessCode, authorizationUrl,
+     * reference, … }`. The caller resumes that transaction (see paystack.ts),
+     * the webhook confirms payment, then OTP verification issues the token.
+     */
     register: (payload: RegisterPayload) =>
       fetch(`${BASE_URL}/auth/register`, {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify(payload),
-      }).then((r) => handleResponse<AuthResponse | { message: string }>(r)),
+      }).then((r) => handleResponse<RegisterResponse>(r)),
 
     /**
      * Resend the verification code.
@@ -169,6 +193,27 @@ export const dsaApi = {
           const body = res as { data?: User; user?: User }
           return (body.data ?? body.user ?? res) as User
         }),
+
+    /** Update the logged-in user's profile (PUT /auth/updatedetails). */
+    updateDetails: (payload: Record<string, unknown>, token?: string) =>
+      fetch(`${BASE_URL}/auth/updatedetails`, {
+        method: 'PUT',
+        headers: getHeaders(token),
+        body: JSON.stringify(payload),
+      }).then((r) =>
+        handleResponse<{ success?: boolean; data?: User; user?: User; message?: string }>(r),
+      ),
+
+    /** Change password (PUT /auth/updatepassword). */
+    updatePassword: (
+      payload: { currentPassword: string; newPassword: string },
+      token?: string,
+    ) =>
+      fetch(`${BASE_URL}/auth/updatepassword`, {
+        method: 'PUT',
+        headers: getHeaders(token),
+        body: JSON.stringify(payload),
+      }).then((r) => handleResponse<{ success?: boolean; token?: string; message?: string }>(r)),
   },
 
   quizzes: {

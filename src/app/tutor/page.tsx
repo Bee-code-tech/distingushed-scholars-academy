@@ -6,14 +6,15 @@ import {
   Users,
   CalendarDays,
   CalendarCheck,
-  FileText,
   BarChart3,
   Loader2,
   MapPin,
   Video,
   Clock,
   CheckCircle2,
-  PlusCircle,
+  BookOpen,
+  ClipboardList,
+  Megaphone,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -23,8 +24,15 @@ import DashboardShell, {
 } from '@/components/dashboard/DashboardShell'
 import { useDashboardSession } from '@/components/dashboard/useDashboardSession'
 import TakeAttendance from '@/components/dashboard/TakeAttendance'
-import TimetableEditor from '@/components/dashboard/TimetableEditor'
+import ReadOnlyTimetable from '@/components/dashboard/ReadOnlyTimetable'
+import LiveClasses from '@/components/dashboard/LiveClasses'
+import CourseMaterials from '@/components/dashboard/CourseMaterials'
+import Assignments from '@/components/dashboard/Assignments'
+import Analytics from '@/components/dashboard/Analytics'
+import Announcements from '@/components/dashboard/Announcements'
 import { getStudents, type StoredStudent } from '@/lib/studentsStore'
+import { getCourses } from '@/lib/coursesStore'
+import { getAssignments, getSubmissions } from '@/lib/assignmentsStore'
 
 // --- Mock data (replace with API once tutor endpoints exist) ----------------
 
@@ -34,27 +42,16 @@ const CLASSES = [
   { day: 'FRI', date: '01 AUG', title: 'Further Maths Revision', time: '10:00 AM', where: 'Hall A, Campus', mode: 'physical', live: false },
 ]
 
-const QUIZZES = [
-  { title: 'Algebra Speed Test', subject: 'Mathematics', submissions: 24, graded: 24, status: 'closed' },
-  { title: 'Indices & Logarithms', subject: 'Mathematics', submissions: 18, graded: 11, status: 'grading' },
-  { title: 'Mock CBT — Paper 1', subject: 'Mathematics', submissions: 31, graded: 0, status: 'open' },
-]
-
-const SUBJECT_PERF = [
-  { subject: 'Algebra', score: 84 },
-  { subject: 'Geometry', score: 71 },
-  { subject: 'Calculus', score: 63 },
-  { subject: 'Statistics', score: 78 },
-  { subject: 'Trigonometry', score: 69 },
-]
-
 const NAV: NavItem[] = [
   { key: 'overview', label: 'Overview', icon: LayoutDashboard },
   { key: 'students', label: 'My Students', icon: Users },
+  { key: 'materials', label: 'Course Materials', icon: BookOpen },
+  { key: 'assignments', label: 'Assignments', icon: ClipboardList },
+  { key: 'announcements', label: 'Announcements', icon: Megaphone },
   { key: 'attendance', label: 'Take Attendance', icon: CalendarCheck },
+  { key: 'live', label: 'Live Classes', icon: Video },
   { key: 'timetable', label: 'Timetable', icon: CalendarDays },
   { key: 'schedule', label: 'Class Schedule', icon: CalendarDays },
-  { key: 'quizzes', label: 'Quizzes', icon: FileText },
   { key: 'analytics', label: 'Analytics', icon: BarChart3 },
 ]
 
@@ -100,7 +97,17 @@ export default function TutorDashboard() {
   const name = user.fullName || user.username || 'Tutor'
   // Drop any "(Tutor)" suffix demo names carry, and any leading title.
   const greeting = name.replace(/\s*\(.*\)$/, '').replace(/^(Mr|Mrs|Ms|Dr)\.?\s+/i, '')
-  const pendingGrading = QUIZZES.reduce((n, q) => n + (q.submissions - q.graded), 0)
+  // Assignment metrics from the store (replaces the old quiz mock).
+  let totalAssignments = 0
+  let pendingGrading = 0
+  getCourses().forEach((c) =>
+    getAssignments(c.id).forEach((a) => {
+      totalAssignments++
+      getSubmissions(a.id).forEach((s) => {
+        if (s.status !== 'graded') pendingGrading++
+      })
+    }),
+  )
 
   return (
     <DashboardShell
@@ -127,7 +134,7 @@ export default function TutorDashboard() {
           <div className='grid grid-cols-2 md:grid-cols-4 gap-4'>
             <StatTile label='My Students' value={students.length} icon={Users} tint='bg-blue-50 text-blue-600' />
             <StatTile label='Classes / wk' value={CLASSES.length} icon={CalendarDays} tint='bg-emerald-50 text-emerald-600' />
-            <StatTile label='Quizzes' value={QUIZZES.length} icon={FileText} tint='bg-amber-50 text-amber-600' />
+            <StatTile label='Assignments' value={totalAssignments} icon={ClipboardList} tint='bg-amber-50 text-amber-600' />
             <StatTile label='To Grade' value={pendingGrading} icon={CheckCircle2} tint='bg-rose-50 text-rose-600' />
           </div>
 
@@ -200,9 +207,17 @@ export default function TutorDashboard() {
         </div>
       )}
 
+      {view === 'materials' && <CourseMaterials mode='tutor' />}
+
+      {view === 'assignments' && <Assignments mode='tutor' />}
+
+      {view === 'announcements' && <Announcements mode='tutor' />}
+
       {view === 'attendance' && <TakeAttendance />}
 
-      {view === 'timetable' && <TimetableEditor />}
+      {view === 'live' && <LiveClasses mode='tutor' />}
+
+      {view === 'timetable' && <ReadOnlyTimetable />}
 
       {view === 'schedule' && (
         <div className='space-y-4'>
@@ -235,77 +250,7 @@ export default function TutorDashboard() {
         </div>
       )}
 
-      {view === 'quizzes' && (
-        <div className='space-y-4'>
-          <div className='flex items-center justify-between'>
-            <h2 className='text-2xl font-black text-[#002EFF] italic uppercase'>Quizzes</h2>
-            <Button className='bg-[#002EFF] text-white font-black text-[10px] rounded-xl'>
-              <PlusCircle size={14} className='mr-2' /> NEW QUIZ
-            </Button>
-          </div>
-          {QUIZZES.map((q, i) => {
-            const pct = q.submissions ? Math.round((q.graded / q.submissions) * 100) : 0
-            return (
-              <Card key={i} className='p-5 rounded-3xl border-none shadow-sm bg-white'>
-                <div className='flex items-center justify-between'>
-                  <div>
-                    <h4 className='text-sm font-black text-gray-800 uppercase'>{q.title}</h4>
-                    <p className='text-[10px] font-bold text-gray-400 uppercase'>{q.subject}</p>
-                  </div>
-                  <Badge
-                    className={`text-[8px] font-black ${
-                      q.status === 'open' ? 'bg-emerald-50 text-emerald-600'
-                      : q.status === 'grading' ? 'bg-amber-50 text-amber-600'
-                      : 'bg-slate-100 text-slate-500'
-                    }`}
-                  >
-                    {q.status.toUpperCase()}
-                  </Badge>
-                </div>
-                <div className='flex items-center gap-3 mt-4'>
-                  <div className='flex-1 h-2 bg-slate-100 rounded-full overflow-hidden'>
-                    <div className='h-full bg-[#002EFF] rounded-full' style={{ width: `${pct}%` }} />
-                  </div>
-                  <span className='text-[10px] font-black text-gray-500'>
-                    {q.graded}/{q.submissions} graded
-                  </span>
-                  {q.graded < q.submissions && (
-                    <Button size='sm' className='bg-[#FCB900] text-[#002EFF] font-black text-[10px] rounded-xl h-8'>
-                      GRADE
-                    </Button>
-                  )}
-                </div>
-              </Card>
-            )
-          })}
-        </div>
-      )}
-
-      {view === 'analytics' && (
-        <div className='space-y-4'>
-          <h2 className='text-2xl font-black text-[#002EFF] italic uppercase'>Student Analytics</h2>
-          <Card className='p-6 rounded-3xl border-none shadow-sm bg-white'>
-            <p className='text-[10px] font-black uppercase text-gray-400 mb-5'>
-              Average class score by topic
-            </p>
-            <div className='space-y-4'>
-              {SUBJECT_PERF.map((s) => (
-                <div key={s.subject} className='flex items-center gap-3'>
-                  <span className='w-24 text-[10px] font-black text-gray-600 uppercase text-right'>{s.subject}</span>
-                  <div className='flex-1 h-6 bg-slate-100 rounded-lg overflow-hidden'>
-                    <div
-                      className={`h-full rounded-lg flex items-center justify-end pr-2 ${s.score >= 70 ? 'bg-[#002EFF]' : 'bg-amber-400'}`}
-                      style={{ width: `${s.score}%` }}
-                    >
-                      <span className='text-[9px] font-black text-white'>{s.score}%</span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </Card>
-        </div>
-      )}
+      {view === 'analytics' && <Analytics mode='tutor' />}
     </DashboardShell>
   )
 }

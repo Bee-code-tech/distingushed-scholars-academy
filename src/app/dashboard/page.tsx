@@ -316,6 +316,10 @@ import {
   Lock,
   Loader2,
   CalendarCheck,
+  ClipboardList,
+  Megaphone,
+  Video,
+  BarChart3,
 } from 'lucide-react'
 
 // API Utility
@@ -353,6 +357,10 @@ import ResourcesView from './resources/page'
 import CommunityView from './community/page'
 import StudentAttendance from '@/components/dashboard/StudentAttendance'
 import Timetable from '@/components/dashboard/Timetable'
+import Assignments from '@/components/dashboard/Assignments'
+import Announcements from '@/components/dashboard/Announcements'
+import LiveClasses from '@/components/dashboard/LiveClasses'
+import Analytics from '@/components/dashboard/Analytics'
 
 type ViewState =
   | 'overview'
@@ -362,6 +370,10 @@ type ViewState =
   | 'schedule'
   | 'settings'
   | 'resources'
+  | 'assignments'
+  | 'announcements'
+  | 'live'
+  | 'analytics'
   | 'community'
 
 export default function AcademyDashboard() {
@@ -455,7 +467,11 @@ export default function AcademyDashboard() {
       view: 'attendance' as ViewState,
     },
     { icon: Calendar, label: 'Timetable', view: 'timetable' as ViewState },
+    { icon: Video, label: 'Live Class', view: 'live' as ViewState },
     { icon: Library, label: 'E-Learning', view: 'resources' as ViewState },
+    { icon: ClipboardList, label: 'Assignments', view: 'assignments' as ViewState },
+    { icon: BarChart3, label: 'My Performance', view: 'analytics' as ViewState },
+    { icon: Megaphone, label: 'Announcements', view: 'announcements' as ViewState },
     { icon: Zap, label: 'Syllabus Mastery', view: 'syllabus' as ViewState },
     {
       icon: Users,
@@ -673,6 +689,10 @@ export default function AcademyDashboard() {
             {activeView === 'resources' && (
               <ResourcesView isDSAite={user.isDSAite} />
             )}
+            {activeView === 'assignments' && <Assignments mode='student' />}
+            {activeView === 'announcements' && <Announcements mode='student' />}
+            {activeView === 'live' && <LiveClasses mode='student' />}
+            {activeView === 'analytics' && <Analytics mode='student' />}
             {activeView === 'syllabus' && <SyllabusMastery />}
             {activeView === 'community' && <CommunityView />}
             {activeView === 'schedule' && <ExamSchedule mode={student.mode} />}

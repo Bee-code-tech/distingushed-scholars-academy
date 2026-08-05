@@ -1,21 +1,13 @@
 'use client'
 
-import { useState } from 'react'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { GraduationCap, ArrowLeft } from 'lucide-react'
 
 import { Card, CardContent } from '@/components/ui/card'
-import { cn } from '@/lib/utils'
 import StudentWizard from './StudentWizard'
-import GuardianForm from './GuardianForm'
-
-type AccountType = 'student' | 'guardian'
 
 export default function DSASignUp() {
-  const [accountType, setAccountType] = useState<AccountType>('student')
-  const isGuardian = accountType === 'guardian'
-
   return (
     <div className='min-h-screen bg-[#F8FAFF] py-8 px-4 flex flex-col items-center'>
       <div className='w-full max-w-xl mb-4'>
@@ -38,44 +30,17 @@ export default function DSASignUp() {
             <GraduationCap size={24} />
           </div>
         </motion.div>
-        <h1 className='text-2xl font-black text-slate-900'>
-          {isGuardian ? 'Guardian Registration' : 'Student Registration'}
-        </h1>
+        <h1 className='text-2xl font-black text-slate-900'>Student Registration</h1>
         <p className='text-slate-500 text-sm font-medium'>
-          {isGuardian
-            ? 'Create an account to monitor your ward'
-            : 'Join the Distinguished Scholars Academy'}
+          Join the Distinguished Scholars Academy
         </p>
       </div>
 
       <Card className='w-full max-w-xl rounded-[24px] shadow-lg border-slate-100 overflow-hidden bg-white'>
         <CardContent className='p-6 md:p-8 space-y-6'>
-          {/* Account type — students & guardians self-register here.
-              Tutors are created by an admin. */}
-          <div className='grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-xl'>
-            {(
-              [
-                { id: 'student', label: 'Student' },
-                { id: 'guardian', label: 'Guardian / Parent' },
-              ] as const
-            ).map((opt) => (
-              <button
-                key={opt.id}
-                type='button'
-                onClick={() => setAccountType(opt.id)}
-                className={cn(
-                  'py-2.5 rounded-lg text-[11px] font-black uppercase tracking-wide transition-all',
-                  accountType === opt.id
-                    ? 'bg-white text-[#002EFF] shadow-sm'
-                    : 'text-slate-400 hover:text-slate-600',
-                )}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-
-          {isGuardian ? <GuardianForm /> : <StudentWizard />}
+          {/* Students self-register here. Tutors and guardians/parents are
+              created by an admin from the admin panel. */}
+          <StudentWizard />
 
           <div className='text-center pt-2 border-t border-slate-50'>
             <p className='text-gray-400 font-bold text-[10px] uppercase tracking-widest'>

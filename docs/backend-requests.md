@@ -36,7 +36,7 @@ store them and return them on `GET /api/auth/me`:
 | `guardianName`, `guardianPhone`, `guardianEmail` | parent/guardian contact |
 | `profilePic` | passport photo (currently sent as a base64 data URL) |
 | `paymentReference` | Paystack reference — see §2 |
-| `role` | always `student` from this form; **tutors are created by an admin**; guardians self-register with `role: parent` |
+| `role` | always `student` from this form; **tutors and guardians/parents are created by an admin** (not self-service) — see §5 |
 
 **Why it matters:** on-campus vs online, department, and programmes drive the
 dashboard, timetable, attendance and live-class views. Today the frontend
@@ -46,13 +46,33 @@ device** loses them until the API stores and returns them.
 ## 2. Verify the Paystack payment (Portal Access Fee) — money
 
 Every student pays a one-time **₦2,000 Portal Access Fee** via Paystack **before**
-the account is activated. The frontend opens the Paystack popup with the
-**public** key and sends the resulting `paymentReference`.
+the account is activated.
 
-**The backend must verify that reference with the Paystack SECRET key**
-(server-side, `GET https://api.paystack.co/transaction/verify/:reference`) and
-only then mark the account paid/active. **Do not trust the client** — a success
-callback can be faked. The secret key must live only in a backend env var.
+**The frontend now uses the register-first flow that the API's Swagger already
+implies:**
+
+1. `POST /api/auth/register` (with `price` in **kobo** = `200000`) → server
+   creates the PENDING student, **initializes** the Paystack transaction, and
+   returns `data: { accessCode, authorizationUrl, reference, … }`.
+2. The browser **resumes that same transaction** with `accessCode` (Paystack
+   Popup v2 `resumeTransaction`) — so the reference the student pays under is the
+   one the server created.
+3. Paystack calls **`POST /api/auth/paystack/webhook`** (HMAC-SHA512) → the
+   server marks the student paid. The client never decides "paid".
+4. Then OTP → `verify-otp` issues the token.
+
+**So the backend must actually return `data.accessCode` (and/or
+`authorizationUrl`) from register, and the webhook must flip the paid flag.**
+Verify server-side with the SECRET key (`GET
+https://api.paystack.co/transaction/verify/:reference`) — never trust the
+client; the secret key lives only in a backend env var. (If register does not
+return an access code, the frontend falls back gracefully, but payment won't be
+collected — so this response field is required for real payments.)
+
+**Also plan for manual (offline) payments.** Some students pay by bank transfer
+or cash. Authorized staff (see §9) must be able to mark such a student as paid —
+e.g. `POST /api/payments/manual { studentId, amount, method, reference? }`
+(staff-only) → sets `isPaid`. So paid-status should not depend solely on Paystack.
 
 ## 3. Return `role`, study mode, department & subjects on `GET /api/auth/me`
 
@@ -81,9 +101,12 @@ so the dashboard shows the right mode and department.
 - **Class analytics** — simple progress figures across their students.
 
 **Guardian** (`role: "parent"`):
+- **Admin-created, not self-service.** An admin creates the guardian account and
+  sets the ward link at creation time (`POST /api/admin/staff`-style, with
+  `role: "parent"` + `wardId`). There is no guardian self-registration.
 - **Ward link** — which student(s) a guardian oversees. **This relationship is the
   key missing piece** — everything else hangs off it, and it must be verified
-  server-side (a guardian must not see a child's data just by typing a username).
+  server-side (a guardian must not see a child's data just by naming them).
 - **Ward performance, attendance, and fees** (amount, status paid/due, date).
 
 ## 6. Attendance — activate & self-check-in
@@ -126,6 +149,44 @@ Exam countdowns read from `GET /api/programs`. Only a (stale) "JAMB Countdown"
 exists. Please add entries whose `name` contains **"WAEC"** and **"Post-UTME"**,
 each with a future `endDate`, and refresh the JAMB one. Updating a countdown is
 just another `POST /api/programs` — no deploy.
+
+## 9. Staff roles & permissions (admin-managed)
+
+Beyond the four core roles (`student` / `tutor` / `parent` / `admin`), the admin
+must be able to create **additional staff accounts** — e.g. **secretary,
+auditor** — each with its own permissions. **Please design the role model as
+role → permissions, not a hardcoded enum**, so new roles can be added without a
+code change.
+
+Examples of duties:
+- **Secretary** — verify **manual/offline payments** (§2), create/edit the
+  **timetable** when the admin is unavailable, manage student records, send
+  announcements — general administrative work.
+- **Auditor** — read-only access to payments/finance and reports.
+
+**Requested:**
+- Admin endpoint to create a staff user: `POST /api/admin/staff { name, email,
+  password, role }` and assign/adjust that role's permissions.
+- A **permissions model** (role → list of permissions) that is **checked
+  server-side on every protected action** (e.g. only a role with
+  `payments.verify` can confirm a manual payment; only `timetable.edit` can
+  change the timetable).
+- Staff **log in on the normal login page** and must land on a staff dashboard
+  (`/staff`) whose tools are shown/hidden by their permissions. `GET /api/auth/me`
+  must therefore return `role: "staff"` plus the staff role and its permissions
+  (e.g. `{ role: "staff", staffRole: "secretary", permissions: ["payments.verify", …] }`).
+
+The frontend is **already built** for all of this (admin "Permissions" screen to
+create staff + edit role permissions, staff login, and a permission-gated
+`/staff` dashboard) — it currently runs on browser-local data. To make it real,
+back these with `POST /api/admin/staff`, a login that returns `role: "staff"`,
+and the permissions on `/api/auth/me`. Permission keys the UI uses:
+`payments.verify`, `payments.view`, `timetable.edit`, `timetable.view`,
+`attendance.manage`, `students.manage`, `students.view`, `announcements.send`,
+`reports.view`, `staff.manage`.
+
+**Security:** authorize each staff action against that role's permissions on the
+server — never trust a role/permission sent from the client.
 
 ---
 

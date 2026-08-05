@@ -22,7 +22,7 @@ import {
   ShieldCheck,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { dsaApi } from '@/lib/api'
+import { dsaApi, isBackendUnreachable } from '@/lib/api'
 import { rememberEnrolmentChoice } from '@/lib/studentProfile'
 import {
   GENDERS,
@@ -34,8 +34,9 @@ import {
   deriveTrackFromProgrammes,
   usernameFromEmail,
 } from '@/lib/registration'
-import { payWithPaystack } from '@/lib/paystack'
+import { resumePaystack } from '@/lib/paystack'
 import { addStudent } from '@/lib/studentsStore'
+import type { RegisterInitData } from '@/lib/types'
 
 const schema = z
   .object({
@@ -54,7 +55,10 @@ const schema = z
     learningMode: z.string().min(1, 'Select a learning mode'),
     passport: z.string().optional(),
     // Step 3
-    programmes: z.array(z.string()).min(1, 'Select at least one programme'),
+    programmes: z
+      .array(z.string())
+      .min(1, 'Select at least one programme')
+      .max(2, 'You can pick up to 2 programmes'),
     // Step 4
     guardianName: z.string().min(2, 'Parent/Guardian name is required'),
     guardianPhone: z.string().min(10, 'Valid number required').regex(/^\d+$/, 'Numbers only'),
@@ -136,15 +140,22 @@ export default function StudentWizard() {
     reader.readAsDataURL(file)
   }
 
+  // Toggle a programme, enforcing the 1–2 selection cap: clicking an already-
+  // selected one removes it; a new one is added only while under the max of 2.
   const toggleProgramme = (p: string) => {
     const curr = getValues('programmes')
-    const nextList = curr.includes(p)
-      ? curr.filter((x) => x !== p)
-      : [...curr, p]
-    setValue('programmes', nextList, { shouldValidate: true })
+    if (curr.includes(p)) {
+      setValue('programmes', curr.filter((x) => x !== p), { shouldValidate: true })
+    } else if (curr.length < 2) {
+      setValue('programmes', [...curr, p], { shouldValidate: true })
+    }
+    // else: already at 2 — ignore the click (cap reached)
   }
 
-  // Final action: pay the portal fee, then move to OTP verification.
+  // Final action: register FIRST (the server creates a pending student and
+  // initializes the Paystack transaction), then resume that transaction to
+  // collect payment, then move to OTP verification. The backend's webhook is
+  // what actually marks the student paid — the client never decides that.
   const completeRegistration = async () => {
     setError('')
     const ok = await trigger()
@@ -154,89 +165,130 @@ export default function StudentWizard() {
     }
     const v = getValues()
     setBusy(true)
-    setStatus('Opening secure payment…')
 
-    const pay = await payWithPaystack({
-      email: v.email,
-      amountNaira: PORTAL_ACCESS_FEE,
-      metadata: { fullname: v.fullname, purpose: 'Portal Access Fee' },
-    })
+    const username = usernameFromEmail(v.email)
+    const track = deriveTrackFromProgrammes(v.programmes)
+    const mode: 'physical' | 'online' =
+      v.learningMode === 'Physical' ? 'physical' : 'online'
 
-    // Payment is mandatory — verification only happens after a successful
-    // charge. Nothing proceeds unless Paystack returns success.
-    if (pay.status !== 'success') {
+    // Persist the local stores + pending profile, then go to OTP. Runs after a
+    // real successful payment, and in the "backend not reachable yet" fallback
+    // so the owner can still preview the flow (OTP 1111 on the next screen).
+    const proceedToOtp = () => {
+      rememberEnrolmentChoice({ track, mode })
+      // Record the student so the tutor/admin roster shows them (browser-local
+      // until the backend links students to tutors — see studentsStore.ts).
+      addStudent({
+        key: username,
+        name: v.fullname,
+        track: track.toUpperCase(),
+        mode,
+      })
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('dsa_pending_email', v.email)
+        localStorage.setItem(
+          'dsa_pending_user',
+          JSON.stringify({
+            email: v.email.toLowerCase(),
+            username,
+            fullName: v.fullname,
+            role: 'student',
+            level: track,
+            isDsaStudent: mode === 'physical',
+            phone: v.whatsapp,
+            avatarUrl: v.passport || undefined,
+            subjectsOfInterest: v.programmes,
+          }),
+        )
+      }
+      router.push('/auth/verify-otp')
+    }
+
+    // Payload shaped to the live API contract (POST /api/auth/register):
+    // whatsappNumber, currentLevel, learningMode enum, nested guardianInfo, and
+    // price in KOBO. `username`/`role` are harmless extras for our local stores.
+    const payload = {
+      fullname: v.fullname,
+      email: v.email.toLowerCase(),
+      whatsappNumber: v.whatsapp,
+      password: v.password,
+      gender: v.gender,
+      dateOfBirth: v.dob,
+      stateOfResidence: v.state,
+      institution: v.school,
+      currentLevel: v.classLevel,
+      learningMode: mode, // 'online' | 'physical'
+      programmes: v.programmes,
+      guardianInfo: {
+        fullname: v.guardianName,
+        phoneNumber: v.guardianPhone,
+        ...(v.guardianEmail ? { email: v.guardianEmail } : {}),
+      },
+      price: PORTAL_ACCESS_FEE * 100, // ₦ → kobo
+      profilePic: v.passport || undefined,
+      username,
+      role: 'student',
+    }
+
+    // 1) Register first — server creates a pending student and initializes the
+    //    Paystack transaction (returns data.accessCode / authorizationUrl).
+    setStatus('Creating your account…')
+    let init: RegisterInitData | undefined
+    try {
+      const res = await dsaApi.auth.register(payload)
+      init = res?.data
+    } catch (err) {
+      // A real HTTP error (e.g. "email already registered") is shown and STOPS
+      // the flow — no more silent swallowing. Only a genuine "backend
+      // unreachable" (network/CORS, no backend yet) falls back to the local
+      // preview path.
+      if (isBackendUnreachable(err)) {
+        setStatus('Backend not connected — continuing in preview mode…')
+        proceedToOtp()
+        return
+      }
       setBusy(false)
       setStatus('')
       setError(
-        pay.status === 'cancelled'
-          ? `Payment was not completed. Please pay the ₦${PORTAL_ACCESS_FEE.toLocaleString()} portal access fee to finish registering.`
-          : 'Payment could not be started. Please check your connection and try again.',
+        err instanceof Error
+          ? err.message
+          : 'Registration failed. Please check your details and try again.',
       )
       return
     }
 
-    setStatus('Creating your account…')
-    const username = usernameFromEmail(v.email)
-    const track = deriveTrackFromProgrammes(v.programmes)
-    const mode = v.learningMode === 'Physical' ? 'physical' : 'online'
-
-    // Best-effort backend register. Extra fields are sent for when the backend
-    // supports them; unknown fields are ignored today.
-    try {
-      await dsaApi.auth.register({
-        name: v.fullname,
-        username,
-        email: v.email.toLowerCase(),
-        password: v.password,
-        phoneNumber: v.whatsapp,
-        role: 'student',
-        level: track,
-        subjectsOfInterest: v.programmes,
-        isDsaStudent: mode === 'physical',
-        profilePic: v.passport || '',
-        gender: v.gender,
-        dateOfBirth: v.dob,
-        stateOfResidence: v.state,
-        school: v.school,
-        classLevel: v.classLevel,
-        programmes: v.programmes,
-        guardianName: v.guardianName,
-        guardianPhone: v.guardianPhone,
-        guardianEmail: v.guardianEmail || '',
-        paymentReference: pay.reference || '',
-      })
-    } catch {
-      // Ignore — the demo OTP flow continues so the client can preview it.
+    // 2) Pay by resuming the server-created transaction (amount fixed server-
+    //    side). The webhook marks the student paid; we just need a completed
+    //    popup before moving on.
+    if (init?.accessCode) {
+      setStatus('Opening secure payment…')
+      const pay = await resumePaystack({ accessCode: init.accessCode })
+      if (pay.status !== 'success') {
+        setBusy(false)
+        setStatus('')
+        setError(
+          pay.status === 'cancelled'
+            ? `Payment was not completed. Please pay the ₦${PORTAL_ACCESS_FEE.toLocaleString()} portal access fee to activate your portal.`
+            : pay.status === 'unavailable'
+              ? 'Could not open the payment window. Check your connection and try again.'
+              : pay.message ||
+                'Payment could not be processed. Please try again.',
+        )
+        return
+      }
+      proceedToOtp()
+      return
     }
 
-    rememberEnrolmentChoice({ track, mode })
-    // Record the student so the tutor/admin roster shows them (browser-local
-    // until the backend links students to tutors — see studentsStore.ts).
-    addStudent({
-      key: username,
-      name: v.fullname,
-      track: track.toUpperCase(),
-      mode,
-    })
-    // Stash the profile so the OTP screen can open the dashboard on 1111.
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('dsa_pending_email', v.email)
-      localStorage.setItem(
-        'dsa_pending_user',
-        JSON.stringify({
-          email: v.email.toLowerCase(),
-          username,
-          fullName: v.fullname,
-          role: 'student',
-          level: track,
-          isDsaStudent: mode === 'physical',
-          phone: v.whatsapp,
-          avatarUrl: v.passport || undefined,
-          subjectsOfInterest: v.programmes,
-        }),
-      )
+    // Hosted-checkout fallback: no inline access code, but a redirect URL.
+    if (init?.authorizationUrl) {
+      window.location.href = init.authorizationUrl
+      return
     }
-    router.push('/auth/verify-otp')
+
+    // Registered, but the backend returned no payment details (payment not
+    // wired yet). Continue to OTP so registration isn't blocked.
+    proceedToOtp()
   }
 
   // --- small field helpers ---
@@ -438,12 +490,24 @@ export default function StudentWizard() {
           {step === 3 && (
             <>
               <h3 className='text-sm font-black text-slate-800'>Programme Enrollment</h3>
-              <p className='text-[11px] text-slate-500 font-medium'>Select the programmes you want to enrol in.</p>
+              <p className='text-[11px] text-slate-500 font-medium'>Select the programme(s) you want to enrol in — choose 1 or 2.</p>
               <div className='grid grid-cols-1 sm:grid-cols-2 gap-2'>
                 {PROGRAMMES.map((p) => {
                   const active = programmes.includes(p)
+                  const atMax = programmes.length >= 2 && !active
                   return (
-                    <div key={p} onClick={() => toggleProgramme(p)} className={cn('cursor-pointer p-3 rounded-xl border flex items-center gap-2 transition-all', active ? 'bg-blue-50 border-[#002EFF]' : 'bg-white border-slate-100 hover:bg-slate-50')}>
+                    <div
+                      key={p}
+                      onClick={() => toggleProgramme(p)}
+                      className={cn(
+                        'p-3 rounded-xl border flex items-center gap-2 transition-all',
+                        active
+                          ? 'bg-blue-50 border-[#002EFF] cursor-pointer'
+                          : atMax
+                            ? 'bg-slate-50 border-slate-100 opacity-50 cursor-not-allowed'
+                            : 'bg-white border-slate-100 hover:bg-slate-50 cursor-pointer',
+                      )}
+                    >
                       <div className={cn('h-4 w-4 rounded flex items-center justify-center shrink-0', active ? 'bg-[#002EFF] text-white' : 'border border-slate-300')}>
                         {active && <CheckCircle2 size={12} />}
                       </div>
@@ -452,6 +516,10 @@ export default function StudentWizard() {
                   )
                 })}
               </div>
+              <p className='text-[10px] font-bold text-slate-400'>
+                {programmes.length}/2 selected
+                {programmes.length >= 2 && ' — maximum reached'}
+              </p>
               {errors.programmes && <p className='text-[10px] font-bold text-rose-500'>{errors.programmes.message as string}</p>}
             </>
           )}
