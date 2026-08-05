@@ -17,7 +17,7 @@ const SUB_KEY = 'dsa_submissions'
 const SEED_ASSIGNMENTS: Assignment[] = [
   {
     id: 'a-seed-1',
-    courseId: 'jamb-math',
+    courseId: 'jp-math',
     title: 'Algebra Problem Set 1',
     instructions:
       'Solve questions 1–20 in the shared PDF. Show all working. Submit a link to your scanned work or type your answers.',
@@ -28,7 +28,7 @@ const SEED_ASSIGNMENTS: Assignment[] = [
   },
   {
     id: 'a-seed-2',
-    courseId: 'jamb-eng',
+    courseId: 'jp-eng',
     title: 'Comprehension Essay',
     instructions:
       'Read the passage and answer in 250–300 words. Submit as text.',

@@ -5,29 +5,50 @@
 // Same-browser only: a material a tutor adds here is visible to students on the
 // same browser (great for demoing the flow) until the backend persists it.
 
-import type { Course, CourseMaterial } from './types'
+import type { Course, CourseCategory, CourseMaterial } from './types'
 
 const COURSES_KEY = 'dsa_courses'
 const MATERIALS_KEY = 'dsa_materials'
 const COMPLETE_KEY = 'dsa_material_completions' // { [studentKey]: materialId[] }
 
-// Seeded courses per track so every browser has content to show. Tutors can add
-// materials to these; new courses added at runtime are browser-local.
+// Course categories — a course is shared across every track/level in its category.
+export const COURSE_CATEGORIES: { id: CourseCategory; label: string; note: string }[] = [
+  { id: 'waec-sss', label: 'WAEC & Secondary', note: 'SS1 – SS3 and WAEC' },
+  { id: 'jamb-putme', label: 'JAMB & Post-UTME', note: 'JAMB and Post-UTME — same courses' },
+  { id: 'higher', label: 'Higher Institution', note: '100 / 200 level' },
+]
+
+/** Map a student's exam track / class level to a course category. */
+export function categoryForTrack(track?: string): CourseCategory {
+  const t = (track || '').toLowerCase()
+  if (t.includes('waec') || t.includes('ss1') || t.includes('ss2') || t.includes('ss3'))
+    return 'waec-sss'
+  if (t.includes('100') || t.includes('200') || t.includes('higher')) return 'higher'
+  return 'jamb-putme' // jamb, post-utme (and default)
+}
+
+export function categoryLabel(id: CourseCategory): string {
+  return COURSE_CATEGORIES.find((c) => c.id === id)?.label ?? id
+}
+
+const courseCategory = (c: Course): CourseCategory =>
+  c.category || categoryForTrack(c.examTrack)
+
+// Seeded example courses per category (unassigned — the admin assigns a tutor).
 const SEED_COURSES: Course[] = [
-  { id: 'jamb-math', title: 'JAMB Mathematics', subject: 'Mathematics', examTrack: 'jamb', tutorName: 'Dr. Jay' },
-  { id: 'jamb-eng', title: 'JAMB Use of English', subject: 'English', examTrack: 'jamb', tutorName: 'Miss Betty' },
-  { id: 'jamb-phy', title: 'JAMB Physics', subject: 'Physics', examTrack: 'jamb', tutorName: 'Mr. Hakeem' },
-  { id: 'waec-math', title: 'WAEC Mathematics', subject: 'Mathematics', examTrack: 'waec', tutorName: 'Dr. Jay' },
-  { id: 'waec-eng', title: 'WAEC English', subject: 'English', examTrack: 'waec', tutorName: 'Miss Betty' },
-  { id: 'putme-math', title: 'Post-UTME Mathematics', subject: 'Mathematics', examTrack: 'postutme', tutorName: 'Dr. Phils' },
-  { id: 'putme-eng', title: 'Post-UTME English', subject: 'English', examTrack: 'postutme', tutorName: 'Mr. Emmanuel' },
+  { id: 'ws-math', title: 'Mathematics', subject: 'Mathematics', category: 'waec-sss', examTrack: 'waec' },
+  { id: 'ws-eng', title: 'English Language', subject: 'English', category: 'waec-sss', examTrack: 'waec' },
+  { id: 'ws-phy', title: 'Physics', subject: 'Physics', category: 'waec-sss', examTrack: 'waec' },
+  { id: 'jp-eng', title: 'Use of English', subject: 'English', category: 'jamb-putme', examTrack: 'jamb' },
+  { id: 'jp-math', title: 'Mathematics', subject: 'Mathematics', category: 'jamb-putme', examTrack: 'jamb' },
+  { id: 'jp-phy', title: 'Physics', subject: 'Physics', category: 'jamb-putme', examTrack: 'jamb' },
 ]
 
 const SEED_MATERIALS: CourseMaterial[] = [
-  { id: 'm-seed-1', courseId: 'jamb-math', title: 'Course Syllabus 2026', type: 'syllabus', url: 'https://example.com/jamb-math-syllabus.pdf', isDownloadable: true, createdAt: '2026-01-05T09:00:00.000Z' },
-  { id: 'm-seed-2', courseId: 'jamb-math', title: 'Indices & Logarithms (Notes)', type: 'pdf', url: 'https://example.com/indices.pdf', isDownloadable: true, createdAt: '2026-01-06T09:00:00.000Z' },
-  { id: 'm-seed-3', courseId: 'jamb-math', title: 'Live Class Recording — Algebra', type: 'recording', url: 'https://example.com/algebra-recording', durationLabel: '48:12', isDownloadable: false, createdAt: '2026-01-07T09:00:00.000Z' },
-  { id: 'm-seed-4', courseId: 'jamb-eng', title: 'Comprehension Techniques (Video)', type: 'video', url: 'https://example.com/comprehension', durationLabel: '15:30', isDownloadable: false, createdAt: '2026-01-06T10:00:00.000Z' },
+  { id: 'm-seed-1', courseId: 'jp-math', title: 'Course Syllabus 2026', type: 'syllabus', url: 'https://example.com/syllabus.pdf', isDownloadable: true, createdAt: '2026-01-05T09:00:00.000Z' },
+  { id: 'm-seed-2', courseId: 'jp-math', title: 'Indices & Logarithms (Notes)', type: 'pdf', url: 'https://example.com/indices.pdf', isDownloadable: true, createdAt: '2026-01-06T09:00:00.000Z' },
+  { id: 'm-seed-3', courseId: 'jp-math', title: 'Live Class Recording — Algebra', type: 'recording', url: 'https://example.com/algebra-recording', durationLabel: '48:12', isDownloadable: false, createdAt: '2026-01-07T09:00:00.000Z' },
+  { id: 'm-seed-4', courseId: 'jp-eng', title: 'Comprehension Techniques (Video)', type: 'video', url: 'https://example.com/comprehension', durationLabel: '15:30', isDownloadable: false, createdAt: '2026-01-06T10:00:00.000Z' },
 ]
 
 function read<T>(key: string, fallback: T): T {
@@ -45,11 +66,18 @@ function write(key: string, value: unknown): void {
 }
 
 // ---- Courses ----
+/** All courses, or (when a track is given) the courses for that track's category. */
 export function getCourses(track?: string): Course[] {
   const seedIds = new Set(SEED_COURSES.map((c) => c.id))
   const extras = read<Course[]>(COURSES_KEY, []).filter((c) => c?.id && !seedIds.has(c.id))
   const all = [...SEED_COURSES, ...extras]
-  return track ? all.filter((c) => c.examTrack === track) : all
+  if (!track) return all
+  const cat = categoryForTrack(track)
+  return all.filter((c) => courseCategory(c) === cat)
+}
+
+export function getCoursesByCategory(category: CourseCategory): Course[] {
+  return getCourses().filter((c) => courseCategory(c) === category)
 }
 
 export function getCourse(id: string): Course | undefined {
@@ -61,6 +89,20 @@ export function addCourse(c: Omit<Course, 'id'> & { id?: string }): Course {
   const course: Course = { ...c, id }
   write(COURSES_KEY, [...read<Course[]>(COURSES_KEY, []).filter((x) => x.id !== id), course])
   return course
+}
+
+export function removeCourse(id: string): void {
+  if (SEED_COURSES.some((c) => c.id === id)) return
+  write(COURSES_KEY, read<Course[]>(COURSES_KEY, []).filter((x) => x.id !== id))
+}
+
+/** Courses assigned to a tutor (by username or display name). */
+export function getCoursesForTutor(tutorKey?: string, tutorName?: string): Course[] {
+  return getCourses().filter(
+    (c) =>
+      (tutorKey && c.tutorId === tutorKey) ||
+      (tutorName && c.tutorName && c.tutorName === tutorName),
+  )
 }
 
 // ---- Materials ----

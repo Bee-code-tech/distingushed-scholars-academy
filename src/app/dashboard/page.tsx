@@ -320,6 +320,7 @@ import {
   Megaphone,
   Video,
   BarChart3,
+  BookOpen,
 } from 'lucide-react'
 
 // API Utility
@@ -361,6 +362,7 @@ import Assignments from '@/components/dashboard/Assignments'
 import Announcements from '@/components/dashboard/Announcements'
 import LiveClasses from '@/components/dashboard/LiveClasses'
 import Analytics from '@/components/dashboard/Analytics'
+import MyCourses from '@/components/dashboard/MyCourses'
 
 type ViewState =
   | 'overview'
@@ -370,6 +372,7 @@ type ViewState =
   | 'schedule'
   | 'settings'
   | 'resources'
+  | 'courses'
   | 'assignments'
   | 'announcements'
   | 'live'
@@ -467,6 +470,7 @@ export default function AcademyDashboard() {
       view: 'attendance' as ViewState,
     },
     { icon: Calendar, label: 'Timetable', view: 'timetable' as ViewState },
+    { icon: BookOpen, label: 'My Courses', view: 'courses' as ViewState },
     { icon: Video, label: 'Live Class', view: 'live' as ViewState },
     { icon: Library, label: 'E-Learning', view: 'resources' as ViewState },
     { icon: ClipboardList, label: 'Assignments', view: 'assignments' as ViewState },
@@ -692,6 +696,7 @@ export default function AcademyDashboard() {
             {activeView === 'assignments' && <Assignments mode='student' />}
             {activeView === 'announcements' && <Announcements mode='student' />}
             {activeView === 'live' && <LiveClasses mode='student' />}
+            {activeView === 'courses' && <MyCourses />}
             {activeView === 'analytics' && <Analytics mode='student' />}
             {activeView === 'syllabus' && <SyllabusMastery />}
             {activeView === 'community' && <CommunityView />}

@@ -111,22 +111,28 @@ uploads it → the student joins), performance analytics, and profile & settings
 | `createdAt`/`updatedAt` | date | |
 
 ### 2.2 Course
-A teachable unit (e.g. "JAMB Mathematics", "WAEC Physics").
+A teachable unit, grouped into a **category** shared across tracks/levels.
 | Field | Type | Notes |
 | --- | --- | --- |
 | `id` | string (PK) | |
-| `title` | string | |
-| `description` | text | |
-| `examTrack` | enum | jamb \| waec \| postutme |
-| `department` | enum? | WAEC only |
+| `title` | string | e.g. "Mathematics" |
 | `subject` | string | e.g. Mathematics |
-| `tutorId` | FK→User | owning tutor |
+| `category` | enum | **`waec-sss`** (WAEC + SS1–SS3) · **`jamb-putme`** (JAMB **and** Post-UTME — same courses) · **`higher`** (100/200 level). **This is the grouping the app uses**, not `examTrack`. |
+| `tutorId` | FK→User? | **assigned tutor** (admin assigns). A student sees this tutor; the tutor sees students in the course's category |
+| `description` | text? | |
+| `department` | enum? | WAEC only |
 | `thumbnailUrl` | url? | |
-| `level` | string? | |
 | `price` | int (kobo)? | 0/absent = free with portal access |
 | `isPublished` | bool | |
-| `syllabusMaterialId` | FK→CourseMaterial? | the syllabus doc |
 | `createdAt`/`updatedAt` | date | |
+
+> **Categories (as built).** Courses are added by the **admin** under one of the
+> three categories above and **assigned to a tutor**. A student's category is
+> derived from their track/level (WAEC & SS → `waec-sss`; JAMB & Post-UTME →
+> `jamb-putme`; 100/200 → `higher`). **JAMB and Post-UTME see the same courses.**
+> Students see the courses **and the assigned tutor** for their category; a tutor
+> sees the **students doing their courses** (students whose category matches a
+> category of a course assigned to that tutor).
 
 ### 2.3 Enrollment
 | Field | Type | Notes |
@@ -315,14 +321,20 @@ weighted formula incl. assignments/quizzes). Recompute on material completion.
 ## 4. Courses & enrollment  *(new)*
 | Method | Path | Who | Purpose |
 | --- | --- | --- | --- |
-| GET | `/courses` | any | list/browse (filter `?track=&department=&tutorId=`) |
+| GET | `/courses?category=` | any | list courses (filter by `category` / `tutorId`) |
+| GET | `/courses/mine` | student | courses **for the student's category** + each course's assigned **tutor** (drives "My Courses / Your Tutors") |
 | GET | `/courses/:id` | any | course detail (+materials/assignments counts) |
-| POST | `/courses` | tutor/admin | create |
-| PUT | `/courses/:id` | owner tutor/admin | update |
-| DELETE | `/courses/:id` | owner tutor/admin | |
-| POST | `/courses/:id/enroll` | student | enroll (→409 if already) |
+| POST | `/courses` | **admin** | create — `{ title, subject, category, tutorId? }` |
+| PUT | `/courses/:id` | admin | update / **assign or change the tutor** (`tutorId`) |
+| DELETE | `/courses/:id` | admin | |
+| GET | `/tutors/me/students` | tutor | students **doing this tutor's courses** — i.e. students whose category matches a category of a course assigned to the tutor |
+| POST | `/courses/:id/enroll` | student | (optional) explicit enroll — otherwise category drives membership |
 | GET | `/enrollments/me` | student | my courses + progressPercent |
-| GET | `/courses/:id/students` | owner tutor | roster |
+
+> Course management (add course + category + tutor assignment) is done by the
+> **admin** (see §2.2). Student↔tutor visibility is **category-derived**: a
+> student sees the tutors of the courses in their category, and a tutor sees the
+> students whose category matches their assigned courses.
 
 ## 5. Course materials  *(new)*
 | Method | Path | Who | Purpose |

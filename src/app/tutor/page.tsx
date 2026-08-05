@@ -28,7 +28,7 @@ import Assignments from '@/components/dashboard/Assignments'
 import Analytics from '@/components/dashboard/Analytics'
 import Announcements from '@/components/dashboard/Announcements'
 import { getStudents, type StoredStudent } from '@/lib/studentsStore'
-import { getCourses } from '@/lib/coursesStore'
+import { getCourses, categoryForTrack, getCoursesForTutor } from '@/lib/coursesStore'
 import { getAssignments, getSubmissions } from '@/lib/assignmentsStore'
 
 const NAV: NavItem[] = [
@@ -85,6 +85,15 @@ export default function TutorDashboard() {
   const name = user.fullName || user.username || 'Tutor'
   // Drop any "(Tutor)" suffix demo names carry, and any leading title.
   const greeting = name.replace(/\s*\(.*\)$/, '').replace(/^(Mr|Mrs|Ms|Dr)\.?\s+/i, '')
+
+  // Students "doing this tutor's courses" = students whose category matches a
+  // category of a course assigned to this tutor. If none assigned yet, show all.
+  const myCourseCats = new Set(
+    getCoursesForTutor(user.username, name).map((c) => c.category),
+  )
+  const myStudents = myCourseCats.size
+    ? students.filter((s) => myCourseCats.has(categoryForTrack(s.track)))
+    : students
   // Assignment metrics from the store (replaces the old quiz mock).
   let totalAssignments = 0
   let pendingGrading = 0
@@ -120,7 +129,7 @@ export default function TutorDashboard() {
           </section>
 
           <div className='grid grid-cols-2 md:grid-cols-4 gap-4'>
-            <StatTile label='My Students' value={students.length} icon={Users} tint='bg-blue-50 text-blue-600' />
+            <StatTile label='My Students' value={myStudents.length} icon={Users} tint='bg-blue-50 text-blue-600' />
             <StatTile label='Courses' value={getCourses().length} icon={BookOpen} tint='bg-emerald-50 text-emerald-600' />
             <StatTile label='Assignments' value={totalAssignments} icon={ClipboardList} tint='bg-amber-50 text-amber-600' />
             <StatTile label='To Grade' value={pendingGrading} icon={CheckCircle2} tint='bg-rose-50 text-rose-600' />
@@ -134,7 +143,7 @@ export default function TutorDashboard() {
               </button>
             </div>
             <div className='space-y-2'>
-              {students.filter((s) => (s.avg ?? 100) < 70).map((s) => (
+              {myStudents.filter((s) => (s.avg ?? 100) < 70).map((s) => (
                 <div key={s.key} className='flex items-center justify-between p-3 rounded-2xl bg-rose-50/50'>
                   <div className='flex items-center gap-2'>
                     <span className='text-xs font-black text-gray-800'>{s.name}</span>
@@ -159,7 +168,7 @@ export default function TutorDashboard() {
               <span className='col-span-2'>Avg</span>
               <span className='col-span-2'>Progress</span>
             </div>
-            {students.map((s) => (
+            {myStudents.map((s) => (
               <div key={s.key} className='grid grid-cols-12 items-center px-5 py-4 border-t border-slate-50'>
                 <span className='col-span-4 text-xs font-black text-gray-800'>
                   {s.name}

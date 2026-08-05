@@ -21,6 +21,7 @@ type Tab =
   | 'create-guardian'
   | 'view-tutors'
   | 'view-guardians'
+  | 'courses'
   | 'attendance'
   | 'timetable'
   | 'broadcast'
@@ -52,6 +53,7 @@ export default function AdminHome({ onNavigate }: { onNavigate: (tab: Tab) => vo
     { label: 'View Guardians', tab: 'view-guardians', icon: Users },
     { label: 'Create Tutor', tab: 'create-tutor', icon: UserPlus },
     { label: 'Create Guardian', tab: 'create-guardian', icon: UserPlus },
+    { label: 'Manage Courses', tab: 'courses', icon: BookOpen },
     { label: 'Take Attendance', tab: 'attendance', icon: CalendarCheck },
     { label: 'Edit Timetable', tab: 'timetable', icon: CalendarDays },
     { label: 'Send Announcement', tab: 'broadcast', icon: Megaphone },

@@ -93,13 +93,20 @@ export type MaterialType =
   | 'slide'
   | 'link'
 
+// Courses are grouped into categories shared across tracks:
+//  waec-sss   → WAEC + Secondary (SS1–SS3)
+//  jamb-putme → JAMB + Post-UTME (same courses)
+//  higher     → Higher Institution (100/200 level)
+export type CourseCategory = 'waec-sss' | 'jamb-putme' | 'higher'
+
 export interface Course {
   id: string
   title: string
   subject: string
-  examTrack: string // jamb | waec | postutme
+  category: CourseCategory
+  examTrack?: string // legacy hint; category is the source of truth
   department?: string // WAEC only
-  tutorId?: string
+  tutorId?: string // assigned tutor (username)
   tutorName?: string
   description?: string
 }

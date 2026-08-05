@@ -358,6 +358,7 @@ import { useRouter } from 'next/navigation'
 import {
   LayoutDashboard,
   Users,
+  BookOpen,
   ShieldCheck,
   Megaphone,
   LogOut,
@@ -380,6 +381,7 @@ import { Badge } from '@/components/ui/badge'
 import AdminHome from './components/AdminHome'
 import StudentRoster from './components/StudentRoster'
 import PeopleRoster from './components/PeopleRoster'
+import CourseManager from './components/CourseManager'
 import CreateTutor from './components/CreateTutor'
 import CreateGuardian from './components/CreateGuardian'
 import TakeAttendance from '@/components/dashboard/TakeAttendance'
@@ -396,6 +398,7 @@ type AdminTab =
   | 'create-guardian'
   | 'view-tutors'
   | 'view-guardians'
+  | 'courses'
   | 'attendance'
   | 'timetable'
   | 'broadcast'
@@ -452,6 +455,7 @@ export default function AdminAdmin() {
     {
       group: 'Academics',
       items: [
+        { id: 'courses' as AdminTab, label: 'Courses', icon: BookOpen },
         { id: 'attendance' as AdminTab, label: 'Take Attendance', icon: CalendarCheck },
         { id: 'timetable' as AdminTab, label: 'Timetable', icon: CalendarCheck },
       ],
@@ -480,6 +484,8 @@ export default function AdminAdmin() {
         return <PeopleRoster kind='tutors' />
       case 'view-guardians':
         return <PeopleRoster kind='guardians' />
+      case 'courses':
+        return <CourseManager />
       case 'create-tutor':
         return <CreateTutor />
       case 'create-guardian':
