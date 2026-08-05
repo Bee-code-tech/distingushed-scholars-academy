@@ -1,13 +1,26 @@
 'use client'
 
+import { useEffect } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { GraduationCap, ArrowLeft } from 'lucide-react'
 
 import { Card, CardContent } from '@/components/ui/card'
 import StudentWizard from './StudentWizard'
+import { getToken, getRole, dashboardPathForRole } from '@/lib/auth'
 
 export default function DSASignUp() {
+  const router = useRouter()
+
+  // An already-signed-in user shouldn't sit on the signup page (e.g. after
+  // hitting the back button from a dashboard) — send them to their dashboard.
+  useEffect(() => {
+    const token = getToken()
+    const role = getRole()
+    if (token && role) router.replace(dashboardPathForRole(role))
+  }, [router])
+
   return (
     <div className='min-h-screen bg-[#F8FAFF] py-8 px-4 flex flex-col items-center'>
       <div className='w-full max-w-xl mb-4'>

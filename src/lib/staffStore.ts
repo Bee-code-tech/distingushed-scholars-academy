@@ -90,27 +90,9 @@ const STAFF_KEY = 'dsa_staff_members'
 // Seeded staff so the owner can preview the staff dashboard with one click,
 // on every device (like the demo student logins). Password matches the other
 // demos. Admin-created staff live only in this browser until the backend exists.
-const DEMO_PASSWORD = 'demo1234'
-const SEED_STAFF: StaffMember[] = [
-  {
-    id: 'demo-secretary',
-    name: 'Grace Okon',
-    email: 'secretary@dsa.demo',
-    roleId: 'secretary',
-    password: DEMO_PASSWORD,
-    createdAt: '2026-01-01T00:00:00.000Z',
-    seeded: true,
-  },
-  {
-    id: 'demo-auditor',
-    name: 'Sam Udo',
-    email: 'auditor@dsa.demo',
-    roleId: 'auditor',
-    password: DEMO_PASSWORD,
-    createdAt: '2026-01-01T00:00:00.000Z',
-    seeded: true,
-  },
-]
+// No seeded staff — auditor/secretary and other staff accounts are created by
+// the admin under "Permissions → Provision New Access".
+const SEED_STAFF: StaffMember[] = []
 
 function read<T>(key: string, fallback: T): T {
   if (typeof window === 'undefined') return fallback

@@ -46,6 +46,8 @@ import {
   dashboardPathForRole,
   ADMIN_BYPASS_ENABLED,
   DEV_ADMIN_EMAIL,
+  getToken,
+  getRole,
 } from '@/lib/auth'
 import {
   findDemoAccount,
@@ -77,6 +79,14 @@ function LoginContent() {
       rememberMe: false,
     },
   })
+
+  // If already signed in, skip the login page and go to the dashboard. This
+  // stops the back button from landing an authenticated user on an auth page.
+  useEffect(() => {
+    const token = getToken()
+    const role = getRole()
+    if (token && role) router.replace(dashboardPathForRole(role))
+  }, [router])
 
   // Initialize form with remembered email & check query params
   useEffect(() => {
@@ -110,7 +120,7 @@ function LoginContent() {
     ) {
       setSession({ token: 'admin-session-active', role: 'super_admin' })
       setSuccessMsg('ADMIN ACCESS GRANTED. REDIRECTING...')
-      setTimeout(() => router.push('/admin'), 800)
+      setTimeout(() => router.replace('/admin'), 800)
       return true
     }
 
@@ -124,7 +134,7 @@ function LoginContent() {
       })
       rememberEmail(values.email, !!values.rememberMe)
       setSuccessMsg('Demo login successful! Redirecting...')
-      router.push(dashboardPathForRole(role))
+      router.replace(dashboardPathForRole(role))
       return true
     }
 
@@ -142,7 +152,7 @@ function LoginContent() {
       })
       rememberEmail(values.email, !!values.rememberMe)
       setSuccessMsg('Staff login successful! Redirecting...')
-      router.push(dashboardPathForRole('staff'))
+      router.replace(dashboardPathForRole('staff'))
       return true
     }
 
@@ -168,7 +178,7 @@ function LoginContent() {
       }
 
       setSuccessMsg('Login successful! Redirecting...')
-      router.push(dashboardPathForRole(role))
+      router.replace(dashboardPathForRole(role))
       router.refresh()
     } catch (err) {
       // Live login failed — fall back to local preview accounts (the only way
@@ -387,29 +397,33 @@ function LoginContent() {
                   </button>
                 ))}
               </div>
-              <p className='text-center text-[9px] font-black uppercase tracking-[0.25em] text-gray-400 mb-3 mt-6'>
-                Staff logins · secretary / auditor
-              </p>
-              <div className='grid grid-cols-2 gap-2'>
-                {getDemoStaff().map((s) => (
-                  <button
-                    key={s.email}
-                    type='button'
-                    disabled={loading}
-                    onClick={() => {
-                      form.setValue('email', s.email)
-                      form.setValue('password', s.password)
-                      form.handleSubmit(onSubmit)()
-                    }}
-                    className='px-3 py-2.5 rounded-xl bg-amber-50/70 hover:bg-[#FCB900] hover:text-[#002EFF] text-amber-700 text-[9px] font-black uppercase tracking-wide transition-all active:scale-95 disabled:opacity-50'
-                  >
-                    {s.name.split(' ')[0]} ·{' '}
-                    {s.roleId.charAt(0).toUpperCase() + s.roleId.slice(1)}
-                  </button>
-                ))}
-              </div>
+              {getDemoStaff().length > 0 && (
+                <>
+                  <p className='text-center text-[9px] font-black uppercase tracking-[0.25em] text-gray-400 mb-3 mt-6'>
+                    Staff logins
+                  </p>
+                  <div className='grid grid-cols-2 gap-2'>
+                    {getDemoStaff().map((s) => (
+                      <button
+                        key={s.email}
+                        type='button'
+                        disabled={loading}
+                        onClick={() => {
+                          form.setValue('email', s.email)
+                          form.setValue('password', s.password)
+                          form.handleSubmit(onSubmit)()
+                        }}
+                        className='px-3 py-2.5 rounded-xl bg-amber-50/70 hover:bg-[#FCB900] hover:text-[#002EFF] text-amber-700 text-[9px] font-black uppercase tracking-wide transition-all active:scale-95 disabled:opacity-50'
+                      >
+                        {s.name.split(' ')[0]} ·{' '}
+                        {s.roleId.charAt(0).toUpperCase() + s.roleId.slice(1)}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
               <p className='text-center text-[8px] font-bold text-gray-300 mt-3'>
-                All demo passwords: demo1234
+                Demo passwords: demo1234
               </p>
             </div>
           </CardContent>

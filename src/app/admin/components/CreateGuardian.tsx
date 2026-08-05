@@ -17,6 +17,7 @@ import {
 } from 'lucide-react'
 import { dsaApi } from '@/lib/api'
 import { getStudents, type StoredStudent } from '@/lib/studentsStore'
+import { addGuardian } from '@/lib/directoryStore'
 
 interface FieldState {
   fullname: string
@@ -96,6 +97,14 @@ export default function CreateGuardian() {
       })
 
       const ward = students.find((s) => s.key === values.wardKey)
+      // Record locally so the admin's "View Guardians" list shows them.
+      addGuardian({
+        key: values.username.toLowerCase(),
+        name: values.fullname,
+        email: values.email.toLowerCase(),
+        extra: ward?.name,
+      })
+
       setSuccess(
         `Guardian "${values.fullname}" created${
           ward ? ` for ${ward.name}` : ''

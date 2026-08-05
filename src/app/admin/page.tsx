@@ -358,16 +358,8 @@ import { useRouter } from 'next/navigation'
 import {
   LayoutDashboard,
   Users,
-  Database,
-  BookOpen,
-  BookOpenCheck,
-  BarChart3,
   ShieldCheck,
-  Activity,
   Megaphone,
-  Trophy,
-  CreditCard,
-  Settings as SettingsIcon,
   LogOut,
   Menu,
   Bell,
@@ -385,42 +377,29 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 
 // --- FEATURE IMPORTS ---
-import AdminGuide from './components/AdminGuide'
-import ExamBuilder from './components/examBuilder/index'
-import MyQuizzes from '../admin/components/myQuizzes/page'
-import Library from './components/Library'
-import Analytics from './components/Analytics'
-import StudentManagement from './components/StudentManagement'
+import AdminHome from './components/AdminHome'
+import StudentRoster from './components/StudentRoster'
+import PeopleRoster from './components/PeopleRoster'
 import CreateTutor from './components/CreateTutor'
 import CreateGuardian from './components/CreateGuardian'
 import TakeAttendance from '@/components/dashboard/TakeAttendance'
 import TimetableEditor from '@/components/dashboard/TimetableEditor'
-import LiveMonitoring from './components/LiveMonitoring'
-import Announcements from './components/Announcements'
-import Leaderboard from './components/Leaderboard'
-import RevenueControls from './components/RevenueControls'
+import Announcements from '@/components/dashboard/Announcements'
 import RolesPermissions from './components/RolesPermissions'
-import Settings from './components/Settings'
 import { AnimatePresence, motion } from 'framer-motion'
 import { isAdmin, clearSession } from '@/lib/auth'
 
 type AdminTab =
   | 'dashboard'
-  | 'exam-builder'
-  | 'library'
-  | 'my-quizzes'
-  | 'analytics'
   | 'students'
   | 'create-tutor'
   | 'create-guardian'
+  | 'view-tutors'
+  | 'view-guardians'
   | 'attendance'
   | 'timetable'
-  | 'monitoring'
   | 'broadcast'
-  | 'leaderboard'
-  | 'revenue'
   | 'roles'
-  | 'settings'
 
 export default function AdminAdmin() {
   const [mounted, setMounted] = useState(false)
@@ -457,69 +436,36 @@ export default function AdminAdmin() {
     {
       group: 'Management',
       items: [
-        {
-          id: 'dashboard' as AdminTab,
-          label: 'Dashboard',
-          icon: LayoutDashboard,
-        },
-        {
-          id: 'exam-builder' as AdminTab,
-          label: 'Exam Builder',
-          icon: Database,
-        },
-        { id: 'my-quizzes' as AdminTab, label: 'My Quizzes', icon: BookOpen },
-        { id: 'library' as AdminTab, label: 'Library', icon: BookOpenCheck },
-      ],
-    },
-    {
-      group: 'Operations',
-      items: [
-        { id: 'analytics' as AdminTab, label: 'Analytics', icon: BarChart3 },
+        { id: 'dashboard' as AdminTab, label: 'Dashboard', icon: LayoutDashboard },
         { id: 'students' as AdminTab, label: 'Students', icon: Users },
-        {
-          id: 'create-tutor' as AdminTab,
-          label: 'Create Tutor',
-          icon: UserPlus,
-        },
-        {
-          id: 'create-guardian' as AdminTab,
-          label: 'Create Guardian',
-          icon: Users,
-        },
-        {
-          id: 'attendance' as AdminTab,
-          label: 'Take Attendance',
-          icon: CalendarCheck,
-        },
-        {
-          id: 'timetable' as AdminTab,
-          label: 'Timetable',
-          icon: CalendarCheck,
-        },
-        {
-          id: 'monitoring' as AdminTab,
-          label: 'Live Monitoring',
-          icon: Activity,
-        },
       ],
     },
     {
-      group: 'Finance & Engagement',
+      group: 'People',
       items: [
-        {
-          id: 'broadcast' as AdminTab,
-          label: 'Announcements',
-          icon: Megaphone,
-        },
-        { id: 'leaderboard' as AdminTab, label: 'Leaderboard', icon: Trophy },
-        { id: 'revenue' as AdminTab, label: 'Revenue', icon: CreditCard },
+        { id: 'view-tutors' as AdminTab, label: 'Tutors', icon: GraduationCap },
+        { id: 'create-tutor' as AdminTab, label: 'Create Tutor', icon: UserPlus },
+        { id: 'view-guardians' as AdminTab, label: 'Guardians', icon: Users },
+        { id: 'create-guardian' as AdminTab, label: 'Create Guardian', icon: UserPlus },
+      ],
+    },
+    {
+      group: 'Academics',
+      items: [
+        { id: 'attendance' as AdminTab, label: 'Take Attendance', icon: CalendarCheck },
+        { id: 'timetable' as AdminTab, label: 'Timetable', icon: CalendarCheck },
+      ],
+    },
+    {
+      group: 'Engagement',
+      items: [
+        { id: 'broadcast' as AdminTab, label: 'Announcements', icon: Megaphone },
       ],
     },
     {
       group: 'System',
       items: [
         { id: 'roles' as AdminTab, label: 'Permissions', icon: ShieldCheck },
-        { id: 'settings' as AdminTab, label: 'Settings', icon: SettingsIcon },
       ],
     },
   ]
@@ -527,17 +473,13 @@ export default function AdminAdmin() {
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
-        return <AdminGuide onNavigate={(tab: AdminTab) => setActiveTab(tab)} />
-      case 'exam-builder':
-        return <ExamBuilder onBack={() => setActiveTab('my-quizzes')} />
-      case 'my-quizzes':
-        return <MyQuizzes />
-      case 'library':
-        return <Library />
-      case 'analytics':
-        return <Analytics />
+        return <AdminHome onNavigate={(tab) => setActiveTab(tab as AdminTab)} />
       case 'students':
-        return <StudentManagement />
+        return <StudentRoster />
+      case 'view-tutors':
+        return <PeopleRoster kind='tutors' />
+      case 'view-guardians':
+        return <PeopleRoster kind='guardians' />
       case 'create-tutor':
         return <CreateTutor />
       case 'create-guardian':
@@ -546,18 +488,10 @@ export default function AdminAdmin() {
         return <TakeAttendance />
       case 'timetable':
         return <TimetableEditor />
-      case 'monitoring':
-        return <LiveMonitoring />
       case 'broadcast':
-        return <Announcements />
-      case 'leaderboard':
-        return <Leaderboard />
-      case 'revenue':
-        return <RevenueControls />
+        return <Announcements mode='tutor' />
       case 'roles':
         return <RolesPermissions />
-      case 'settings':
-        return <Settings />
       default:
         return <Error404 tabId={activeTab} />
     }

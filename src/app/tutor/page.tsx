@@ -8,16 +8,13 @@ import {
   CalendarCheck,
   BarChart3,
   Loader2,
-  MapPin,
   Video,
-  Clock,
   CheckCircle2,
   BookOpen,
   ClipboardList,
   Megaphone,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import DashboardShell, {
   type NavItem,
@@ -34,14 +31,6 @@ import { getStudents, type StoredStudent } from '@/lib/studentsStore'
 import { getCourses } from '@/lib/coursesStore'
 import { getAssignments, getSubmissions } from '@/lib/assignmentsStore'
 
-// --- Mock data (replace with API once tutor endpoints exist) ----------------
-
-const CLASSES = [
-  { day: 'MON', date: '28 JUL', title: 'Mathematics — Algebra', time: '9:00 AM', where: 'Hall B, Campus', mode: 'physical', live: true },
-  { day: 'WED', date: '30 JUL', title: 'Mathematics — Live Q&A', time: '6:00 PM', where: 'DSA Portal', mode: 'online', live: false },
-  { day: 'FRI', date: '01 AUG', title: 'Further Maths Revision', time: '10:00 AM', where: 'Hall A, Campus', mode: 'physical', live: false },
-]
-
 const NAV: NavItem[] = [
   { key: 'overview', label: 'Overview', icon: LayoutDashboard },
   { key: 'students', label: 'My Students', icon: Users },
@@ -51,7 +40,6 @@ const NAV: NavItem[] = [
   { key: 'attendance', label: 'Take Attendance', icon: CalendarCheck },
   { key: 'live', label: 'Live Classes', icon: Video },
   { key: 'timetable', label: 'Timetable', icon: CalendarDays },
-  { key: 'schedule', label: 'Class Schedule', icon: CalendarDays },
   { key: 'analytics', label: 'Analytics', icon: BarChart3 },
 ]
 
@@ -126,14 +114,14 @@ export default function TutorDashboard() {
               Welcome, <span className='text-[#FCB900]'>{greeting}</span>
             </h1>
             <p className='text-blue-100 text-xs md:text-sm mt-2 font-medium'>
-              You have {pendingGrading} submissions waiting to be graded and{' '}
-              {CLASSES.filter((c) => c.live).length} class live today.
+              You have {pendingGrading} submission{pendingGrading === 1 ? '' : 's'}{' '}
+              waiting to be graded.
             </p>
           </section>
 
           <div className='grid grid-cols-2 md:grid-cols-4 gap-4'>
             <StatTile label='My Students' value={students.length} icon={Users} tint='bg-blue-50 text-blue-600' />
-            <StatTile label='Classes / wk' value={CLASSES.length} icon={CalendarDays} tint='bg-emerald-50 text-emerald-600' />
+            <StatTile label='Courses' value={getCourses().length} icon={BookOpen} tint='bg-emerald-50 text-emerald-600' />
             <StatTile label='Assignments' value={totalAssignments} icon={ClipboardList} tint='bg-amber-50 text-amber-600' />
             <StatTile label='To Grade' value={pendingGrading} icon={CheckCircle2} tint='bg-rose-50 text-rose-600' />
           </div>
@@ -218,37 +206,6 @@ export default function TutorDashboard() {
       {view === 'live' && <LiveClasses mode='tutor' />}
 
       {view === 'timetable' && <ReadOnlyTimetable />}
-
-      {view === 'schedule' && (
-        <div className='space-y-4'>
-          <h2 className='text-2xl font-black text-[#002EFF] italic uppercase'>Class Schedule</h2>
-          {CLASSES.map((c, i) => (
-            <Card key={i} className='p-4 rounded-3xl border-none shadow-sm bg-white flex items-center justify-between'>
-              <div className='flex items-center gap-5'>
-                <div className={`text-center p-3 rounded-2xl min-w-[68px] ${c.live ? 'bg-[#FCB900] text-[#002EFF]' : 'bg-blue-50 text-gray-700'}`}>
-                  <p className='text-[10px] font-black uppercase'>{c.day}</p>
-                  <p className='text-sm font-black'>{c.date}</p>
-                </div>
-                <div className='space-y-1'>
-                  <div className='flex items-center gap-2'>
-                    <h4 className='text-sm font-black text-gray-800 uppercase'>{c.title}</h4>
-                    {c.live && <Badge className='bg-red-500 text-white text-[8px] font-black animate-pulse'>LIVE</Badge>}
-                  </div>
-                  <div className='flex items-center gap-4 text-gray-400'>
-                    <span className='flex items-center gap-1 text-[10px] font-bold'><Clock size={12} /> {c.time}</span>
-                    <span className='flex items-center gap-1 text-[10px] font-bold'>
-                      {c.mode === 'physical' ? <MapPin size={12} /> : <Video size={12} />} {c.where}
-                    </span>
-                  </div>
-                </div>
-              </div>
-              <Button size='sm' className='bg-[#002EFF] text-white font-black text-[10px] rounded-xl'>
-                {c.mode === 'online' ? 'START' : 'DETAILS'}
-              </Button>
-            </Card>
-          ))}
-        </div>
-      )}
 
       {view === 'analytics' && <Analytics mode='tutor' />}
     </DashboardShell>

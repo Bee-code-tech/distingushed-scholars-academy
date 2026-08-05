@@ -144,7 +144,7 @@ export default function VerifyOTP() {
     localStorage.removeItem('dsa_pending_user')
     localStorage.removeItem('otp_expiry')
     setApiSuccess('Verified! Loading your dashboard…')
-    router.push(dashboardPathForRole(role))
+    router.replace(dashboardPathForRole(role))
   }
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
@@ -168,7 +168,7 @@ export default function VerifyOTP() {
       localStorage.removeItem('dsa_pending_user')
       localStorage.removeItem('otp_expiry')
       setApiSuccess('Verified! Loading your dashboard…')
-      router.push(dashboardPathForRole(data.user?.role || 'student'))
+      router.replace(dashboardPathForRole(data.user?.role || 'student'))
     } catch (err) {
       // Only fall back to the demo code when the backend isn't reachable yet.
       // A real server error (wrong/expired code) is shown as-is.

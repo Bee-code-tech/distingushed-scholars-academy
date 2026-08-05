@@ -299,6 +299,16 @@ weighted formula incl. assignments/quizzes). Recompute on material completion.
 | PUT | `/auth/updatepassword` | any | exists |
 | POST | `/auth/forgot-password` · `/auth/reset-password/:token` | public | exists |
 | POST | `/admin/staff` | admin | **new** — create tutor/guardian/staff (role + wardId/permissions) |
+| GET | `/admin/users?role=…` | admin | **new** — list users by role (`student`/`tutor`/`parent`/`staff`) for the admin's **Students / Tutors / Guardians / Staff** management views. Supports `?search=`&pagination |
+
+> **Admin management views (as built).** The admin dashboard has live lists for
+> **Students, Tutors, Guardians** (and Staff under Permissions). Right now the
+> frontend records admin-created **tutors/guardians locally** (and lists locally
+> registered students) because there is no list endpoint yet — it swaps to
+> `GET /admin/users?role=…` the moment it exists. No demo/seed people remain in
+> the UI: every list is driven by real registrations / admin-created accounts.
+> Note tutors & guardians are still created via `/auth/register` (role `tutor` /
+> `parent`); a dedicated admin-create endpoint is requested above.
 
 ---
 

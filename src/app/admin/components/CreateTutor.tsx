@@ -16,6 +16,7 @@ import {
   EyeOff,
 } from 'lucide-react'
 import { dsaApi } from '@/lib/api'
+import { addTutor } from '@/lib/directoryStore'
 
 interface FieldState {
   fullname: string
@@ -87,6 +88,15 @@ export default function CreateTutor() {
         phoneNumber: values.phone,
         role: 'tutor',
         subjectsOfInterest: values.subject ? [values.subject] : [],
+      })
+
+      // Record locally so the admin's "View Tutors" list shows them (until the
+      // backend has a list-users endpoint).
+      addTutor({
+        key: values.username.toLowerCase(),
+        name: values.fullname,
+        email: values.email.toLowerCase(),
+        extra: values.subject || undefined,
       })
 
       setSuccess(
