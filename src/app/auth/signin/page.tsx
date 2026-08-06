@@ -216,7 +216,7 @@ function LoginContent() {
               Sign In
             </CardTitle>
             <CardDescription className='font-bold uppercase text-[10px] tracking-[0.25em] text-[#002EFF]'>
-              DSA Student Portal
+              DSA Access Portal
             </CardDescription>
           </CardHeader>
 
