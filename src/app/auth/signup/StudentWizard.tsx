@@ -43,7 +43,11 @@ const schema = z
     // Step 1
     fullname: z.string().min(2, 'Full name is required'),
     email: z.string().email('Enter a valid email'),
-    whatsapp: z.string().min(10, 'Valid number required').regex(/^\d+$/, 'Numbers only'),
+    whatsapp: z
+      .string()
+      .regex(/^\d+$/, 'Numbers only')
+      .min(10, 'Enter a valid number')
+      .max(11, 'Maximum 11 digits'),
     password: z.string().min(6, 'Min. 6 characters'),
     confirmPassword: z.string(),
     // Step 2
@@ -61,7 +65,11 @@ const schema = z
       .max(2, 'You can pick up to 2 programmes'),
     // Step 4
     guardianName: z.string().min(2, 'Parent/Guardian name is required'),
-    guardianPhone: z.string().min(10, 'Valid number required').regex(/^\d+$/, 'Numbers only'),
+    guardianPhone: z
+      .string()
+      .regex(/^\d+$/, 'Numbers only')
+      .min(10, 'Enter a valid number')
+      .max(11, 'Maximum 11 digits'),
     guardianEmail: z.string().email('Enter a valid email').or(z.literal('')).optional(),
     // Step 5
     acceptTerms: z.literal(true, {
@@ -298,30 +306,44 @@ export default function StudentWizard() {
     placeholder: string,
     type = 'text',
     Icon?: React.ElementType,
-  ) => (
-    <div className='space-y-1.5'>
-      <label className='text-[10px] font-bold text-slate-500 uppercase'>{label}</label>
-      <div className='relative'>
-        {Icon && (
-          <Icon className='absolute left-3 top-1/2 -translate-y-1/2 text-slate-400' size={14} />
-        )}
-        <input
-          type={type}
-          {...register(name)}
-          placeholder={placeholder}
-          className={cn(
-            'w-full h-11 rounded-lg bg-slate-50 border border-transparent focus:bg-white focus:border-[#002EFF]/30 outline-none text-sm font-medium transition-all',
-            Icon ? 'pl-9 pr-3' : 'px-3',
+    opts?: { numeric?: boolean; maxLength?: number },
+  ) => {
+    const reg = register(name)
+    return (
+      <div className='space-y-1.5'>
+        <label className='text-[10px] font-bold text-slate-500 uppercase'>{label}</label>
+        <div className='relative'>
+          {Icon && (
+            <Icon className='absolute left-3 top-1/2 -translate-y-1/2 text-slate-400' size={14} />
           )}
-        />
+          <input
+            type={type}
+            {...reg}
+            inputMode={opts?.numeric ? 'numeric' : undefined}
+            maxLength={opts?.maxLength}
+            onChange={(e) => {
+              if (opts?.numeric) {
+                let v = e.target.value.replace(/\D/g, '')
+                if (opts.maxLength) v = v.slice(0, opts.maxLength)
+                e.target.value = v
+              }
+              reg.onChange(e)
+            }}
+            placeholder={placeholder}
+            className={cn(
+              'w-full h-11 rounded-lg bg-slate-50 border border-transparent focus:bg-white focus:border-[#002EFF]/30 outline-none text-sm font-medium transition-all',
+              Icon ? 'pl-9 pr-3' : 'px-3',
+            )}
+          />
+        </div>
+        {errors[name] && (
+          <p className='text-[10px] font-bold text-rose-500'>
+            {errors[name]?.message as string}
+          </p>
+        )}
       </div>
-      {errors[name] && (
-        <p className='text-[10px] font-bold text-rose-500'>
-          {errors[name]?.message as string}
-        </p>
-      )}
-    </div>
-  )
+    )
+  }
 
   const pill = (active: boolean) =>
     cn(
@@ -385,7 +407,7 @@ export default function StudentWizard() {
               <h3 className='text-sm font-black text-slate-800'>Create Your Account</h3>
               {input('fullname', 'Full Name *', 'John Doe', 'text', User)}
               {input('email', 'Email Address *', 'you@example.com', 'email', AtSign)}
-              {input('whatsapp', 'WhatsApp Number *', '08012345678', 'text', Phone)}
+              {input('whatsapp', 'WhatsApp Number *', '08012345678', 'text', Phone, { numeric: true, maxLength: 11 })}
               <div className='space-y-1.5'>
                 <label className='text-[10px] font-bold text-slate-500 uppercase'>Password *</label>
                 <div className='relative'>
@@ -528,7 +550,7 @@ export default function StudentWizard() {
             <>
               <h3 className='text-sm font-black text-slate-800'>Parent/Guardian Information</h3>
               {input('guardianName', 'Parent/Guardian Name *', 'Full name', 'text', User)}
-              {input('guardianPhone', 'Parent/Guardian Phone *', '08012345678', 'text', Phone)}
+              {input('guardianPhone', 'Parent/Guardian Phone *', '08012345678', 'text', Phone, { numeric: true, maxLength: 11 })}
               {input('guardianEmail', 'Parent/Guardian Email (Optional)', 'guardian@example.com', 'email', AtSign)}
             </>
           )}
