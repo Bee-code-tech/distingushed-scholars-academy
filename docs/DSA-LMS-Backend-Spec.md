@@ -307,14 +307,41 @@ weighted formula incl. assignments/quizzes). Recompute on material completion.
 | POST | `/admin/staff` | admin | **new** — create tutor/guardian/staff (role + wardId/permissions) |
 | GET | `/admin/users?role=…` | admin | **new** — list users by role (`student`/`tutor`/`parent`/`staff`) for the admin's **Students / Tutors / Guardians / Staff** management views. Supports `?search=`&pagination |
 
-> **Admin management views (as built).** The admin dashboard has live lists for
-> **Students, Tutors, Guardians** (and Staff under Permissions). Right now the
-> frontend records admin-created **tutors/guardians locally** (and lists locally
-> registered students) because there is no list endpoint yet — it swaps to
-> `GET /admin/users?role=…` the moment it exists. No demo/seed people remain in
-> the UI: every list is driven by real registrations / admin-created accounts.
-> Note tutors & guardians are still created via `/auth/register` (role `tutor` /
-> `parent`); a dedicated admin-create endpoint is requested above.
+> **Admin management views (as built).** The admin dashboard has **live-first**
+> lists for **Students, Tutors, Guardians** (and Staff under Permissions): each
+> screen calls `GET /admin/users?role=…` first and falls back to a browser-local
+> list until the endpoint exists (a "Live"/"Local" badge shows which). No
+> demo/seed people remain — every list is driven by real accounts.
+
+### 3a. REQUIRED to make the admin panel show real users
+
+Two backend pieces are **blocking** the admin panel from displaying registered
+users (today `GET /admin/users` returns **404** and admin has no server token):
+
+**1. Real admin authentication.** The admin login is currently a **frontend-only
+bypass** — there is no server admin session/JWT. Provide a real admin login so
+the panel sends a valid `Authorization: Bearer` token; protected admin endpoints
+must verify the `admin`/`super_admin` role server-side.
+
+**2. `GET /admin/users?role=student|tutor|parent|staff`** (admin-only). Return
+the envelope `{ success, data: User[] }` (or a bare array). The frontend reads
+these fields per role (send these names, or the frontend already tolerates the
+alternates in parentheses):
+
+| Role (`?role=`) | Fields the admin list needs |
+| --- | --- |
+| `student` | `id`/`studentId`, `fullname` (or `fullName`), `email`, `examTrack` (or `level`), `learningMode` (or `isDsaStudent`) |
+| `tutor` | `id`, `fullname`, `email`, `subject` (or `subjects[]`) |
+| `parent` (guardian) | `id`, `fullname`, `email`, `wardName` (the linked student's name) |
+| `staff` | `id`, `fullname`, `email`, `role`/`staffRole` + `permissions[]` |
+
+Support `?search=` and pagination (`?page=&limit=`). Once both ship, the admin's
+Students/Tutors/Guardians lists populate from the database automatically — no
+frontend change needed.
+
+Related: tutors & guardians are still **created** via `/auth/register` (role
+`tutor` / `parent`); a dedicated `POST /admin/staff`-style admin-create endpoint
+is requested above.
 
 ---
 

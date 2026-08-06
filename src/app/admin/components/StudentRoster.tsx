@@ -1,21 +1,58 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Users, Loader2 } from 'lucide-react'
+import { Users, Loader2, Cloud, HardDrive } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { getStudents, type StoredStudent } from '@/lib/studentsStore'
+import { dsaApi } from '@/lib/api'
 
-// Live student roster (from the students store; becomes the real
-// GET /api/... students list once the backend ships it).
+// Map a backend user record (shape TBD) to the row we render, defensively.
+function mapStudent(u: Record<string, unknown>): StoredStudent {
+  const s = u as Record<string, string | boolean | undefined>
+  const mode =
+    (s.learningMode as string) ||
+    (s.mode as string) ||
+    (s.isDsaStudent ? 'physical' : s.isDsaStudent === false ? 'online' : undefined)
+  return {
+    key: String(s.studentId || s.username || s.email || s.id || s.fullname || Math.random()),
+    name: String(s.fullname || s.fullName || s.name || 'Student'),
+    track: String(s.examTrack || s.level || s.track || '—').toUpperCase(),
+    mode,
+  }
+}
+
 export default function StudentRoster() {
-  const [mounted, setMounted] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [students, setStudents] = useState<StoredStudent[]>([])
+  const [source, setSource] = useState<'server' | 'local'>('local')
+
   useEffect(() => {
-    setMounted(true)
-    setStudents(getStudents())
+    let cancelled = false
+    ;(async () => {
+      // Live-first: try the backend list, fall back to the local roster.
+      try {
+        const rows = await dsaApi.admin.listUsers('student')
+        if (!cancelled && Array.isArray(rows) && rows.length > 0) {
+          setStudents(rows.map(mapStudent))
+          setSource('server')
+          return
+        }
+        throw new Error('no server data')
+      } catch {
+        if (!cancelled) {
+          setStudents(getStudents())
+          setSource('local')
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
   }, [])
 
-  if (!mounted) {
+  if (loading) {
     return <div className='py-20 flex justify-center'><Loader2 className='animate-spin text-[#002EFF]' /></div>
   }
 
@@ -24,6 +61,9 @@ export default function StudentRoster() {
       <div className='flex items-center gap-2'>
         <Users size={18} className='text-[#002EFF]' />
         <h1 className='text-2xl font-black text-slate-900 tracking-tight'>Students</h1>
+        <Badge className={`text-[8px] font-black ${source === 'server' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-500'}`}>
+          {source === 'server' ? <><Cloud size={9} className='mr-1' /> Live</> : <><HardDrive size={9} className='mr-1' /> Local</>}
+        </Badge>
         <span className='ml-auto text-[10px] font-black uppercase text-slate-400'>{students.length} total</span>
       </div>
 
@@ -55,7 +95,9 @@ export default function StudentRoster() {
         )}
       </div>
       <p className='text-[10px] font-medium text-slate-400'>
-        Registered students appear here. Full server-backed list arrives with the students API.
+        {source === 'server'
+          ? 'Live from the server.'
+          : 'Showing this browser’s list — the server students API (GET /admin/users?role=student) is not live yet, so registered students from other devices won’t appear until the backend ships it.'}
       </p>
     </div>
   )

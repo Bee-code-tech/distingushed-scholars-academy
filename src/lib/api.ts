@@ -277,4 +277,24 @@ export const dsaApi = {
         .then((r) => handleResponse<Program[] | { data?: Program[] }>(r))
         .then((res) => (Array.isArray(res) ? res : (res?.data ?? []))),
   },
+
+  admin: {
+    /**
+     * List users by role for the admin management views
+     * (GET /api/admin/users?role=student|tutor|parent|staff).
+     *
+     * NOT LIVE YET — the backend returns 404 and there is no real admin auth.
+     * The admin roster components try this first and fall back to the local
+     * store. It starts returning data the moment the backend ships the endpoint
+     * (+ real admin login so the Bearer token is valid). See
+     * docs/DSA-LMS-Backend-Spec.md §3.
+     */
+    listUsers: (role: 'student' | 'tutor' | 'parent' | 'staff', token?: string) =>
+      fetch(`${BASE_URL}/admin/users?role=${encodeURIComponent(role)}`, {
+        method: 'GET',
+        headers: getHeaders(token),
+      })
+        .then((r) => handleResponse<Record<string, unknown>[] | { data?: Record<string, unknown>[] }>(r))
+        .then((res) => (Array.isArray(res) ? res : (res?.data ?? []))),
+  },
 }

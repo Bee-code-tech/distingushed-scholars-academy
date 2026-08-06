@@ -1,18 +1,56 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Users, GraduationCap, Mail, Loader2 } from 'lucide-react'
+import { Users, GraduationCap, Mail, Loader2, Cloud, HardDrive } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
 import { getTutors, getGuardians, type DirectoryPerson } from '@/lib/directoryStore'
+import { dsaApi } from '@/lib/api'
+
+function mapPerson(u: Record<string, unknown>, kind: 'tutors' | 'guardians'): DirectoryPerson {
+  const s = u as Record<string, string | string[] | undefined>
+  const subjects = s.subjects as string[] | undefined
+  return {
+    key: String(s.username || s.email || s.id || s.fullname || Math.random()),
+    name: String(s.fullname || s.fullName || s.name || (kind === 'tutors' ? 'Tutor' : 'Guardian')),
+    email: String(s.email || ''),
+    extra:
+      kind === 'tutors'
+        ? String(s.subject || (subjects && subjects[0]) || '') || undefined
+        : String(s.wardName || s.ward || '') || undefined,
+  }
+}
 
 export default function PeopleRoster({ kind }: { kind: 'tutors' | 'guardians' }) {
-  const [mounted, setMounted] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [people, setPeople] = useState<DirectoryPerson[]>([])
+  const [source, setSource] = useState<'server' | 'local'>('local')
+
   useEffect(() => {
-    setMounted(true)
-    setPeople(kind === 'tutors' ? getTutors() : getGuardians())
+    let cancelled = false
+    ;(async () => {
+      try {
+        const rows = await dsaApi.admin.listUsers(kind === 'tutors' ? 'tutor' : 'parent')
+        if (!cancelled && Array.isArray(rows) && rows.length > 0) {
+          setPeople(rows.map((r) => mapPerson(r, kind)))
+          setSource('server')
+          return
+        }
+        throw new Error('no server data')
+      } catch {
+        if (!cancelled) {
+          setPeople(kind === 'tutors' ? getTutors() : getGuardians())
+          setSource('local')
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
   }, [kind])
 
-  if (!mounted) {
+  if (loading) {
     return <div className='py-20 flex justify-center'><Loader2 className='animate-spin text-[#002EFF]' /></div>
   }
 
@@ -26,6 +64,9 @@ export default function PeopleRoster({ kind }: { kind: 'tutors' | 'guardians' })
       <div className='flex items-center gap-2'>
         <Icon size={18} className='text-[#002EFF]' />
         <h1 className='text-2xl font-black text-slate-900 tracking-tight'>{title}</h1>
+        <Badge className={`text-[8px] font-black ${source === 'server' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-500'}`}>
+          {source === 'server' ? <><Cloud size={9} className='mr-1' /> Live</> : <><HardDrive size={9} className='mr-1' /> Local</>}
+        </Badge>
         <span className='ml-auto text-[10px] font-black uppercase text-slate-400'>{people.length} total</span>
       </div>
 
@@ -55,8 +96,9 @@ export default function PeopleRoster({ kind }: { kind: 'tutors' | 'guardians' })
         )}
       </div>
       <p className='text-[10px] font-medium text-slate-400'>
-        {isTutor ? 'Tutors' : 'Guardians'} created here appear in this list. Full server-backed
-        list arrives with the users API.
+        {source === 'server'
+          ? 'Live from the server.'
+          : `Showing this browser’s list — the server users API (GET /admin/users?role=${isTutor ? 'tutor' : 'parent'}) is not live yet.`}
       </p>
     </div>
   )
