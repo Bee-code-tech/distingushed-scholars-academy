@@ -6,6 +6,7 @@ import { ArrowRight } from 'lucide-react'
 
 import WAEC from '../../imges/waec.jpeg'
 import JAMB from '../../imges/jamb.jpeg'
+import POSTUTME from '../../imges/postutme.jpeg'
 import Year1 from '../../imges/Year01.jpg'
 import SUMMER from '../../imges/Summer-Coaching.jpg'
 import Skills from '../../imges/skillAcquisition.jpg'
@@ -32,7 +33,7 @@ const programs = [
   },
   {
     name: 'Full Post-UTME Preparation',
-    img: JAMB,
+    img: POSTUTME,
     desc: 'Targeted Post-UTME screening prep — course-specific subjects, past questions, and mock screenings.',
   },
   {
