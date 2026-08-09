@@ -15,9 +15,13 @@ export interface DirectoryPerson {
 const TUTORS_KEY = 'dsa_tutors'
 const GUARDIANS_KEY = 'dsa_guardians'
 
-// No seeds — tutors & guardians are created by the admin (Create Tutor /
-// Create Guardian) and appear here once created.
-const SEED_TUTORS: DirectoryPerson[] = []
+// One seeded tutor (matches the demo tutor login tutor@dsa.demo → username
+// "tutor_demo") so the admin's Tutors list & course-assignment dropdown have a
+// tutor to work with, and courses assigned to them link to the tutor dashboard.
+// Guardians are created by the admin (Create Guardian).
+const SEED_TUTORS: DirectoryPerson[] = [
+  { key: 'tutor_demo', name: 'Mr. Timilehin', email: 'tutor@dsa.demo', extra: 'Mathematics' },
+]
 const SEED_GUARDIANS: DirectoryPerson[] = []
 
 function read(key: string): DirectoryPerson[] {
