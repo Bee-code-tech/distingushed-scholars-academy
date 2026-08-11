@@ -1,5 +1,10 @@
 # DSA LMS — Backend Specification (Student & Tutor)
 
+> **Mostly delivered (v1).** This was the authoritative wishlist while building.
+> For day-to-day frontend integration, use the LIVE route docs in
+> [README.md](./README.md). Quizzes / messaging / forum / websockets remain **v2**.
+
+
 Everything the backend needs to make the Student and Tutor experiences real. This
 is the authoritative spec: it lists **every database entity with its fields** and
 **every endpoint** grouped by feature, marking what already exists vs. what is

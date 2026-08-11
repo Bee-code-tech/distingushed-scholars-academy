@@ -1,5 +1,11 @@
 # Backend requests — from the frontend team
 
+> **Archive.** The endpoints below were the frontend wishlist. They are now
+> implemented on the backend — use the LIVE docs in [README.md](./README.md)
+> (`admin.md`, `attendance.md`, `courses.md`, etc.) and Swagger `/api-docs`
+> for integration. Keep this file only for historical context.
+
+
 The frontend is fully built and running on **browser-local / mock data**. These
 endpoints are what's needed to make it real. Items are ordered by urgency.
 

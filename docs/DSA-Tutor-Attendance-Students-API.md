@@ -1,5 +1,10 @@
 # Tutor, Attendance & Student-List APIs — with the UI they power
 
+> **Superseded.** Prefer the LIVE docs:
+> [admin.md](./admin.md) · [tutor.md](./tutor.md) · [attendance.md](./attendance.md).
+> See [README.md](./README.md) for the full integration map.
+
+
 For the backend dev. **All three UIs are already built and running** — this doc
 maps each screen to the exact endpoint + response fields it needs, so the API
 can be structured to match. Base API: `/api`. All protected routes take

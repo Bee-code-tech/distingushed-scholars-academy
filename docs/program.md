@@ -1,9 +1,20 @@
 # Program Countdown API Documentation
 
+> **Status: LIVE on the backend.** Use these routes to replace local/mock stores.
+> Interactive Swagger: [api-docs](https://api.distinguishedscholarsacademy.com/api-docs) · Local: `http://localhost:5001/api-docs`
+> All protected calls need `Authorization: Bearer <JWT>`.
+
+
+Base URL: `https://api.distinguishedscholarsacademy.com/api/programs`
+
+Interactive docs: [https://api.distinguishedscholarsacademy.com/api-docs](https://api.distinguishedscholarsacademy.com/api-docs)
+
+Local development base URL: `http://localhost:5001/api/programs`
+
 Endpoints for managing program countdowns.
 
 ## 1. Upsert Program Countdown
-- **Route:** `POST http://localhost:5001/api/programs`
+- **Route:** `POST https://api.distinguishedscholarsacademy.com/api/programs`
 - **Description:** Create a new program countdown or update an existing one by name.
 - **Body:**
   ```json
@@ -27,7 +38,7 @@ Endpoints for managing program countdowns.
   ```
 
 ## 2. Get All Programs
-- **Route:** `GET http://localhost:5001/api/programs`
+- **Route:** `GET https://api.distinguishedscholarsacademy.com/api/programs`
 - **Description:** Retrieve all programs and their end dates.
 - **Success Response:**
   ```json

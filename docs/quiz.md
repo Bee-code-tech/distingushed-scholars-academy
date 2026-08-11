@@ -1,9 +1,20 @@
 # Quiz API Documentation
 
+> **Status: LIVE on the backend.** Use these routes to replace local/mock stores.
+> Interactive Swagger: [api-docs](https://api.distinguishedscholarsacademy.com/api-docs) · Local: `http://localhost:5001/api-docs`
+> All protected calls need `Authorization: Bearer <JWT>`.
+
+
+Base URL: `https://api.distinguishedscholarsacademy.com/api/quizzes`
+
+Interactive docs: [https://api.distinguishedscholarsacademy.com/api-docs](https://api.distinguishedscholarsacademy.com/api-docs)
+
+Local development base URL: `http://localhost:5001/api/quizzes`
+
 Endpoints for managing and accessing quizzes. All routes except where noted require a **Bearer Token** in the `Authorization` header.
 
 ## 1. Create Quiz (Admin Only)
-- **Route:** `POST /api/quizzes`
+- **Route:** `POST https://api.distinguishedscholarsacademy.com/api/quizzes`
 - **Description:** Create a new quiz with nested subjects and questions.
 - **Body:**
   ```json
@@ -34,11 +45,11 @@ Endpoints for managing and accessing quizzes. All routes except where noted requ
 - **Success Response:** Returns the created quiz with automatically generated `accessLink` and `accessCode` (e.g., `DSA-123456`).
 
 ## 2. Get All Quizzes (Admin Only)
-- **Route:** `GET /api/quizzes`
+- **Route:** `GET https://api.distinguishedscholarsacademy.com/api/quizzes`
 - **Description:** Retrieve all quizzes in the system.
 
 ## 3. Get Quiz by Link (Student/Public)
-- **Route:** `GET /api/quizzes/link/:link`
+- **Route:** `GET https://api.distinguishedscholarsacademy.com/api/quizzes/link/:link`
 - **Description:** Retrieve basic quiz information using the unique `accessLink`. This does *not* return the questions.
 - **Success Response:**
   ```json
@@ -60,7 +71,7 @@ Endpoints for managing and accessing quizzes. All routes except where noted requ
   ```
 
 ## 4. Verify Access Code (Student/Public)
-- **Route:** `POST /api/quizzes/verify-code`
+- **Route:** `POST https://api.distinguishedscholarsacademy.com/api/quizzes/verify-code`
 - **Description:** Verify the `accessCode` for a specific quiz link and retrieve the full quiz content (including questions).
 - **Body:**
   ```json
@@ -72,14 +83,14 @@ Endpoints for managing and accessing quizzes. All routes except where noted requ
 - **Success Response:** Returns the `Quiz` object, but **excludes** `correctAnswer` and `explanation` from each question for security.
 
 ## 5. Update Quiz (Admin Only)
-- **Route:** `PUT /api/quizzes/:id`
+- **Route:** `PUT https://api.distinguishedscholarsacademy.com/api/quizzes/:id`
 - **Description:** Update quiz details. Pre-save hooks will automatically recalculate `totalMarks` if subjects or questions are changed.
 
 ## 6. Delete Quiz (Admin Only)
-- **Route:** `DELETE /api/quizzes/:id`
+- **Route:** `DELETE https://api.distinguishedscholarsacademy.com/api/quizzes/:id`
 
 ## 7. Toggle Quiz Status (Admin Only)
-- **Route:** `PATCH /api/quizzes/:id/status`
+- **Route:** `PATCH https://api.distinguishedscholarsacademy.com/api/quizzes/:id/status`
 - **Description:** Activate or deactivate a quiz. Inactive quizzes cannot be accessed via link or code.
 
 ---
@@ -97,7 +108,7 @@ To **preserve existing IDs** and avoid breaking student submissions that rely on
 {
   "subjects": [
     {
-      "_id": "65eba2c...", 
+      "_id": "65eba2c...",
       "name": "Updated Name",
       "questions": [
         {
@@ -113,7 +124,7 @@ To **preserve existing IDs** and avoid breaking student submissions that rely on
 ```
 
 ## 8. Submit Quiz (Student/Private)
-- **Route:** `POST /api/quizzes/:id/submit`
+- **Route:** `POST https://api.distinguishedscholarsacademy.com/api/quizzes/:id/submit`
 - **Description:** Submit answers for grading. Returns the calculated score and saves the result.
 - **Body:**
   ```json
@@ -129,17 +140,20 @@ To **preserve existing IDs** and avoid breaking student submissions that rely on
   ```
 
 ## 9. Get Leaderboard (Student/Private)
-- **Route:** `GET /api/quizzes/:id/leaderboard`
+- **Route:** `GET https://api.distinguishedscholarsacademy.com/api/quizzes/:id/leaderboard`
 - **Description:** Retrieve top 20 results for a specific quiz, sorted by score and time taken.
-{
-  "success": true,
-  "count": 1,
-  "data": [
-    {
-      "username": "John Doe",
-      "profilePic": "https://api.dicebear.com/...",
-      "score": 0.85,
-      "timeTaken": 120
-    }
-  ]
-}
+- **Success Response:**
+  ```json
+  {
+    "success": true,
+    "count": 1,
+    "data": [
+      {
+        "username": "John Doe",
+        "profilePic": "https://api.dicebear.com/...",
+        "score": 0.85,
+        "timeTaken": 120
+      }
+    ]
+  }
+  ```
