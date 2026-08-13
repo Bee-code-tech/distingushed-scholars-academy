@@ -19,9 +19,15 @@ import type {
 // (`api.distinguishedscholarsacademy.com`); only this client previously used
 // `www.api...`, which was almost certainly wrong. Standardized to non-www.
 // Override per-environment with NEXT_PUBLIC_API_URL.
-const BASE_URL =
+// This client uses an "/api" base (paths below omit the /api prefix), while
+// admin-api.ts + the admin components read the SAME env var but WITHOUT /api
+// (they add /api per path). Normalize here so either env format works and we
+// never emit a doubled "/api/api/...": strip any trailing slash and a single
+// trailing "/api", then append exactly one "/api".
+const RAW_API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
-  'https://api.distinguishedscholarsacademy.com/api'
+  'https://api.distinguishedscholarsacademy.com'
+const BASE_URL = RAW_API_URL.replace(/\/+$/, '').replace(/\/api$/, '') + '/api'
 
 const TOKEN_KEY = 'dsa_token'
 
