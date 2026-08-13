@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -22,6 +22,29 @@ import {
   type CheckIn,
 } from '@/lib/attendanceStore'
 import { getStudents } from '@/lib/studentsStore'
+import { dsaApi } from '@/lib/api'
+import { getToken } from '@/lib/auth'
+import { isDemoToken } from '@/lib/demoAccounts'
+
+/** Live path = a real (non-demo) JWT is present; otherwise we run on the
+ *  browser-local attendance store so the preview still works offline/demo. */
+function isLive(): boolean {
+  const t = getToken()
+  return !!t && !isDemoToken(t)
+}
+
+function todayKey(): string {
+  return new Date().toISOString().slice(0, 10)
+}
+
+/** Normalise a check-in row from the API to the component's CheckIn shape. */
+function mapApiCheckIn(row: Record<string, unknown>): CheckIn {
+  return {
+    key: String(row.studentId ?? row.id ?? row.studentCode ?? ''),
+    name: String(row.fullname ?? row.name ?? 'Student'),
+    at: String(row.at ?? ''),
+  }
+}
 
 /**
  * Tutor/admin attendance control.
@@ -30,6 +53,9 @@ import { getStudents } from '@/lib/studentsStore'
  * themselves present from their own dashboard. This screen shows who has
  * checked in and at what time — it does not mark students manually
  * (students self-mark from their own dashboard).
+ *
+ * Live-first: with a real JWT it drives the backend attendance API
+ * (docs/attendance.md); on demo/offline it falls back to the local store.
  */
 export default function TakeAttendance() {
   const [session, setSession] = useState<AttendanceSession>({
@@ -39,13 +65,38 @@ export default function TakeAttendance() {
   })
   const [checkIns, setCheckIns] = useState<CheckIn[]>([])
   const [expected, setExpected] = useState(0)
+  const [source, setSource] = useState<'live' | 'local'>('local')
+  const [busy, setBusy] = useState(false)
 
-  const refresh = () => {
+  const refresh = useCallback(async () => {
+    setExpected(getStudents().length)
+    if (isLive()) {
+      try {
+        const [cur, rows] = await Promise.all([
+          dsaApi.attendance.current(),
+          dsaApi.attendance.checkIns(),
+        ])
+        const c = (cur ?? {}) as Record<string, unknown>
+        setSession({
+          active: !!c.active,
+          date: (c.date as string) ?? null,
+          activatedAt: (c.activatedAt as string) ?? null,
+        })
+        setCheckIns((rows as Record<string, unknown>[]).map(mapApiCheckIn))
+        setSource('live')
+        return
+      } catch {
+        // fall through to local store on any API/connectivity error
+      }
+    }
     setSession(getSession())
     setCheckIns(getTodayCheckIns())
-    setExpected(getStudents().length)
-  }
-  useEffect(refresh, [])
+    setSource('local')
+  }, [])
+
+  useEffect(() => {
+    void refresh()
+  }, [refresh])
 
   const dateLabel = new Date().toLocaleDateString('en-NG', {
     weekday: 'long',
@@ -53,13 +104,42 @@ export default function TakeAttendance() {
     month: 'long',
   })
 
-  const activate = () => {
-    activateAttendance()
-    refresh()
+  const activate = async () => {
+    if (busy) return
+    setBusy(true)
+    try {
+      if (isLive()) {
+        try {
+          await dsaApi.attendance.activate({})
+        } catch {
+          activateAttendance()
+        }
+      } else {
+        activateAttendance()
+      }
+      await refresh()
+    } finally {
+      setBusy(false)
+    }
   }
-  const close = () => {
-    closeAttendance()
-    refresh()
+
+  const close = async () => {
+    if (busy) return
+    setBusy(true)
+    try {
+      if (isLive()) {
+        try {
+          await dsaApi.attendance.close(session.date ?? todayKey())
+        } catch {
+          closeAttendance()
+        }
+      } else {
+        closeAttendance()
+      }
+      await refresh()
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
@@ -73,11 +153,18 @@ export default function TakeAttendance() {
             {dateLabel}
           </p>
         </div>
-        <Badge
-          className={`text-[9px] font-black ${session.active ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-500'}`}
-        >
-          {session.active ? 'ACTIVE TODAY' : 'NOT ACTIVATED'}
-        </Badge>
+        <div className='flex items-center gap-2'>
+          <Badge
+            className={`text-[9px] font-black ${source === 'live' ? 'bg-blue-50 text-[#002EFF]' : 'bg-slate-100 text-slate-400'}`}
+          >
+            {source === 'live' ? 'LIVE' : 'LOCAL'}
+          </Badge>
+          <Badge
+            className={`text-[9px] font-black ${session.active ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-500'}`}
+          >
+            {session.active ? 'ACTIVE TODAY' : 'NOT ACTIVATED'}
+          </Badge>
+        </div>
       </div>
 
       {!session.active ? (
@@ -94,9 +181,10 @@ export default function TakeAttendance() {
           </p>
           <button
             onClick={activate}
-            className='mt-5 inline-flex items-center gap-2 px-6 h-11 bg-[#002EFF] text-white rounded-xl font-black text-[11px] uppercase shadow-lg shadow-blue-200 hover:bg-blue-700 active:scale-95 transition-all'
+            disabled={busy}
+            className='mt-5 inline-flex items-center gap-2 px-6 h-11 bg-[#002EFF] text-white rounded-xl font-black text-[11px] uppercase shadow-lg shadow-blue-200 hover:bg-blue-700 active:scale-95 transition-all disabled:opacity-60'
           >
-            <Power size={15} /> Activate Attendance
+            <Power size={15} /> {busy ? 'Activating…' : 'Activate Attendance'}
           </button>
         </Card>
       ) : (
@@ -121,9 +209,10 @@ export default function TakeAttendance() {
               </div>
               <button
                 onClick={close}
-                className='flex items-center gap-1 px-3 h-9 rounded-xl bg-white/10 hover:bg-white/20 text-[10px] font-black uppercase transition-all'
+                disabled={busy}
+                className='flex items-center gap-1 px-3 h-9 rounded-xl bg-white/10 hover:bg-white/20 text-[10px] font-black uppercase transition-all disabled:opacity-60'
               >
-                <PowerOff size={13} /> Close
+                <PowerOff size={13} /> {busy ? '…' : 'Close'}
               </button>
             </div>
           </Card>
@@ -132,11 +221,12 @@ export default function TakeAttendance() {
             <div className='flex items-center gap-2 text-gray-500'>
               <Users size={15} />
               <span className='text-[11px] font-black uppercase'>
-                {checkIns.length}/{expected} checked in
+                {checkIns.length}
+                {expected ? `/${expected}` : ''} checked in
               </span>
             </div>
             <button
-              onClick={refresh}
+              onClick={() => void refresh()}
               className='flex items-center gap-1 text-[10px] font-black uppercase text-[#002EFF] hover:underline'
             >
               <RefreshCw size={12} /> Refresh
@@ -153,9 +243,9 @@ export default function TakeAttendance() {
                 </p>
               </div>
             ) : (
-              checkIns.map((c) => (
+              checkIns.map((c, i) => (
                 <div
-                  key={c.key}
+                  key={c.key || i}
                   className='flex items-center justify-between px-5 py-3.5 border-t border-slate-50 first:border-t-0'
                 >
                   <div className='flex items-center gap-3'>

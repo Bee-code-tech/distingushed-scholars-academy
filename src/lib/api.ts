@@ -297,4 +297,51 @@ export const dsaApi = {
         .then((r) => handleResponse<Record<string, unknown>[] | { data?: Record<string, unknown>[] }>(r))
         .then((res) => (Array.isArray(res) ? res : (res?.data ?? []))),
   },
+
+  // Attendance — self check-in flow (docs/attendance.md). Each returns the
+  // unwrapped `data` payload.
+  attendance: {
+    current: (token?: string) =>
+      fetch(`${BASE_URL}/attendance/sessions/current`, { headers: getHeaders(token) })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+
+    activate: (body: { date?: string; courseId?: string } = {}, token?: string) =>
+      fetch(`${BASE_URL}/attendance/sessions`, {
+        method: 'POST',
+        headers: getHeaders(token),
+        body: JSON.stringify(body),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+
+    close: (date: string, token?: string) =>
+      fetch(`${BASE_URL}/attendance/sessions/${encodeURIComponent(date)}`, {
+        method: 'DELETE',
+        headers: getHeaders(token),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+
+    checkIn: (token?: string) =>
+      fetch(`${BASE_URL}/attendance/check-in`, {
+        method: 'POST',
+        headers: getHeaders(token),
+        body: JSON.stringify({}),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+
+    checkIns: (date?: string, token?: string) =>
+      fetch(`${BASE_URL}/attendance/check-ins${date ? `?date=${encodeURIComponent(date)}` : ''}`, {
+        headers: getHeaders(token),
+      })
+        .then((r) => handleResponse<Record<string, unknown>[] | { data?: Record<string, unknown>[] }>(r))
+        .then((res) => (Array.isArray(res) ? res : (res?.data ?? []))),
+
+    me: (token?: string) =>
+      fetch(`${BASE_URL}/attendance/me`, { headers: getHeaders(token) })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+  },
 }
