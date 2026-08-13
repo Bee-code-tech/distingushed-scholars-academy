@@ -349,6 +349,46 @@ function suggestPassword() {
   return 'DSAparent' + Math.floor(1000 + ((Date.now() / 1000) % 9000))
 }
 
+// Defined at module scope (NOT inside CreateGuardian). Declaring it inside the
+// component re-created the Field function on every keystroke, remounting the
+// <input> and dropping focus after a single character.
+function Field({
+  icon: Icon,
+  label,
+  value,
+  onChange,
+  placeholder,
+  type = 'text',
+}: {
+  icon: React.ElementType
+  label: string
+  value: string
+  onChange: (v: string) => void
+  placeholder: string
+  type?: string
+}) {
+  return (
+    <div className='space-y-1.5'>
+      <label className='text-[10px] font-black uppercase tracking-widest text-slate-400'>
+        {label}
+      </label>
+      <div className='relative'>
+        <Icon
+          className='absolute left-3 top-1/2 -translate-y-1/2 text-slate-400'
+          size={15}
+        />
+        <input
+          type={type}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          className='w-full h-11 pl-9 pr-3 rounded-lg bg-slate-50 border border-transparent focus:border-[#002EFF]/30 focus:bg-white outline-none text-sm font-medium transition-all'
+        />
+      </div>
+    </div>
+  )
+}
+
 export default function CreateGuardian() {
   const [values, setValues] = useState<FieldState>(EMPTY)
   const [students, setStudents] = useState<StoredStudent[]>([])
@@ -418,48 +458,20 @@ export default function CreateGuardian() {
       )
       setValues(EMPTY)
     } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : 'Failed to create guardian.'
+      // Backend sends a generic "Duplicate field value entered" (Mongoose
+      // E11000) without naming the field. email/username/phone are unique
+      // across all users, so translate it into an actionable message.
       setError(
-        err instanceof Error ? err.message : 'Failed to create guardian.',
+        /duplicate/i.test(msg)
+          ? 'That email, username, or phone number is already registered to another user. Use different details.'
+          : msg,
       )
     } finally {
       setLoading(false)
     }
   }
-
-  const Field = ({
-    icon: Icon,
-    label,
-    value,
-    onChange,
-    placeholder,
-    type = 'text',
-  }: {
-    icon: React.ElementType
-    label: string
-    value: string
-    onChange: (v: string) => void
-    placeholder: string
-    type?: string
-  }) => (
-    <div className='space-y-1.5'>
-      <label className='text-[10px] font-black uppercase tracking-widest text-slate-400'>
-        {label}
-      </label>
-      <div className='relative'>
-        <Icon
-          className='absolute left-3 top-1/2 -translate-y-1/2 text-slate-400'
-          size={15}
-        />
-        <input
-          type={type}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
-          className='w-full h-11 pl-9 pr-3 rounded-lg bg-slate-50 border border-transparent focus:border-[#002EFF]/30 focus:bg-white outline-none text-sm font-medium transition-all'
-        />
-      </div>
-    </div>
-  )
 
   return (
     <div className='max-w-2xl mx-auto'>

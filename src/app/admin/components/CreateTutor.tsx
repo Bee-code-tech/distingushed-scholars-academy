@@ -315,6 +315,46 @@ function suggestPassword() {
   return 'DSAtutor' + Math.floor(1000 + ((Date.now() / 1000) % 9000))
 }
 
+// Defined at module scope (NOT inside CreateTutor). If this lived inside the
+// component, every keystroke re-created the Field function, so React would
+// unmount/remount the <input> and the field would lose focus after one char.
+function Field({
+  icon: Icon,
+  label,
+  value,
+  onChange,
+  placeholder,
+  type = 'text',
+}: {
+  icon: React.ElementType
+  label: string
+  value: string
+  onChange: (v: string) => void
+  placeholder: string
+  type?: string
+}) {
+  return (
+    <div className='space-y-1.5'>
+      <label className='text-[10px] font-black uppercase tracking-widest text-slate-400'>
+        {label}
+      </label>
+      <div className='relative'>
+        <Icon
+          className='absolute left-3 top-1/2 -translate-y-1/2 text-slate-400'
+          size={15}
+        />
+        <input
+          type={type}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          className='w-full h-11 pl-9 pr-3 rounded-lg bg-slate-50 border border-transparent focus:border-[#002EFF]/30 focus:bg-white outline-none text-sm font-medium transition-all'
+        />
+      </div>
+    </div>
+  )
+}
+
 export default function CreateTutor() {
   const [values, setValues] = useState<FieldState>(EMPTY)
   const [showPass, setShowPass] = useState(false)
@@ -375,46 +415,20 @@ export default function CreateTutor() {
       )
       setValues(EMPTY)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create tutor.')
+      const msg = err instanceof Error ? err.message : 'Failed to create tutor.'
+      // The backend returns a generic Mongoose duplicate-key message
+      // ("Duplicate field value entered") without naming the field. Translate
+      // it into something an admin can act on: email/username/phone are unique
+      // across ALL users, so a collision with any existing account triggers it.
+      setError(
+        /duplicate/i.test(msg)
+          ? 'That email, username, or phone number is already registered to another user. Use different details.'
+          : msg,
+      )
     } finally {
       setLoading(false)
     }
   }
-
-  const Field = ({
-    icon: Icon,
-    label,
-    value,
-    onChange,
-    placeholder,
-    type = 'text',
-  }: {
-    icon: React.ElementType
-    label: string
-    value: string
-    onChange: (v: string) => void
-    placeholder: string
-    type?: string
-  }) => (
-    <div className='space-y-1.5'>
-      <label className='text-[10px] font-black uppercase tracking-widest text-slate-400'>
-        {label}
-      </label>
-      <div className='relative'>
-        <Icon
-          className='absolute left-3 top-1/2 -translate-y-1/2 text-slate-400'
-          size={15}
-        />
-        <input
-          type={type}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
-          className='w-full h-11 pl-9 pr-3 rounded-lg bg-slate-50 border border-transparent focus:border-[#002EFF]/30 focus:bg-white outline-none text-sm font-medium transition-all'
-        />
-      </div>
-    </div>
-  )
 
   return (
     <div className='max-w-2xl mx-auto'>
