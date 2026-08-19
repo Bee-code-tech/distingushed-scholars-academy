@@ -638,4 +638,40 @@ export const dsaApi = {
         .then((r) => handleResponse<{ data?: unknown }>(r))
         .then((r) => (r as { data?: unknown }).data ?? r),
   },
+
+  // Announcements. The backend supports GET (server-filtered: a student sees
+  // global + their track) and POST (tutor/admin broadcast). There is no delete
+  // or read-state endpoint, so read tracking stays client-side.
+  announcements: {
+    // GET /announcements?scope=&track= — students get their relevant set
+    // server-side; tutors/admin can filter.
+    list: (
+      params: { scope?: string; track?: string } = {},
+      token?: string,
+    ) => {
+      const qs = new URLSearchParams()
+      if (params.scope) qs.set('scope', params.scope)
+      if (params.track) qs.set('track', params.track)
+      const q = qs.toString()
+      return fetch(`${BASE_URL}/announcements${q ? `?${q}` : ''}`, {
+        headers: getHeaders(token),
+      })
+        .then((r) =>
+          handleResponse<
+            Record<string, unknown>[] | { data?: Record<string, unknown>[] }
+          >(r),
+        )
+        .then((res) => (Array.isArray(res) ? res : (res?.data ?? [])))
+    },
+
+    // POST /announcements (tutor / admin). scope 'global' | 'track' (+ track).
+    create: (body: Record<string, unknown>, token?: string) =>
+      fetch(`${BASE_URL}/announcements`, {
+        method: 'POST',
+        headers: getHeaders(token),
+        body: JSON.stringify(body),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+  },
 }
