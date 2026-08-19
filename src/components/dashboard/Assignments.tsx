@@ -15,6 +15,7 @@ import {
   ChevronUp,
   BookOpen,
   Users,
+  Paperclip,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -32,6 +33,7 @@ import {
 import { getUser, getToken } from '@/lib/auth'
 import { isDemoToken } from '@/lib/demoAccounts'
 import { dsaApi } from '@/lib/api'
+import { uploadToCloudinary, cloudinaryConfigured } from '@/lib/cloudinary'
 import { normaliseTrack } from '@/lib/studentProfile'
 import type { Assignment, Submission, SubmissionStatus } from '@/lib/types'
 
@@ -742,7 +744,29 @@ function StudentAssignmentCard({
   const [fileUrl, setFileUrl] = useState(mine?.fileUrl ?? '')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [uploadingFile, setUploadingFile] = useState(false)
+  const [uploadNote, setUploadNote] = useState('')
   const d = dueLabel(assignment.dueDate)
+
+  const onPickFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setUploadNote('')
+    setError('')
+    setUploadingFile(true)
+    try {
+      const { url } = await uploadToCloudinary(file, 'submissions')
+      setFileUrl(url)
+      setUploadNote('File attached ✓')
+    } catch (err) {
+      setUploadNote(
+        err instanceof Error ? err.message : 'Upload unavailable — paste a link.',
+      )
+    } finally {
+      setUploadingFile(false)
+    }
+  }
   // Live backend allows one submission per assignment, so lock once submitted.
   const locked = mine?.status === 'graded' || (live && !!mine)
 
@@ -875,6 +899,29 @@ function StudentAssignmentCard({
                 rows={3}
                 className='w-full px-3 py-2 rounded-lg bg-slate-50 border border-transparent focus:border-[#002EFF]/30 focus:bg-white outline-none text-sm font-medium resize-none'
               />
+              {cloudinaryConfigured() && (
+                <div className='flex items-center gap-2 flex-wrap'>
+                  <label className='inline-flex items-center gap-2 h-11 px-4 rounded-lg bg-slate-100 hover:bg-slate-200 cursor-pointer text-[11px] font-black uppercase text-slate-600 transition-colors'>
+                    {uploadingFile ? (
+                      <Loader2 size={14} className='animate-spin' />
+                    ) : (
+                      <Paperclip size={14} />
+                    )}
+                    {uploadingFile ? 'Uploading…' : 'Attach file'}
+                    <input
+                      type='file'
+                      onChange={onPickFile}
+                      disabled={uploadingFile}
+                      className='hidden'
+                    />
+                  </label>
+                  {uploadNote && (
+                    <span className='text-[10px] font-bold text-slate-500 flex-1 min-w-[140px]'>
+                      {uploadNote}
+                    </span>
+                  )}
+                </div>
+              )}
               <input
                 value={fileUrl}
                 onChange={(e) => setFileUrl(e.target.value)}

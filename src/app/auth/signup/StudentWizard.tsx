@@ -23,6 +23,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { dsaApi, isBackendUnreachable } from '@/lib/api'
+import { uploadToCloudinary, cloudinaryConfigured } from '@/lib/cloudinary'
 import { rememberEnrolmentChoice } from '@/lib/studentProfile'
 import {
   GENDERS,
@@ -106,6 +107,7 @@ export default function StudentWizard() {
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState('')
   const [error, setError] = useState('')
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -136,13 +138,32 @@ export default function StudentWizard() {
     setStep((s) => Math.max(1, s - 1))
   }
 
-  const handlePassport = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePassport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
+    e.target.value = ''
     if (!file) return
     if (!file.type.startsWith('image/'))
       return form.setError('passport', { message: 'Choose an image file' })
     if (file.size > 2 * 1024 * 1024)
       return form.setError('passport', { message: 'Image must be under 2MB' })
+    form.clearErrors('passport')
+    // Prefer a hosted URL so the passport isn't a large base64 string (which the
+    // backend's ~100KB body limit would reject on register).
+    if (cloudinaryConfigured()) {
+      setUploadingPhoto(true)
+      try {
+        const { url } = await uploadToCloudinary(file, 'passports')
+        setValue('passport', url)
+        return
+      } catch (err) {
+        form.setError('passport', {
+          message: err instanceof Error ? err.message : 'Upload failed',
+        })
+        return
+      } finally {
+        setUploadingPhoto(false)
+      }
+    }
     const reader = new FileReader()
     reader.onloadend = () => setValue('passport', reader.result as string)
     reader.readAsDataURL(file)
@@ -451,6 +472,7 @@ export default function StudentWizard() {
                     <Trash2 size={11} /> Remove
                   </button>
                 )}
+                {uploadingPhoto && <p className='text-[10px] font-bold text-[#002EFF]'>Uploading photo…</p>}
                 {errors.passport && <p className='text-[10px] font-bold text-rose-500'>{errors.passport.message as string}</p>}
               </div>
 
