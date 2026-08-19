@@ -31,7 +31,8 @@ import {
 } from '@/lib/coursesStore'
 import { getUser, getToken } from '@/lib/auth'
 import { isDemoToken } from '@/lib/demoAccounts'
-import { dsaApi, uploadFile } from '@/lib/api'
+import { dsaApi } from '@/lib/api'
+import { uploadToCloudinary, cloudinaryConfigured } from '@/lib/cloudinary'
 import { normaliseTrack } from '@/lib/studentProfile'
 import type { CourseMaterial, MaterialType } from '@/lib/types'
 
@@ -159,12 +160,12 @@ function TutorMaterials() {
     setError('')
     setUploading(true)
     try {
-      const hosted = await uploadFile(file, 'materials')
+      const { url: hosted } = await uploadToCloudinary(file, 'materials')
       setUrl(hosted)
       if (!title.trim()) setTitle(file.name.replace(/\.[^.]+$/, ''))
-      setUploadNote('File uploaded.')
+      setUploadNote('File uploaded ✓')
     } catch (err) {
-      // Storage not configured yet — the URL field stays for a pasted link.
+      // Not configured / failed — the URL field stays for a pasted link.
       setUploadNote(
         err instanceof Error ? err.message : 'Upload unavailable — paste a link.',
       )
@@ -399,11 +400,20 @@ function TutorMaterials() {
           </button>
         </form>
         <p className='text-[10px] font-medium text-slate-400 mt-3 leading-relaxed'>
-          <span className='font-black text-slate-500'>Adding a PDF or video?</span>{' '}
-          Upload it to Google Drive, Dropbox or OneDrive, set sharing to
-          “anyone with the link”, and paste that link in the URL box above.
-          In-app file upload turns on automatically once the server enables file
-          storage.
+          {cloudinaryConfigured() ? (
+            <>
+              <span className='font-black text-slate-500'>Adding a PDF or video?</span>{' '}
+              Use <span className='font-black'>Upload file</span> above to add it
+              directly, or paste any hosted link in the URL box.
+            </>
+          ) : (
+            <>
+              <span className='font-black text-slate-500'>Adding a PDF or video?</span>{' '}
+              Upload it to Google Drive, Dropbox or OneDrive, set sharing to
+              “anyone with the link”, and paste that link in the URL box above.
+              (Direct upload turns on once Cloudinary is configured.)
+            </>
+          )}
         </p>
       </Card>
 

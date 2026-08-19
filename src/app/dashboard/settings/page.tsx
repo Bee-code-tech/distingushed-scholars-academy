@@ -25,6 +25,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { dsaApi, isBackendUnreachable } from '@/lib/api'
 import { getUser, getToken, setUser } from '@/lib/auth'
 import { isDemoToken } from '@/lib/demoAccounts'
+import { uploadToCloudinary, cloudinaryConfigured } from '@/lib/cloudinary'
 import type { User as DsaUser } from '@/lib/types'
 
 export default function SettingsView() {
@@ -89,13 +90,32 @@ export default function SettingsView() {
     }
   }, [])
 
-  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageChange = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
     const file = event.target.files?.[0]
-    if (file) {
-      const reader = new FileReader()
-      reader.onloadend = () => setProfileImage(reader.result as string)
-      reader.readAsDataURL(file)
+    event.target.value = ''
+    if (!file) return
+    // Prefer a real hosted URL (Cloudinary) so profilePic stays small — base64
+    // avatars over ~100KB are rejected by the backend's body limit on save.
+    if (cloudinaryConfigured()) {
+      setSaveMsg('')
+      setSaveErr('')
+      try {
+        const { url } = await uploadToCloudinary(file, 'avatars')
+        setProfileImage(url)
+        return
+      } catch (err) {
+        setSaveErr(
+          err instanceof Error ? err.message : 'Could not upload the image.',
+        )
+        return
+      }
     }
+    // No Cloudinary yet — local preview only (kept small on save is your call).
+    const reader = new FileReader()
+    reader.onloadend = () => setProfileImage(reader.result as string)
+    reader.readAsDataURL(file)
   }
 
   const handleSaveChanges = async () => {
