@@ -30,6 +30,45 @@ import Announcements from '@/components/dashboard/Announcements'
 import { getStudents, type StoredStudent } from '@/lib/studentsStore'
 import { getCourses, categoryForTrack, getCoursesForTutor } from '@/lib/coursesStore'
 import { getAssignments, getSubmissions } from '@/lib/assignmentsStore'
+import { getToken } from '@/lib/auth'
+import { isDemoToken } from '@/lib/demoAccounts'
+import { dsaApi } from '@/lib/api'
+
+function isLive(): boolean {
+  const t = getToken()
+  return !!t && !isDemoToken(t)
+}
+
+const asNum = (v: unknown): number | undefined =>
+  typeof v === 'number' && !Number.isNaN(v) ? v : undefined
+
+const TRACK_LABEL: Record<string, string> = {
+  jamb: 'JAMB',
+  waec: 'WAEC',
+  postutme: 'Post-UTME',
+}
+
+/** Map a live /tutors/me/students row to the roster row the table renders. */
+function mapRosterStudent(s: Record<string, unknown>): StoredStudent {
+  const track = String(s.examTrack ?? s.level ?? '')
+  const mode = String(s.learningMode ?? s.studyMode ?? '')
+  return {
+    key: String(s.id ?? s._id ?? ''),
+    name: String(s.fullname ?? s.fullName ?? 'Student'),
+    track: TRACK_LABEL[track] ?? (track || '—'),
+    mode: mode === 'physical' || mode === 'online' ? mode : undefined,
+    avg: asNum(s.averageScore) ?? asNum(s.avg),
+    progress: asNum(s.progressPercent) ?? asNum(s.progress),
+    isNew: false,
+  }
+}
+
+type TutorStats = {
+  students: number
+  courses: number
+  assignments: number
+  toGrade: number
+}
 
 const NAV: NavItem[] = [
   { key: 'overview', label: 'Overview', icon: LayoutDashboard },
@@ -66,10 +105,75 @@ function TrackBadge({ track }: { track: string }) {
 export default function TutorDashboard() {
   const { user, loading, logout } = useDashboardSession('tutor')
   const [view, setView] = useState('overview')
-  // Loaded on the client (localStorage) — includes any student registered on
-  // this browser, so the roster reflects real sign-ups.
-  const [students, setStudents] = useState<StoredStudent[]>([])
-  useEffect(() => setStudents(getStudents()), [])
+  // Live-first: a real JWT reads the tutor roster + overview (GET
+  // /tutors/me/students, /tutors/me/analytics); demo/offline falls back to the
+  // local stores keyed off the tutor's assigned courses.
+  const [roster, setRoster] = useState<StoredStudent[]>([])
+  const [stats, setStats] = useState<TutorStats>({
+    students: 0,
+    courses: 0,
+    assignments: 0,
+    toGrade: 0,
+  })
+  const [live, setLive] = useState(false)
+
+  useEffect(() => {
+    if (!user) return
+    let cancelled = false
+    const name = user.fullName || user.username || 'Tutor'
+    ;(async () => {
+      if (isLive()) {
+        try {
+          const [ov, rosterRaw] = await Promise.all([
+            dsaApi.analytics.tutorOverview() as Promise<Record<string, unknown>>,
+            dsaApi.analytics.tutorStudents() as Promise<Record<string, unknown>[]>,
+          ])
+          if (cancelled) return
+          const mapped = rosterRaw.map(mapRosterStudent)
+          setRoster(mapped)
+          setStats({
+            students: asNum(ov.studentsCount) ?? mapped.length,
+            courses: asNum(ov.coursesCount) ?? 0,
+            assignments: asNum(ov.assignmentsCount) ?? 0,
+            toGrade: asNum(ov.toGradeCount) ?? 0,
+          })
+          setLive(true)
+          return
+        } catch {
+          /* fall through to local */
+        }
+      }
+      if (cancelled) return
+      const students = getStudents()
+      const myCourseCats = new Set(
+        getCoursesForTutor(user.username, name).map((c) => c.category),
+      )
+      const myStudents = myCourseCats.size
+        ? students.filter((s) => myCourseCats.has(categoryForTrack(s.track)))
+        : students
+      let totalAssignments = 0
+      let pendingGrading = 0
+      getCourses().forEach((c) =>
+        getAssignments(c.id).forEach((a) => {
+          totalAssignments++
+          getSubmissions(a.id).forEach((s) => {
+            if (s.status !== 'graded') pendingGrading++
+          })
+        }),
+      )
+      setRoster(myStudents)
+      setStats({
+        students: myStudents.length,
+        courses: getCourses().length,
+        assignments: totalAssignments,
+        toGrade: pendingGrading,
+      })
+      setLive(false)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [user])
 
   if (loading || !user) {
     return (
@@ -85,26 +189,9 @@ export default function TutorDashboard() {
   const name = user.fullName || user.username || 'Tutor'
   // Drop any "(Tutor)" suffix demo names carry, and any leading title.
   const greeting = name.replace(/\s*\(.*\)$/, '').replace(/^(Mr|Mrs|Ms|Dr)\.?\s+/i, '')
-
-  // Students "doing this tutor's courses" = students whose category matches a
-  // category of a course assigned to this tutor. If none assigned yet, show all.
-  const myCourseCats = new Set(
-    getCoursesForTutor(user.username, name).map((c) => c.category),
-  )
-  const myStudents = myCourseCats.size
-    ? students.filter((s) => myCourseCats.has(categoryForTrack(s.track)))
-    : students
-  // Assignment metrics from the store (replaces the old quiz mock).
-  let totalAssignments = 0
-  let pendingGrading = 0
-  getCourses().forEach((c) =>
-    getAssignments(c.id).forEach((a) => {
-      totalAssignments++
-      getSubmissions(a.id).forEach((s) => {
-        if (s.status !== 'graded') pendingGrading++
-      })
-    }),
-  )
+  // Roster + counts come from the loader effect above (live or local fallback).
+  const myStudents = roster
+  const pendingGrading = stats.toGrade
 
   return (
     <DashboardShell
@@ -129,10 +216,10 @@ export default function TutorDashboard() {
           </section>
 
           <div className='grid grid-cols-2 md:grid-cols-4 gap-4'>
-            <StatTile label='My Students' value={myStudents.length} icon={Users} tint='bg-blue-50 text-blue-600' />
-            <StatTile label='Courses' value={getCourses().length} icon={BookOpen} tint='bg-emerald-50 text-emerald-600' />
-            <StatTile label='Assignments' value={totalAssignments} icon={ClipboardList} tint='bg-amber-50 text-amber-600' />
-            <StatTile label='To Grade' value={pendingGrading} icon={CheckCircle2} tint='bg-rose-50 text-rose-600' />
+            <StatTile label='My Students' value={stats.students} icon={Users} tint='bg-blue-50 text-blue-600' />
+            <StatTile label='Courses' value={stats.courses} icon={BookOpen} tint='bg-emerald-50 text-emerald-600' />
+            <StatTile label='Assignments' value={stats.assignments} icon={ClipboardList} tint='bg-amber-50 text-amber-600' />
+            <StatTile label='To Grade' value={stats.toGrade} icon={CheckCircle2} tint='bg-rose-50 text-rose-600' />
           </div>
 
           <Card className='p-6 rounded-3xl border-none shadow-sm bg-white'>
@@ -159,7 +246,14 @@ export default function TutorDashboard() {
 
       {view === 'students' && (
         <div className='space-y-4'>
-          <h2 className='text-2xl font-black text-[#002EFF] italic uppercase'>My Students</h2>
+          <div className='flex items-center gap-2'>
+            <h2 className='text-2xl font-black text-[#002EFF] italic uppercase'>My Students</h2>
+            <Badge
+              className={`text-[8px] font-black ${live ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-500'}`}
+            >
+              {live ? 'Live' : 'Local'}
+            </Badge>
+          </div>
           <Card className='rounded-3xl border-none shadow-sm bg-white overflow-hidden'>
             <div className='grid grid-cols-12 px-5 py-3 bg-slate-50 text-[9px] font-black uppercase text-gray-400'>
               <span className='col-span-4'>Student</span>
