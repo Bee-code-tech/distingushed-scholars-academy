@@ -604,4 +604,38 @@ export const dsaApi = {
         )
         .then((res) => (Array.isArray(res) ? res : (res?.data ?? []))),
   },
+
+  // Analytics — computed from grades, enrollments, submissions & attendance
+  // (docs/analytics.md). Students read their own; tutors (or admin) read theirs.
+  analytics: {
+    // GET /analytics/me (student).
+    me: (token?: string) =>
+      fetch(`${BASE_URL}/analytics/me`, { headers: getHeaders(token) })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+
+    // GET /tutors/me/analytics (tutor / admin) — dashboard overview.
+    tutorOverview: (token?: string) =>
+      fetch(`${BASE_URL}/tutors/me/analytics`, { headers: getHeaders(token) })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+
+    // GET /tutors/me/students (tutor / admin) — roster with avg + progress.
+    tutorStudents: (token?: string) =>
+      fetch(`${BASE_URL}/tutors/me/students`, { headers: getHeaders(token) })
+        .then((r) =>
+          handleResponse<
+            Record<string, unknown>[] | { data?: Record<string, unknown>[] }
+          >(r),
+        )
+        .then((res) => (Array.isArray(res) ? res : (res?.data ?? []))),
+
+    // GET /courses/:id/analytics (owner tutor / admin) — one course.
+    course: (courseId: string, token?: string) =>
+      fetch(`${BASE_URL}/courses/${encodeURIComponent(courseId)}/analytics`, {
+        headers: getHeaders(token),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+  },
 }
