@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/sheet'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
+import NotificationBell from '@/components/dashboard/NotificationBell'
 
 export interface NavItem {
   key: string
@@ -141,6 +142,7 @@ export default function DashboardShell({
           </div>
 
           <div className='flex items-center gap-3 ml-auto'>
+            <NotificationBell />
             <div className='text-right hidden sm:block'>
               <p className='text-[10px] font-black text-zinc-900 leading-none'>
                 {userName}

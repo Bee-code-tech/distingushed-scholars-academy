@@ -683,4 +683,36 @@ export const dsaApi = {
         .then((r) => handleResponse<{ data?: unknown }>(r))
         .then((r) => (r as { data?: unknown }).data ?? r),
   },
+
+  // Notifications — a per-user inbox with server-side read state. Populated by
+  // the backend from announcements, attendance opens, grades, etc.
+  notifications: {
+    // GET /notifications — the logged-in user's notifications, newest first.
+    list: (token?: string) =>
+      fetch(`${BASE_URL}/notifications`, { headers: getHeaders(token) })
+        .then((r) =>
+          handleResponse<
+            Record<string, unknown>[] | { data?: Record<string, unknown>[] }
+          >(r),
+        )
+        .then((res) => (Array.isArray(res) ? res : (res?.data ?? []))),
+
+    // PATCH /notifications/:id/read — mark one read.
+    markRead: (id: string, token?: string) =>
+      fetch(`${BASE_URL}/notifications/${encodeURIComponent(id)}/read`, {
+        method: 'PATCH',
+        headers: getHeaders(token),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+
+    // PATCH /notifications/read-all — mark every notification read.
+    markAllRead: (token?: string) =>
+      fetch(`${BASE_URL}/notifications/read-all`, {
+        method: 'PATCH',
+        headers: getHeaders(token),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+  },
 }

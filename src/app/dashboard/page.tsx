@@ -363,6 +363,7 @@ import Announcements from '@/components/dashboard/Announcements'
 import LiveClasses from '@/components/dashboard/LiveClasses'
 import Analytics from '@/components/dashboard/Analytics'
 import MyCourses from '@/components/dashboard/MyCourses'
+import NotificationBell from '@/components/dashboard/NotificationBell'
 
 type ViewState =
   | 'overview'
@@ -647,14 +648,7 @@ export default function AcademyDashboard() {
           </div>
 
           <div className='flex items-center gap-3'>
-            <Button
-              variant='ghost'
-              size='icon'
-              className='relative text-zinc-400 hover:text-blue-600'
-            >
-              <Bell size={18} />
-              <span className='absolute top-2 right-2 w-2 h-2 bg-rose-500 rounded-full border-2 border-white' />
-            </Button>
+            <NotificationBell />
 
             <div className='flex items-center gap-3 pl-3 border-l border-zinc-200'>
               <div className='text-right hidden sm:block'>
