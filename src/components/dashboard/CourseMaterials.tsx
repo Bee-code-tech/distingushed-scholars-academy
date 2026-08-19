@@ -31,7 +31,7 @@ import {
 } from '@/lib/coursesStore'
 import { getUser, getToken } from '@/lib/auth'
 import { isDemoToken } from '@/lib/demoAccounts'
-import { dsaApi } from '@/lib/api'
+import { dsaApi, uploadFile } from '@/lib/api'
 import { normaliseTrack } from '@/lib/studentProfile'
 import type { CourseMaterial, MaterialType } from '@/lib/types'
 
@@ -148,6 +148,30 @@ function TutorMaterials() {
   const [downloadable, setDownloadable] = useState(true)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [uploadNote, setUploadNote] = useState('')
+
+  const onPickFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = '' // allow re-picking the same file
+    if (!file) return
+    setUploadNote('')
+    setError('')
+    setUploading(true)
+    try {
+      const hosted = await uploadFile(file, 'materials')
+      setUrl(hosted)
+      if (!title.trim()) setTitle(file.name.replace(/\.[^.]+$/, ''))
+      setUploadNote('File uploaded.')
+    } catch (err) {
+      // Storage not configured yet — the URL field stays for a pasted link.
+      setUploadNote(
+        err instanceof Error ? err.message : 'Upload unavailable — paste a link.',
+      )
+    } finally {
+      setUploading(false)
+    }
+  }
 
   // Load the tutor's courses.
   useEffect(() => {
@@ -323,6 +347,27 @@ function TutorMaterials() {
               </option>
             ))}
           </select>
+          <div className='sm:col-span-2 flex items-center gap-2 flex-wrap'>
+            <label className='inline-flex items-center gap-2 h-11 px-4 rounded-lg bg-slate-100 hover:bg-slate-200 cursor-pointer text-[11px] font-black uppercase text-slate-600 transition-colors'>
+              {uploading ? (
+                <Loader2 size={14} className='animate-spin' />
+              ) : (
+                <Plus size={14} />
+              )}
+              {uploading ? 'Uploading…' : 'Upload file'}
+              <input
+                type='file'
+                onChange={onPickFile}
+                disabled={uploading}
+                className='hidden'
+              />
+            </label>
+            {uploadNote && (
+              <span className='text-[10px] font-bold text-slate-500 flex-1 min-w-[150px]'>
+                {uploadNote}
+              </span>
+            )}
+          </div>
           <input
             value={url}
             onChange={(e) => setUrl(e.target.value)}

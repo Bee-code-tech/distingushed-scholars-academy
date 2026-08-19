@@ -13,6 +13,7 @@ import {
   BookOpen,
   ClipboardList,
   Megaphone,
+  Award,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -25,6 +26,7 @@ import ReadOnlyTimetable from '@/components/dashboard/ReadOnlyTimetable'
 import LiveClasses from '@/components/dashboard/LiveClasses'
 import CourseMaterials from '@/components/dashboard/CourseMaterials'
 import Assignments from '@/components/dashboard/Assignments'
+import Gradebook from '@/components/dashboard/Gradebook'
 import Analytics from '@/components/dashboard/Analytics'
 import Announcements from '@/components/dashboard/Announcements'
 import { getStudents, type StoredStudent } from '@/lib/studentsStore'
@@ -75,6 +77,7 @@ const NAV: NavItem[] = [
   { key: 'students', label: 'My Students', icon: Users },
   { key: 'materials', label: 'Course Materials', icon: BookOpen },
   { key: 'assignments', label: 'Assignments', icon: ClipboardList },
+  { key: 'gradebook', label: 'Gradebook', icon: Award },
   { key: 'announcements', label: 'Announcements', icon: Megaphone },
   { key: 'attendance', label: 'Take Attendance', icon: CalendarCheck },
   { key: 'live', label: 'Live Classes', icon: Video },
@@ -301,6 +304,8 @@ export default function TutorDashboard() {
       {view === 'materials' && <CourseMaterials mode='tutor' />}
 
       {view === 'assignments' && <Assignments mode='tutor' />}
+
+      {view === 'gradebook' && <Gradebook />}
 
       {view === 'announcements' && <Announcements mode='tutor' />}
 

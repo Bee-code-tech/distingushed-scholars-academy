@@ -612,6 +612,44 @@ export const dsaApi = {
           >(r),
         )
         .then((res) => (Array.isArray(res) ? res : (res?.data ?? []))),
+
+    // GET /courses/:id/grades (owner tutor / admin) — the course gradebook
+    // (assignment + manual grades) with student info.
+    courseGrades: (courseId: string, token?: string) =>
+      fetch(`${BASE_URL}/courses/${encodeURIComponent(courseId)}/grades`, {
+        headers: getHeaders(token),
+      })
+        .then((r) =>
+          handleResponse<
+            Record<string, unknown>[] | { data?: Record<string, unknown>[] }
+          >(r),
+        )
+        .then((res) => (Array.isArray(res) ? res : (res?.data ?? []))),
+
+    // POST /courses/:id/grades (owner tutor / admin) — record a manual grade
+    // ({studentId,title,score,maxScore,feedback}) or a batch ({grades:[...]}).
+    recordGrades: (
+      courseId: string,
+      body: Record<string, unknown>,
+      token?: string,
+    ) =>
+      fetch(`${BASE_URL}/courses/${encodeURIComponent(courseId)}/grades`, {
+        method: 'POST',
+        headers: getHeaders(token),
+        body: JSON.stringify(body),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+
+    // PUT /grades/:id (owner tutor / admin) — correct a grade.
+    updateGrade: (id: string, body: Record<string, unknown>, token?: string) =>
+      fetch(`${BASE_URL}/grades/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        headers: getHeaders(token),
+        body: JSON.stringify(body),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
   },
 
   // Analytics — computed from grades, enrollments, submissions & attendance
@@ -715,4 +753,61 @@ export const dsaApi = {
         .then((r) => handleResponse<{ data?: unknown }>(r))
         .then((r) => (r as { data?: unknown }).data ?? r),
   },
+
+  // Uploads. POST /uploads/sign returns a signed target. NOTE: the backend's
+  // object storage is a stub right now — it returns `uploadUrl: null` and asks
+  // callers to pass an external URL instead (see uploadFile below).
+  uploads: {
+    sign: (
+      body: { filename: string; contentType?: string; folder?: string },
+      token?: string,
+    ) =>
+      fetch(`${BASE_URL}/uploads/sign`, {
+        method: 'POST',
+        headers: getHeaders(token),
+        body: JSON.stringify(body),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+  },
+}
+
+/**
+ * Upload a file via the signed-URL flow and return its hosted URL.
+ *
+ * Forward-compatible: it asks the backend for a signed PUT target and uploads
+ * to it. TODAY the backend's storage is not configured (`uploadUrl` is null),
+ * so this throws a clear, actionable error and callers should fall back to a
+ * pasted external link. The moment object storage is enabled, this starts
+ * working with no further code change.
+ */
+export async function uploadFile(
+  file: File,
+  folder = 'uploads',
+  token?: string,
+): Promise<string> {
+  const meta = (await dsaApi.uploads.sign(
+    {
+      filename: file.name,
+      contentType: file.type || 'application/octet-stream',
+      folder,
+    },
+    token,
+  )) as { uploadUrl?: string | null; fileUrl?: string; message?: string }
+
+  if (!meta.uploadUrl) {
+    throw new Error(
+      'Direct file upload is not available yet (server storage not configured). Please paste an external file link instead.',
+    )
+  }
+
+  const put = await fetch(meta.uploadUrl, {
+    method: 'PUT',
+    headers: { 'Content-Type': file.type || 'application/octet-stream' },
+    body: file,
+  })
+  if (!put.ok) {
+    throw new Error('Upload failed. Please try again or paste a link instead.')
+  }
+  return meta.fileUrl || ''
 }
