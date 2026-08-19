@@ -350,4 +350,105 @@ export const dsaApi = {
         .then((r) => handleResponse<{ data?: unknown }>(r))
         .then((r) => (r as { data?: unknown }).data ?? r),
   },
+
+  // Courses & materials (docs/courses.md). Admin create/update/delete live in
+  // admin-api.ts (adminApi, owned by the admin work); these are the student-
+  // and tutor-facing reads plus enrollment, material listing, and completion.
+  // List endpoints unwrap `{ success, count, data }` to the array; single-object
+  // endpoints unwrap `{ success, data }` to the object.
+  courses: {
+    // GET /courses?category=&tutorId=  (any authed user). tutorId may be "me".
+    list: (
+      params: { category?: string; tutorId?: string } = {},
+      token?: string,
+    ) => {
+      const qs = new URLSearchParams()
+      if (params.category) qs.set('category', params.category)
+      if (params.tutorId) qs.set('tutorId', params.tutorId)
+      const q = qs.toString()
+      return fetch(`${BASE_URL}/courses${q ? `?${q}` : ''}`, {
+        headers: getHeaders(token),
+      })
+        .then((r) =>
+          handleResponse<
+            Record<string, unknown>[] | { data?: Record<string, unknown>[] }
+          >(r),
+        )
+        .then((res) => (Array.isArray(res) ? res : (res?.data ?? [])))
+    },
+
+    // GET /courses/mine (student) — published courses for the student's
+    // category, each with progressPercent and a nested tutor.
+    mine: (token?: string) =>
+      fetch(`${BASE_URL}/courses/mine`, { headers: getHeaders(token) })
+        .then((r) =>
+          handleResponse<
+            Record<string, unknown>[] | { data?: Record<string, unknown>[] }
+          >(r),
+        )
+        .then((res) => (Array.isArray(res) ? res : (res?.data ?? []))),
+
+    get: (id: string, token?: string) =>
+      fetch(`${BASE_URL}/courses/${encodeURIComponent(id)}`, {
+        headers: getHeaders(token),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+
+    // POST /courses/:id/enroll (student). 409 if already enrolled.
+    enroll: (id: string, token?: string) =>
+      fetch(`${BASE_URL}/courses/${encodeURIComponent(id)}/enroll`, {
+        method: 'POST',
+        headers: getHeaders(token),
+        body: JSON.stringify({}),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+
+    // GET /enrollments/me (student) — enrollments with nested course + tutor.
+    myEnrollments: (token?: string) =>
+      fetch(`${BASE_URL}/enrollments/me`, { headers: getHeaders(token) })
+        .then((r) =>
+          handleResponse<
+            Record<string, unknown>[] | { data?: Record<string, unknown>[] }
+          >(r),
+        )
+        .then((res) => (Array.isArray(res) ? res : (res?.data ?? []))),
+
+    // GET /courses/:id/materials (student / owner tutor / admin).
+    materials: (courseId: string, token?: string) =>
+      fetch(`${BASE_URL}/courses/${encodeURIComponent(courseId)}/materials`, {
+        headers: getHeaders(token),
+      })
+        .then((r) =>
+          handleResponse<
+            Record<string, unknown>[] | { data?: Record<string, unknown>[] }
+          >(r),
+        )
+        .then((res) => (Array.isArray(res) ? res : (res?.data ?? []))),
+
+    // POST /courses/:id/materials (owner tutor / admin).
+    addMaterial: (
+      courseId: string,
+      body: Record<string, unknown>,
+      token?: string,
+    ) =>
+      fetch(`${BASE_URL}/courses/${encodeURIComponent(courseId)}/materials`, {
+        method: 'POST',
+        headers: getHeaders(token),
+        body: JSON.stringify(body),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+
+    // POST /materials/:id/complete (student) — recomputes progressPercent.
+    completeMaterial: (materialId: string, token?: string) =>
+      fetch(`${BASE_URL}/materials/${encodeURIComponent(materialId)}/complete`, {
+        method: 'POST',
+        headers: getHeaders(token),
+        body: JSON.stringify({}),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+  },
 }
