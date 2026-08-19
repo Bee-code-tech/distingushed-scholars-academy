@@ -398,9 +398,12 @@ function TutorMaterials() {
             <Plus size={15} /> {busy ? 'Adding…' : 'Add Material'}
           </button>
         </form>
-        <p className='text-[10px] font-medium text-slate-400 mt-3'>
-          Paste a link for now. Direct file upload arrives when the backend adds
-          storage (<code>POST /uploads/sign</code>).
+        <p className='text-[10px] font-medium text-slate-400 mt-3 leading-relaxed'>
+          <span className='font-black text-slate-500'>Adding a PDF or video?</span>{' '}
+          Upload it to Google Drive, Dropbox or OneDrive, set sharing to
+          “anyone with the link”, and paste that link in the URL box above.
+          In-app file upload turns on automatically once the server enables file
+          storage.
         </p>
       </Card>
 

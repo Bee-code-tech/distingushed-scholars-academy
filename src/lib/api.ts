@@ -797,7 +797,7 @@ export async function uploadFile(
 
   if (!meta.uploadUrl) {
     throw new Error(
-      'Direct file upload is not available yet (server storage not configured). Please paste an external file link instead.',
+      'Direct upload isn’t enabled on the server yet. Host the file (Google Drive, Dropbox, OneDrive…), set it to “anyone with the link”, and paste that link below.',
     )
   }
 
