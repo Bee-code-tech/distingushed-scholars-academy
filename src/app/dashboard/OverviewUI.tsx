@@ -26,8 +26,12 @@ import { getMeetLink } from '@/lib/liveClass'
 import {
   getEffectiveTimetable,
   getNextClass,
+  gridFromApi,
   type NextClass,
 } from '@/lib/timetable'
+import { getToken } from '@/lib/auth'
+import { isDemoToken } from '@/lib/demoAccounts'
+import { dsaApi } from '@/lib/api'
 
 interface OverviewUIProps {
   setView: (view: any) => void
@@ -58,19 +62,66 @@ function SmallStat({ label, value, icon: Icon, color }: any) {
  * online students get a live-class join card. Same slot, different content.
  */
 function ModeCard({ student }: { student: StudentProfile }) {
-  // Google Meet link + next class from the timetable (client-only to avoid a
-  // hydration mismatch — getNextClass reads the current time).
+  // Google Meet link + next class (client-only to avoid a hydration mismatch —
+  // getNextClass reads the current time). Live-first: a real JWT reads the live
+  // timetable (GET /timetable/:track) for the next class and GET
+  // /live-classes/next for the Meet link + join state; demo/offline falls back
+  // to the local stores.
   const [meetLink, setMeetLink] = useState('')
+  const [canJoin, setCanJoin] = useState(false)
+  const [live, setLive] = useState(false)
   const [next, setNext] = useState<NextClass | null>(null)
   useEffect(() => {
-    setMeetLink(getMeetLink(student.track))
-    setNext(
-      getNextClass(getEffectiveTimetable(student.track, student.department)),
-    )
+    let cancelled = false
+    const local = () => {
+      if (cancelled) return
+      setMeetLink(getMeetLink(student.track))
+      setCanJoin(false)
+      setLive(false)
+      setNext(
+        getNextClass(getEffectiveTimetable(student.track, student.department)),
+      )
+    }
+    const t = getToken()
+    if (t && !isDemoToken(t)) {
+      Promise.allSettled([
+        dsaApi.timetable.get(student.track),
+        dsaApi.liveClasses.next(student.track),
+      ])
+        .then(([tt, lc]) => {
+          if (cancelled) return
+          setLive(true)
+          const apiGrid =
+            tt.status === 'fulfilled'
+              ? (tt.value as { grid?: unknown })?.grid
+              : undefined
+          setNext(
+            getNextClass(
+              Array.isArray(apiGrid)
+                ? gridFromApi(apiGrid)
+                : getEffectiveTimetable(student.track, student.department),
+            ),
+          )
+          const d =
+            lc.status === 'fulfilled' && lc.value && typeof lc.value === 'object'
+              ? (lc.value as { meetLink?: string; canJoin?: boolean })
+              : null
+          setMeetLink(d?.meetLink || '')
+          setCanJoin(!!d?.canJoin)
+        })
+        .catch(local)
+    } else local()
+    return () => {
+      cancelled = true
+    }
   }, [student.track, student.department])
 
   const title = next ? `${next.subject}` : 'No class scheduled'
   const timing = next ? `${next.when} · ${next.time}` : 'Check your timetable'
+  // Live: the backend decides join state (status === "live" and a link exists).
+  // Local fallback: any known link is joinable, as before.
+  const joinable = live ? canJoin : !!meetLink
+  const linkUploadedNotLive = live && !!meetLink && !canJoin
 
   if (student.mode === 'physical') {
     return (
@@ -139,7 +190,7 @@ function ModeCard({ student }: { student: StudentProfile }) {
           </span>
         </div>
       </div>
-      {meetLink ? (
+      {joinable ? (
         <a
           href={meetLink}
           target='_blank'
@@ -153,7 +204,8 @@ function ModeCard({ student }: { student: StudentProfile }) {
           disabled
           className='mt-4 bg-slate-200 text-slate-400 font-black rounded-xl text-[10px] h-10 cursor-not-allowed'
         >
-          LINK NOT SET YET <Video className='ml-2' size={14} />
+          {linkUploadedNotLive ? 'WAITING TO GO LIVE' : 'LINK NOT SET YET'}
+          <Video className='ml-2' size={14} />
         </Button>
       )}
     </Card>

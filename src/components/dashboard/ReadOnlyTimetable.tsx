@@ -7,10 +7,15 @@ import {
   DAYS,
   SLOTS,
   getEffectiveTimetable,
+  gridFromApi,
   tintForSubject,
   type TimetableGrid,
 } from '@/lib/timetable'
 import type { ExamTrack } from '@/lib/studentProfile'
+import { Badge } from '@/components/ui/badge'
+import { getToken } from '@/lib/auth'
+import { isDemoToken } from '@/lib/demoAccounts'
+import { dsaApi } from '@/lib/api'
 
 const TRACKS: { id: ExamTrack; label: string }[] = [
   { id: 'jamb', label: 'JAMB' },
@@ -29,7 +34,34 @@ export default function ReadOnlyTimetable({
 }) {
   const [track, setTrack] = useState<ExamTrack>(initialTrack)
   const [grid, setGrid] = useState<TimetableGrid>([])
-  useEffect(() => setGrid(getEffectiveTimetable(track)), [track])
+  const [live, setLive] = useState(false)
+  // Live-first: real JWT reads GET /timetable/:track (transposed to [period]
+  // [day]); demo/offline falls back to the local store.
+  useEffect(() => {
+    let cancelled = false
+    const local = () => {
+      if (cancelled) return
+      setGrid(getEffectiveTimetable(track))
+      setLive(false)
+    }
+    const t = getToken()
+    if (t && !isDemoToken(t)) {
+      dsaApi.timetable
+        .get(track)
+        .then((res) => {
+          if (cancelled) return
+          const apiGrid = (res as { grid?: unknown })?.grid
+          if (Array.isArray(apiGrid)) {
+            setGrid(gridFromApi(apiGrid))
+            setLive(true)
+          } else local()
+        })
+        .catch(local)
+    } else local()
+    return () => {
+      cancelled = true
+    }
+  }, [track])
 
   return (
     <div className='space-y-5 max-w-5xl mx-auto'>
@@ -40,6 +72,11 @@ export default function ReadOnlyTimetable({
           </h2>
           <p className='text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1.5'>
             <Lock size={11} /> View only — scheduled by the admin
+            <Badge
+              className={`text-[8px] font-black ${live ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-500'}`}
+            >
+              {live ? 'Live' : 'Local'}
+            </Badge>
           </p>
         </div>
         <div className='inline-flex gap-1 p-1 bg-slate-100 rounded-xl'>

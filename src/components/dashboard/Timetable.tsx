@@ -9,9 +9,13 @@ import {
   DAYS,
   SLOTS,
   getEffectiveTimetable,
+  gridFromApi,
   tintForSubject,
   type TimetableGrid,
 } from '@/lib/timetable'
+import { getToken } from '@/lib/auth'
+import { isDemoToken } from '@/lib/demoAccounts'
+import { dsaApi } from '@/lib/api'
 
 export default function Timetable({
   track,
@@ -24,10 +28,35 @@ export default function Timetable({
 }) {
   const isOnline = mode === 'online'
 
-  // Loaded on the client so admin/tutor edits (localStorage) are picked up.
+  // Live-first: with a real JWT read GET /timetable/:track (admin-scheduled,
+  // source of truth) and transpose to the UI's [period][day] layout; on
+  // demo/offline fall back to the local store so the preview still works.
   const [grid, setGrid] = useState<TimetableGrid>([])
+  const [live, setLive] = useState(false)
   useEffect(() => {
-    setGrid(getEffectiveTimetable(track, department))
+    let cancelled = false
+    const local = () => {
+      if (cancelled) return
+      setGrid(getEffectiveTimetable(track, department))
+      setLive(false)
+    }
+    const t = getToken()
+    if (t && !isDemoToken(t)) {
+      dsaApi.timetable
+        .get(track)
+        .then((res) => {
+          if (cancelled) return
+          const apiGrid = (res as { grid?: unknown })?.grid
+          if (Array.isArray(apiGrid)) {
+            setGrid(gridFromApi(apiGrid))
+            setLive(true)
+          } else local()
+        })
+        .catch(local)
+    } else local()
+    return () => {
+      cancelled = true
+    }
   }, [track, department])
 
   return (
@@ -41,12 +70,19 @@ export default function Timetable({
             Your weekly class schedule
           </p>
         </div>
-        <Badge
-          className={`text-[9px] font-black flex items-center gap-1 ${isOnline ? 'bg-blue-50 text-[#002EFF]' : 'bg-emerald-50 text-emerald-600'}`}
-        >
-          {isOnline ? <Video size={11} /> : <MapPin size={11} />}
-          {isOnline ? 'Live on DSA Portal' : 'On-Campus'}
-        </Badge>
+        <div className='flex items-center gap-2'>
+          <Badge
+            className={`text-[8px] font-black ${live ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-500'}`}
+          >
+            {live ? 'Live' : 'Local'}
+          </Badge>
+          <Badge
+            className={`text-[9px] font-black flex items-center gap-1 ${isOnline ? 'bg-blue-50 text-[#002EFF]' : 'bg-emerald-50 text-emerald-600'}`}
+          >
+            {isOnline ? <Video size={11} /> : <MapPin size={11} />}
+            {isOnline ? 'Live on DSA Portal' : 'On-Campus'}
+          </Badge>
+        </div>
       </div>
 
       <Card className='rounded-3xl border-none shadow-sm bg-white overflow-x-auto'>

@@ -451,4 +451,42 @@ export const dsaApi = {
         .then((r) => handleResponse<{ data?: unknown }>(r))
         .then((r) => (r as { data?: unknown }).data ?? r),
   },
+
+  // Timetable (docs/timetable.md). The wire grid is [day][period] (6 days x 4
+  // periods); the UI grid is [period][day] — transpose with gridFromApi() in
+  // lib/timetable. Admin/staff edit via adminApi.updateTimetable; this is the
+  // any-authenticated read.
+  timetable: {
+    get: (track: string, token?: string) =>
+      fetch(`${BASE_URL}/timetable/${encodeURIComponent(track)}`, {
+        headers: getHeaders(token),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+  },
+
+  // Live classes (docs/timetable.md §Live Classes). Tutors upload the Meet link
+  // and flip status; students read `next` to drive the Join button.
+  liveClasses: {
+    // GET /live-classes/next?track= (any auth) — { status, canJoin, meetLink? }.
+    next: (track: string, token?: string) =>
+      fetch(`${BASE_URL}/live-classes/next?track=${encodeURIComponent(track)}`, {
+        headers: getHeaders(token),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+
+    // GET /live-classes?track= (any auth) — list of live-class records.
+    list: (track?: string, token?: string) =>
+      fetch(
+        `${BASE_URL}/live-classes${track ? `?track=${encodeURIComponent(track)}` : ''}`,
+        { headers: getHeaders(token) },
+      )
+        .then((r) =>
+          handleResponse<
+            Record<string, unknown>[] | { data?: Record<string, unknown>[] }
+          >(r),
+        )
+        .then((res) => (Array.isArray(res) ? res : (res?.data ?? []))),
+  },
 }

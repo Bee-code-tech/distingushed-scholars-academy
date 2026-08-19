@@ -45,6 +45,23 @@ function subjectsFor(track: ExamTrack, department: Department | null): string[] 
 /** A grid is rows (periods) × columns (days); each cell is a subject string. */
 export type TimetableGrid = string[][]
 
+/**
+ * Convert the backend timetable grid into the UI grid.
+ *
+ * The API stores the grid as `[day][period]` (6 days Mon–Sat × 4 periods, see
+ * docs/timetable.md), but every component here indexes `[period][day]`. This
+ * transposes and pads so a partial/empty API grid still renders a full 4×6 grid.
+ */
+export function gridFromApi(apiGrid: unknown): TimetableGrid {
+  const g = Array.isArray(apiGrid) ? (apiGrid as unknown[][]) : []
+  return SLOTS.map((_, period) =>
+    DAYS.map((_, day) => {
+      const cell = g[day]?.[period]
+      return typeof cell === 'string' ? cell : ''
+    }),
+  )
+}
+
 /** Build the default template by rotating through the track's subjects. */
 export function buildDefaultGrid(
   track: ExamTrack,
