@@ -489,4 +489,119 @@ export const dsaApi = {
         )
         .then((res) => (Array.isArray(res) ? res : (res?.data ?? []))),
   },
+
+  // Assignments, submissions & grades (docs/assignment.md). Assignments are
+  // nested under courses; submissions/grades are standalone. Tutors (or admin)
+  // create + grade on their own courses; students submit + read their own.
+  assignments: {
+    // GET /courses/:id/assignments (enrolled student sees published; owner
+    // tutor / admin see all).
+    listForCourse: (courseId: string, token?: string) =>
+      fetch(`${BASE_URL}/courses/${encodeURIComponent(courseId)}/assignments`, {
+        headers: getHeaders(token),
+      })
+        .then((r) =>
+          handleResponse<
+            Record<string, unknown>[] | { data?: Record<string, unknown>[] }
+          >(r),
+        )
+        .then((res) => (Array.isArray(res) ? res : (res?.data ?? []))),
+
+    // POST /courses/:id/assignments (owner tutor / admin).
+    create: (
+      courseId: string,
+      body: Record<string, unknown>,
+      token?: string,
+    ) =>
+      fetch(`${BASE_URL}/courses/${encodeURIComponent(courseId)}/assignments`, {
+        method: 'POST',
+        headers: getHeaders(token),
+        body: JSON.stringify(body),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+
+    // PUT /assignments/:id (owner tutor / admin).
+    update: (id: string, body: Record<string, unknown>, token?: string) =>
+      fetch(`${BASE_URL}/assignments/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        headers: getHeaders(token),
+        body: JSON.stringify(body),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+
+    // DELETE /assignments/:id (owner tutor / admin) — also deletes submissions.
+    remove: (id: string, token?: string) =>
+      fetch(`${BASE_URL}/assignments/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: getHeaders(token),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+
+    // POST /assignments/:id/submit (student). At least one of text/fileUrl.
+    submit: (
+      assignmentId: string,
+      body: { text?: string; fileUrl?: string },
+      token?: string,
+    ) =>
+      fetch(`${BASE_URL}/assignments/${encodeURIComponent(assignmentId)}/submit`, {
+        method: 'POST',
+        headers: getHeaders(token),
+        body: JSON.stringify(body),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+
+    // GET /assignments/:id/submissions (owner tutor / admin) — for grading.
+    submissions: (assignmentId: string, token?: string) =>
+      fetch(
+        `${BASE_URL}/assignments/${encodeURIComponent(assignmentId)}/submissions`,
+        { headers: getHeaders(token) },
+      )
+        .then((r) =>
+          handleResponse<
+            Record<string, unknown>[] | { data?: Record<string, unknown>[] }
+          >(r),
+        )
+        .then((res) => (Array.isArray(res) ? res : (res?.data ?? []))),
+
+    // GET /submissions/me?assignmentId= (student).
+    mySubmissions: (assignmentId?: string, token?: string) =>
+      fetch(
+        `${BASE_URL}/submissions/me${assignmentId ? `?assignmentId=${encodeURIComponent(assignmentId)}` : ''}`,
+        { headers: getHeaders(token) },
+      )
+        .then((r) =>
+          handleResponse<
+            Record<string, unknown>[] | { data?: Record<string, unknown>[] }
+          >(r),
+        )
+        .then((res) => (Array.isArray(res) ? res : (res?.data ?? []))),
+
+    // PUT /submissions/:id/grade (owner tutor / admin).
+    grade: (
+      submissionId: string,
+      body: { score: number; feedback?: string },
+      token?: string,
+    ) =>
+      fetch(`${BASE_URL}/submissions/${encodeURIComponent(submissionId)}/grade`, {
+        method: 'PUT',
+        headers: getHeaders(token),
+        body: JSON.stringify(body),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+
+    // GET /grades/me (student) — all grades, each with percent.
+    myGrades: (token?: string) =>
+      fetch(`${BASE_URL}/grades/me`, { headers: getHeaders(token) })
+        .then((r) =>
+          handleResponse<
+            Record<string, unknown>[] | { data?: Record<string, unknown>[] }
+          >(r),
+        )
+        .then((res) => (Array.isArray(res) ? res : (res?.data ?? []))),
+  },
 }
