@@ -76,7 +76,12 @@ export default function NotificationBell() {
   const [open, setOpen] = useState(false)
   const [items, setItems] = useState<Notif[]>([])
   const [loading, setLoading] = useState(false)
+  // Gate rendering until mounted so SSR and the first client render match
+  // (isLive() reads localStorage, which is server-empty → hydration mismatch).
+  const [mounted, setMounted] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => setMounted(true), [])
 
   const load = useCallback(async () => {
     if (!isLive()) return
@@ -136,8 +141,9 @@ export default function NotificationBell() {
     }
   }
 
-  // Nothing to show for sessions without a real backend inbox.
-  if (!isLive()) return null
+  // Nothing to show before mount (SSR parity) or for sessions without a real
+  // backend inbox.
+  if (!mounted || !isLive()) return null
 
   return (
     <div className='relative' ref={ref}>
