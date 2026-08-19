@@ -497,6 +497,31 @@ export const dsaApi = {
           >(r),
         )
         .then((res) => (Array.isArray(res) ? res : (res?.data ?? []))),
+
+    // PUT /live-classes/:track/link (tutor / admin) — upload the Meet link.
+    uploadLink: (track: string, meetLink: string, token?: string) =>
+      fetch(`${BASE_URL}/live-classes/${encodeURIComponent(track)}/link`, {
+        method: 'PUT',
+        headers: getHeaders(token),
+        body: JSON.stringify({ meetLink }),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+
+    // PATCH /live-classes/:track/status (tutor / admin) — go live / end.
+    // Going live requires a meetLink; ending accepts an optional recordingUrl.
+    setStatus: (
+      track: string,
+      body: { status: string; recordingUrl?: string },
+      token?: string,
+    ) =>
+      fetch(`${BASE_URL}/live-classes/${encodeURIComponent(track)}/status`, {
+        method: 'PATCH',
+        headers: getHeaders(token),
+        body: JSON.stringify(body),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
   },
 
   // Assignments, submissions & grades (docs/assignment.md). Assignments are

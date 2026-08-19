@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import {
   Video,
   Save,
@@ -22,8 +22,15 @@ import {
   setLiveStatus,
   type LiveStatus,
 } from '@/lib/liveClass'
-import { getEffectiveTimetable, getNextClass } from '@/lib/timetable'
-import { getUser } from '@/lib/auth'
+import {
+  getEffectiveTimetable,
+  getNextClass,
+  gridFromApi,
+  type NextClass,
+} from '@/lib/timetable'
+import { getUser, getToken } from '@/lib/auth'
+import { isDemoToken } from '@/lib/demoAccounts'
+import { dsaApi } from '@/lib/api'
 import { normaliseTrack, EXAM_TRACKS } from '@/lib/studentProfile'
 import type { ExamTrack } from '@/lib/studentProfile'
 
@@ -33,21 +40,84 @@ const TRACKS: { id: ExamTrack; label: string }[] = [
   { id: 'postutme', label: 'Post-UTME' },
 ]
 
+function isLive(): boolean {
+  const t = getToken()
+  return !!t && !isDemoToken(t)
+}
+
+function normStatus(s: unknown): LiveStatus {
+  return s === 'live' || s === 'ended' ? s : 'scheduled'
+}
+
+function LiveBadge({ live }: { live: boolean }) {
+  return (
+    <Badge
+      className={`text-[8px] font-black shrink-0 ${live ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-500'}`}
+    >
+      {live ? 'Live' : 'Local'}
+    </Badge>
+  )
+}
+
+// Next class from the live timetable (transposed) when signed in, else local.
 function NextClassCard({ track }: { track: ExamTrack }) {
-  const next = getNextClass(getEffectiveTimetable(track))
+  const [next, setNext] = useState<NextClass | null | undefined>(undefined)
+  useEffect(() => {
+    let cancelled = false
+    const local = () => {
+      if (!cancelled) setNext(getNextClass(getEffectiveTimetable(track)))
+    }
+    if (isLive()) {
+      dsaApi.timetable
+        .get(track)
+        .then((res) => {
+          if (cancelled) return
+          const grid = (res as { grid?: unknown })?.grid
+          setNext(
+            getNextClass(
+              Array.isArray(grid)
+                ? gridFromApi(grid)
+                : getEffectiveTimetable(track),
+            ),
+          )
+        })
+        .catch(local)
+    } else local()
+    return () => {
+      cancelled = true
+    }
+  }, [track])
+
+  if (next === undefined) {
+    return (
+      <p className='text-[11px] font-bold text-slate-400'>Loading schedule…</p>
+    )
+  }
   if (!next) {
-    return <p className='text-[11px] font-bold text-slate-400'>No class scheduled in the coming week.</p>
+    return (
+      <p className='text-[11px] font-bold text-slate-400'>
+        No class scheduled in the coming week.
+      </p>
+    )
   }
   return (
     <div className='flex items-center gap-3'>
-      <div className={`text-center p-3 rounded-2xl min-w-[64px] ${next.ongoing ? 'bg-[#FCB900] text-[#002EFF]' : 'bg-blue-50 text-gray-700'}`}>
+      <div
+        className={`text-center p-3 rounded-2xl min-w-[64px] ${next.ongoing ? 'bg-[#FCB900] text-[#002EFF]' : 'bg-blue-50 text-gray-700'}`}
+      >
         <p className='text-[9px] font-black uppercase'>{next.when}</p>
         <p className='text-[11px] font-black'>{next.time.split(' ')[0]}</p>
       </div>
       <div>
         <div className='flex items-center gap-2'>
-          <h4 className='text-sm font-black text-gray-800 uppercase'>{next.subject}</h4>
-          {next.ongoing && <Badge className='bg-red-500 text-white text-[8px] font-black animate-pulse'>ONGOING</Badge>}
+          <h4 className='text-sm font-black text-gray-800 uppercase'>
+            {next.subject}
+          </h4>
+          {next.ongoing && (
+            <Badge className='bg-red-500 text-white text-[8px] font-black animate-pulse'>
+              ONGOING
+            </Badge>
+          )}
         </div>
         <p className='text-[10px] font-bold text-gray-400 flex items-center gap-1'>
           <Clock size={11} /> {next.day} · {next.time}
@@ -63,7 +133,13 @@ function StatusPill({ status }: { status: LiveStatus }) {
     live: 'bg-red-500 text-white animate-pulse',
     ended: 'bg-slate-200 text-slate-500',
   }
-  return <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase ${map[status]}`}>{status}</span>
+  return (
+    <span
+      className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase ${map[status]}`}
+    >
+      {status}
+    </span>
+  )
 }
 
 export default function LiveClasses({
@@ -74,8 +150,6 @@ export default function LiveClasses({
   track?: string
 }) {
   const [mounted, setMounted] = useState(false)
-  const [tick, setTick] = useState(0)
-  const refresh = () => setTick((t) => t + 1)
   useEffect(() => setMounted(true), [])
 
   if (!mounted) {
@@ -86,43 +160,99 @@ export default function LiveClasses({
     )
   }
 
-  if (mode === 'tutor') return <TutorLive key={tick} onChange={refresh} />
+  if (mode === 'tutor') return <TutorLive />
 
   const u = getUser()
-  const track = (trackProp || normaliseTrack(u?.level || u?.examType || 'jamb')) as ExamTrack
-  return <StudentLive key={tick} track={track} />
+  const track = (trackProp ||
+    normaliseTrack(u?.level || u?.examType || 'jamb')) as ExamTrack
+  return <StudentLive track={track} />
 }
 
 /* ---------------- Tutor: upload link + control status ---------------- */
-function TutorLive({ onChange }: { onChange: () => void }) {
+function TutorLive() {
+  const live = isLive()
   const [track, setTrack] = useState<ExamTrack>('jamb')
   const [link, setLink] = useState('')
+  const [status, setStatus] = useState<LiveStatus>('scheduled')
   const [saved, setSaved] = useState(false)
-  const status = getLiveStatus(track)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+
+  const load = useCallback(async () => {
+    setErr('')
+    if (live) {
+      try {
+        const d = (await dsaApi.liveClasses.next(track)) as {
+          meetLink?: string
+          status?: string
+        }
+        setLink(d?.meetLink || '')
+        setStatus(normStatus(d?.status))
+        setSaved(false)
+        return
+      } catch {
+        /* fall through to local */
+      }
+    }
+    setLink(getMeetLink(track))
+    setStatus(getLiveStatus(track))
+    setSaved(false)
+  }, [track, live])
 
   useEffect(() => {
-    setLink(getMeetLink(track))
-    setSaved(false)
-  }, [track])
+    void load()
+  }, [load])
 
-  const save = () => {
-    saveMeetLink(track, link)
-    setSaved(true)
-    onChange()
+  const save = async () => {
+    setErr('')
+    if (!live) {
+      saveMeetLink(track, link)
+      setSaved(true)
+      return
+    }
+    setBusy(true)
+    try {
+      await dsaApi.liveClasses.uploadLink(track, link.trim())
+      setSaved(true)
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Failed to save the link')
+    } finally {
+      setBusy(false)
+    }
   }
-  const setStatus = (s: LiveStatus) => {
-    setLiveStatus(track, s)
-    onChange()
+
+  const changeStatus = async (s: LiveStatus) => {
+    setErr('')
+    if (!live) {
+      setLiveStatus(track, s)
+      setStatus(s)
+      return
+    }
+    setBusy(true)
+    try {
+      await dsaApi.liveClasses.setStatus(track, { status: s })
+      setStatus(s)
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Failed to update the class status')
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
     <div className='space-y-5 max-w-3xl'>
-      <div>
-        <h2 className='text-2xl font-black text-[#002EFF] italic uppercase'>Live Classes</h2>
-        <p className='text-[11px] font-bold text-slate-400'>Upload the class link and go live for your students.</p>
+      <div className='flex items-start justify-between gap-3'>
+        <div>
+          <h2 className='text-2xl font-black text-[#002EFF] italic uppercase'>
+            Live Classes
+          </h2>
+          <p className='text-[11px] font-bold text-slate-400'>
+            Upload the class link and go live for your students.
+          </p>
+        </div>
+        <LiveBadge live={live} />
       </div>
 
-      {/* Admin-generates note */}
       <div className='flex items-start gap-2 p-3 rounded-2xl bg-amber-50 border border-amber-100'>
         <Info size={15} className='text-amber-600 shrink-0 mt-0.5' />
         <p className='text-[11px] font-bold text-amber-800 leading-relaxed'>
@@ -131,7 +261,6 @@ function TutorLive({ onChange }: { onChange: () => void }) {
         </p>
       </div>
 
-      {/* Track selector */}
       <div className='inline-flex gap-1 p-1 bg-slate-100 rounded-xl'>
         {TRACKS.map((t) => (
           <button
@@ -156,6 +285,8 @@ function TutorLive({ onChange }: { onChange: () => void }) {
 
         <NextClassCard track={track} />
 
+        {err && <p className='text-[11px] font-bold text-rose-600'>{err}</p>}
+
         <div className='space-y-1.5'>
           <label className='text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5'>
             <LinkIcon size={13} className='text-[#002EFF]' /> Google Meet link
@@ -163,34 +294,45 @@ function TutorLive({ onChange }: { onChange: () => void }) {
           <div className='flex gap-2'>
             <input
               value={link}
-              onChange={(e) => { setLink(e.target.value); setSaved(false) }}
+              onChange={(e) => {
+                setLink(e.target.value)
+                setSaved(false)
+              }}
               placeholder='https://meet.google.com/abc-defg-hij'
               className='flex-1 h-11 px-3 rounded-lg bg-slate-50 border border-transparent focus:bg-white focus:border-[#002EFF]/30 outline-none text-sm font-medium transition-all'
             />
-            <button onClick={save} className='flex items-center gap-1.5 px-4 h-11 rounded-xl bg-[#002EFF] text-white text-[10px] font-black uppercase hover:bg-blue-700'>
+            <button
+              onClick={save}
+              disabled={busy || !link.trim()}
+              className='flex items-center gap-1.5 px-4 h-11 rounded-xl bg-[#002EFF] text-white text-[10px] font-black uppercase hover:bg-blue-700 disabled:opacity-50'
+            >
               <Save size={13} /> {saved ? 'Saved' : 'Save'}
             </button>
           </div>
         </div>
 
-        {/* Status controls */}
-        <div className='flex items-center gap-2 pt-1 border-t border-slate-50'>
-          <span className='text-[10px] font-black uppercase text-slate-400 mr-1'>Class:</span>
+        <div className='flex items-center gap-2 pt-1 border-t border-slate-50 flex-wrap'>
+          <span className='text-[10px] font-black uppercase text-slate-400 mr-1'>
+            Class:
+          </span>
           <button
-            onClick={() => setStatus('live')}
-            disabled={!link.trim()}
+            onClick={() => changeStatus('live')}
+            disabled={busy || !link.trim()}
             className='flex items-center gap-1.5 h-9 px-3 rounded-lg bg-red-500 text-white text-[10px] font-black uppercase disabled:opacity-40 hover:brightness-105'
           >
             <Radio size={13} /> Go live
           </button>
           <button
-            onClick={() => setStatus('ended')}
-            className='flex items-center gap-1.5 h-9 px-3 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-black uppercase hover:bg-slate-200'
+            onClick={() => changeStatus('ended')}
+            disabled={busy}
+            className='flex items-center gap-1.5 h-9 px-3 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-black uppercase hover:bg-slate-200 disabled:opacity-50'
           >
             <Square size={12} /> End
           </button>
           {!link.trim() && (
-            <span className='text-[10px] font-bold text-slate-400'>Add a link to go live</span>
+            <span className='text-[10px] font-bold text-slate-400'>
+              Save a link to go live
+            </span>
           )}
         </div>
       </Card>
@@ -200,29 +342,79 @@ function TutorLive({ onChange }: { onChange: () => void }) {
 
 /* ---------------- Student: join ---------------- */
 function StudentLive({ track }: { track: ExamTrack }) {
-  const link = getMeetLink(track)
-  const status = getLiveStatus(track)
-  const canJoin = status === 'live' && !!link
+  const [link, setLink] = useState('')
+  const [status, setStatus] = useState<LiveStatus>('scheduled')
+  const [canJoin, setCanJoin] = useState(false)
+  const [loaded, setLoaded] = useState(false)
+  const [live, setLive] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    const local = () => {
+      if (cancelled) return
+      const l = getMeetLink(track)
+      const s = getLiveStatus(track)
+      setLink(l)
+      setStatus(s)
+      setCanJoin(s === 'live' && !!l)
+      setLive(false)
+      setLoaded(true)
+    }
+    if (isLive()) {
+      dsaApi.liveClasses
+        .next(track)
+        .then((d) => {
+          if (cancelled) return
+          const dd = d as {
+            meetLink?: string
+            status?: string
+            canJoin?: boolean
+          }
+          setLink(dd?.meetLink || '')
+          setStatus(normStatus(dd?.status))
+          setCanJoin(!!dd?.canJoin)
+          setLive(true)
+          setLoaded(true)
+        })
+        .catch(local)
+    } else local()
+    return () => {
+      cancelled = true
+    }
+  }, [track])
 
   return (
     <div className='space-y-5 max-w-2xl'>
-      <div>
-        <h2 className='text-2xl font-black text-[#002EFF] italic uppercase'>Live Class</h2>
-        <p className='text-[11px] font-bold text-slate-400'>Join your online class when your tutor is live.</p>
+      <div className='flex items-start justify-between gap-3'>
+        <div>
+          <h2 className='text-2xl font-black text-[#002EFF] italic uppercase'>
+            Live Class
+          </h2>
+          <p className='text-[11px] font-bold text-slate-400'>
+            Join your online class when your tutor is live.
+          </p>
+        </div>
+        <LiveBadge live={live} />
       </div>
 
       <Card className='p-6 rounded-3xl border-none shadow-sm bg-white space-y-5'>
         <div className='flex items-center justify-between'>
           <div className='flex items-center gap-2'>
             <CalendarDays size={16} className='text-[#002EFF]' />
-            <span className='text-[10px] font-black uppercase text-gray-400'>{EXAM_TRACKS[track].label} · Next class</span>
+            <span className='text-[10px] font-black uppercase text-gray-400'>
+              {EXAM_TRACKS[track].label} · Next class
+            </span>
           </div>
           <StatusPill status={status} />
         </div>
 
         <NextClassCard track={track} />
 
-        {canJoin ? (
+        {!loaded ? (
+          <div className='flex items-center justify-center h-14'>
+            <Loader2 className='animate-spin text-[#002EFF]' size={18} />
+          </div>
+        ) : canJoin ? (
           <a
             href={link}
             target='_blank'
