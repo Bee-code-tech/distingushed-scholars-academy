@@ -23,8 +23,9 @@ import {
 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { dsaApi, isBackendUnreachable } from '@/lib/api'
-import { getUser, getToken } from '@/lib/auth'
+import { getUser, getToken, setUser } from '@/lib/auth'
 import { isDemoToken } from '@/lib/demoAccounts'
+import type { User as DsaUser } from '@/lib/types'
 
 export default function SettingsView() {
   const [activeTab, setActiveTab] = useState('Account Info')
@@ -38,6 +39,7 @@ export default function SettingsView() {
   const [fullname, setFullname] = useState('')
   const [email, setEmail] = useState('')
   const [institution, setInstitution] = useState('')
+  const [phone, setPhone] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [saveMsg, setSaveMsg] = useState('')
   const [saveErr, setSaveErr] = useState('')
@@ -52,14 +54,39 @@ export default function SettingsView() {
   ]
 
   useEffect(() => {
-    const u = getUser()
-    if (u) {
-      setFullname(u.fullName || u.username || '')
-      setEmail(u.email || '')
-      setInstitution((u as { institution?: string }).institution || '')
+    const apply = (u: Record<string, unknown>) => {
+      setFullname(
+        (u.fullName as string) ||
+          (u.fullname as string) ||
+          (u.username as string) ||
+          '',
+      )
+      setEmail((u.email as string) || '')
+      setInstitution((u.institution as string) || (u.school as string) || '')
+      setPhone((u.phoneNumber as string) || (u.phone as string) || '')
+      const img =
+        localStorage.getItem('user-pfp') ||
+        (u.avatarUrl as string) ||
+        (u.profilePic as string)
+      if (img) setProfileImage(img)
     }
-    const savedImg = localStorage.getItem('user-pfp') || u?.avatarUrl
-    if (savedImg) setProfileImage(savedImg)
+    // Paint instantly from the cached user, then refresh from the authoritative
+    // /auth/me and update the cache so the whole app reflects the latest profile.
+    const cached = getUser()
+    if (cached) apply(cached as unknown as Record<string, unknown>)
+    const t = getToken()
+    if (t && !isDemoToken(t)) {
+      dsaApi.auth
+        .getProfile()
+        .then((fresh) => {
+          if (!fresh) return
+          apply(fresh as unknown as Record<string, unknown>)
+          setUser(fresh)
+        })
+        .catch(() => {
+          /* keep the cached values */
+        })
+    }
   }, [])
 
   const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -86,12 +113,24 @@ export default function SettingsView() {
     }
 
     try {
-      await dsaApi.auth.updateDetails({
+      const res = await dsaApi.auth.updateDetails({
         fullname,
         email: email.toLowerCase(),
         institution,
+        phoneNumber: phone,
         profilePic: profileImage,
       })
+      // Refresh the cached user so the sidebar/header pick up the new name/avatar.
+      const updated = (res?.data ?? res?.user) as DsaUser | undefined
+      const base = getUser()
+      if (updated) setUser(updated)
+      else if (base)
+        setUser({
+          ...base,
+          fullName: fullname,
+          email: email.toLowerCase(),
+          avatarUrl: profileImage,
+        } as DsaUser)
       setSaveMsg('Saved successfully.')
     } catch (err) {
       if (isBackendUnreachable(err)) setSaveMsg('Saved locally — server unreachable.')
@@ -197,7 +236,10 @@ export default function SettingsView() {
                   <Field label='Full Name' value={fullname} onChange={setFullname} />
                   <Field label='Email Address' value={email} onChange={setEmail} type='email' />
                 </div>
-                <Field label='Institution' value={institution} onChange={setInstitution} placeholder='e.g. University of Lagos' />
+                <div className='grid grid-cols-1 md:grid-cols-2 gap-3'>
+                  <Field label='Institution' value={institution} onChange={setInstitution} placeholder='e.g. University of Lagos' />
+                  <Field label='Phone Number' value={phone} onChange={setPhone} placeholder='080…' />
+                </div>
 
                 <Button
                   onClick={handleSaveChanges}

@@ -45,6 +45,16 @@ export function getUser(): User | null {
   }
 }
 
+/**
+ * Update the cached user (e.g. after editing the profile in Settings or after
+ * a fresh GET /auth/me), so the rest of the app reflects the new name/avatar
+ * without a re-login.
+ */
+export function setUser(user: User): void {
+  if (!isBrowser()) return
+  localStorage.setItem(USER_KEY, JSON.stringify(user))
+}
+
 export function isAuthenticated(): boolean {
   return !!getToken()
 }
