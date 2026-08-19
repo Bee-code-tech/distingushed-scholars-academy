@@ -441,6 +441,15 @@ export const dsaApi = {
         .then((r) => handleResponse<{ data?: unknown }>(r))
         .then((r) => (r as { data?: unknown }).data ?? r),
 
+    // DELETE /materials/:id (owner tutor / admin).
+    removeMaterial: (materialId: string, token?: string) =>
+      fetch(`${BASE_URL}/materials/${encodeURIComponent(materialId)}`, {
+        method: 'DELETE',
+        headers: getHeaders(token),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+
     // POST /materials/:id/complete (student) — recomputes progressPercent.
     completeMaterial: (materialId: string, token?: string) =>
       fetch(`${BASE_URL}/materials/${encodeURIComponent(materialId)}/complete`, {
