@@ -93,6 +93,11 @@ export function setSession(params: {
   if (!isBrowser()) return
   const { token, user, role } = params
   localStorage.setItem(TOKEN_KEY, token)
+  // Mirror the JWT to the generic `token` key that admin-api.ts (adminFetch /
+  // getAdminSession) reads. Without this, shared components backed by adminApi
+  // — e.g. TakeAttendance — send no Authorization header for tutors/staff who
+  // signed in through the normal flow, and the backend returns 401.
+  localStorage.setItem('token', token)
   if (user) localStorage.setItem(USER_KEY, JSON.stringify(user))
   const resolvedRole = role || user?.role || 'student'
   localStorage.setItem(ROLE_KEY, resolvedRole)
@@ -104,6 +109,7 @@ export function setSession(params: {
 export function clearSession(): void {
   if (!isBrowser()) return
   localStorage.removeItem(TOKEN_KEY)
+  localStorage.removeItem('token') // the adminApi mirror set in setSession
   localStorage.removeItem(USER_KEY)
   localStorage.removeItem(ROLE_KEY)
   document.cookie = `${ADMIN_COOKIE}=; path=/; max-age=0; SameSite=Lax`
