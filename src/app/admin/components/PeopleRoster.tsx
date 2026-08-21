@@ -1,112 +1,6 @@
 // 'use client'
 
 // import { useEffect, useState } from 'react'
-// import { Users, GraduationCap, Mail, Loader2, Cloud, HardDrive } from 'lucide-react'
-// import { Badge } from '@/components/ui/badge'
-// import { getTutors, getGuardians, type DirectoryPerson } from '@/lib/directoryStore'
-// import { dsaApi } from '@/lib/api'
-
-// function mapPerson(u: Record<string, unknown>, kind: 'tutors' | 'guardians'): DirectoryPerson {
-//   const s = u as Record<string, string | string[] | undefined>
-//   const subjects = s.subjects as string[] | undefined
-//   return {
-//     key: String(s.username || s.email || s.id || s.fullname || Math.random()),
-//     name: String(s.fullname || s.fullName || s.name || (kind === 'tutors' ? 'Tutor' : 'Guardian')),
-//     email: String(s.email || ''),
-//     extra:
-//       kind === 'tutors'
-//         ? String(s.subject || (subjects && subjects[0]) || '') || undefined
-//         : String(s.wardName || s.ward || '') || undefined,
-//   }
-// }
-
-// export default function PeopleRoster({ kind }: { kind: 'tutors' | 'guardians' }) {
-//   const [loading, setLoading] = useState(true)
-//   const [people, setPeople] = useState<DirectoryPerson[]>([])
-//   const [source, setSource] = useState<'server' | 'local'>('local')
-
-//   useEffect(() => {
-//     let cancelled = false
-//     ;(async () => {
-//       try {
-//         const rows = await dsaApi.admin.listUsers(kind === 'tutors' ? 'tutor' : 'parent')
-//         if (!cancelled && Array.isArray(rows) && rows.length > 0) {
-//           setPeople(rows.map((r) => mapPerson(r, kind)))
-//           setSource('server')
-//           return
-//         }
-//         throw new Error('no server data')
-//       } catch {
-//         if (!cancelled) {
-//           setPeople(kind === 'tutors' ? getTutors() : getGuardians())
-//           setSource('local')
-//         }
-//       } finally {
-//         if (!cancelled) setLoading(false)
-//       }
-//     })()
-//     return () => {
-//       cancelled = true
-//     }
-//   }, [kind])
-
-//   if (loading) {
-//     return <div className='py-20 flex justify-center'><Loader2 className='animate-spin text-[#002EFF]' /></div>
-//   }
-
-//   const isTutor = kind === 'tutors'
-//   const title = isTutor ? 'Tutors' : 'Guardians'
-//   const extraLabel = isTutor ? 'Subject' : 'Ward'
-//   const Icon = isTutor ? GraduationCap : Users
-
-//   return (
-//     <div className='max-w-5xl mx-auto space-y-4 px-4'>
-//       <div className='flex items-center gap-2'>
-//         <Icon size={18} className='text-[#002EFF]' />
-//         <h1 className='text-2xl font-black text-slate-900 tracking-tight'>{title}</h1>
-//         <Badge className={`text-[8px] font-black ${source === 'server' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-500'}`}>
-//           {source === 'server' ? <><Cloud size={9} className='mr-1' /> Live</> : <><HardDrive size={9} className='mr-1' /> Local</>}
-//         </Badge>
-//         <span className='ml-auto text-[10px] font-black uppercase text-slate-400'>{people.length} total</span>
-//       </div>
-
-//       <div className='bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden'>
-//         <div className='grid grid-cols-12 px-5 py-3 bg-slate-50 text-[9px] font-black uppercase text-gray-400'>
-//           <span className='col-span-5'>Name</span>
-//           <span className='col-span-4'>Email</span>
-//           <span className='col-span-3'>{extraLabel}</span>
-//         </div>
-//         {people.length === 0 ? (
-//           <p className='px-5 py-10 text-center text-xs font-bold text-slate-400'>No {title.toLowerCase()} yet.</p>
-//         ) : (
-//           people.map((p) => (
-//             <div key={p.key} className='grid grid-cols-12 items-center px-5 py-4 border-t border-slate-50'>
-//               <span className='col-span-5 text-xs font-black text-gray-800'>
-//                 {p.name}
-//                 {p.isNew && (
-//                   <span className='ml-2 text-[8px] font-black uppercase text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded'>New</span>
-//                 )}
-//               </span>
-//               <span className='col-span-4 text-[10px] font-bold text-slate-500 flex items-center gap-1 truncate'>
-//                 <Mail size={10} /> {p.email}
-//               </span>
-//               <span className='col-span-3 text-[10px] font-bold text-slate-500'>{p.extra || '—'}</span>
-//             </div>
-//           ))
-//         )}
-//       </div>
-//       <p className='text-[10px] font-medium text-slate-400'>
-//         {source === 'server'
-//           ? 'Live from the server.'
-//           : `Showing this browser’s list — the server users API (GET /admin/users?role=${isTutor ? 'tutor' : 'parent'}) is not live yet.`}
-//       </p>
-//     </div>
-//   )
-// }
-
-// 'use client'
-
-// import { useEffect, useState } from 'react'
 // import {
 //   Users,
 //   GraduationCap,
@@ -120,6 +14,10 @@
 //   Check,
 //   X,
 //   AlertCircle,
+//   UserCheck,
+//   UserX,
+//   Trash2,
+//   MoreVertical,
 // } from 'lucide-react'
 // import { Badge } from '@/components/ui/badge'
 // import {
@@ -127,7 +25,11 @@
 //   getGuardians,
 //   type DirectoryPerson,
 // } from '@/lib/directoryStore'
-// import { adminApi, StaffRoleItem } from '@/lib/admin-api'
+// import {
+//   adminApi,
+//   StaffRoleItem,
+//   type AdminUserListItem,
+// } from '@/lib/admin-api'
 
 // // Available permission keys as required by the backend
 // export const PERMISSION_KEYS = [
@@ -145,14 +47,22 @@
 
 // export type PermissionKey = (typeof PERMISSION_KEYS)[number]
 
+// export interface ExtendedDirectoryPerson extends DirectoryPerson {
+//   id?: string
+//   status?: 'active' | 'suspended' | 'inactive' | string
+// }
+
 // function mapPerson(
-//   u: Record<string, unknown>,
+//   u: AdminUserListItem | Record<string, unknown>,
 //   kind: 'tutors' | 'guardians',
-// ): DirectoryPerson {
-//   const s = u as Record<string, string | string[] | undefined>
+// ): ExtendedDirectoryPerson {
+//   const s = u as Record<string, any>
 //   const subjects = s.subjects as string[] | undefined
 //   return {
-//     key: String(s.username || s.email || s.id || s.fullname || Math.random()),
+//     id: String(s.id || s._id || s.username || s.email || ''),
+//     key: String(
+//       s.username || s.email || s.id || s._id || s.fullname || Math.random(),
+//     ),
 //     name: String(
 //       s.fullname ||
 //         s.fullName ||
@@ -164,6 +74,8 @@
 //       kind === 'tutors'
 //         ? String(s.subject || (subjects && subjects[0]) || '') || undefined
 //         : String(s.wardName || s.ward || '') || undefined,
+//     status: (s.status ||
+//       (s.isActive === false ? 'suspended' : 'active')) as string,
 //   }
 // }
 
@@ -173,18 +85,25 @@
 //   kind: 'tutors' | 'guardians'
 // }) {
 //   const [loading, setLoading] = useState(true)
-//   const [people, setPeople] = useState<DirectoryPerson[]>([])
+//   const [people, setPeople] = useState<ExtendedDirectoryPerson[]>([])
 //   const [source, setSource] = useState<'server' | 'local'>('local')
 //   const [showRoleModal, setShowRoleModal] = useState(false)
+//   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null)
 
 //   useEffect(() => {
 //     let cancelled = false
 //     ;(async () => {
 //       try {
-//         const rows = await adminApi.getUsers(
-//           kind === 'tutors' ? 'tutor' : 'parent',
-//         )
-//         if (!cancelled && Array.isArray(rows) && rows.length > 0) {
+//         const response = await adminApi.getUsers({
+//           role: kind === 'tutors' ? 'tutor' : 'parent',
+//         })
+//         const rows = Array.isArray(response)
+//           ? response
+//           : Array.isArray(response?.data)
+//             ? response.data
+//             : null
+
+//         if (!cancelled && rows && rows.length > 0) {
 //           setPeople(rows.map((r) => mapPerson(r, kind)))
 //           setSource('server')
 //           return
@@ -203,6 +122,70 @@
 //       cancelled = true
 //     }
 //   }, [kind])
+
+//   // Handlers for user state operations
+//   const handleStatusChange = async (
+//     person: ExtendedDirectoryPerson,
+//     newStatus: 'active' | 'suspended',
+//   ) => {
+//     const targetId = person.id || person.key
+//     setActionLoadingId(targetId)
+
+//     try {
+//       if (source === 'server' && person.id) {
+//         if (typeof (adminApi as any).updateUserStatus === 'function') {
+//           await (adminApi as any).updateUserStatus(person.id, {
+//             status: newStatus,
+//           })
+//         } else if (typeof (adminApi as any).updateUser === 'function') {
+//           await (adminApi as any).updateUser(person.id, { status: newStatus })
+//         }
+//       }
+
+//       setPeople((prev) =>
+//         prev.map((p) =>
+//           p.id === targetId || p.key === targetId
+//             ? { ...p, status: newStatus }
+//             : p,
+//         ),
+//       )
+//     } catch (err) {
+//       alert(
+//         `Failed to ${newStatus === 'active' ? 'activate' : 'suspend'} user: ${
+//           err instanceof Error ? err.message : 'Unknown error'
+//         }`,
+//       )
+//     } finally {
+//       setActionLoadingId(null)
+//     }
+//   }
+
+//   const handleDelete = async (person: ExtendedDirectoryPerson) => {
+//     const targetId = person.id || person.key
+//     if (!confirm(`Are you sure you want to delete ${person.name}?`)) return
+
+//     setActionLoadingId(targetId)
+
+//     try {
+//       if (source === 'server' && person.id) {
+//         if (typeof (adminApi as any).deleteUser === 'function') {
+//           await (adminApi as any).deleteUser(person.id)
+//         }
+//       }
+
+//       setPeople((prev) =>
+//         prev.filter((p) => (p.id ? p.id !== targetId : p.key !== targetId)),
+//       )
+//     } catch (err) {
+//       alert(
+//         `Failed to delete user: ${
+//           err instanceof Error ? err.message : 'Unknown error'
+//         }`,
+//       )
+//     } finally {
+//       setActionLoadingId(null)
+//     }
+//   }
 
 //   if (loading) {
 //     return (
@@ -260,43 +243,101 @@
 //       {/* Roster Table */}
 //       <div className='bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden'>
 //         <div className='grid grid-cols-12 px-5 py-3 bg-slate-50 text-[9px] font-black uppercase text-gray-400'>
-//           <span className='col-span-5'>Name</span>
-//           <span className='col-span-4'>Email</span>
-//           <span className='col-span-3'>{extraLabel}</span>
+//           <span className='col-span-4'>Name</span>
+//           <span className='col-span-3'>Email</span>
+//           <span className='col-span-2'>{extraLabel}</span>
+//           <span className='col-span-1 text-center'>Status</span>
+//           <span className='col-span-2 text-right'>Actions</span>
 //         </div>
 //         {people.length === 0 ? (
 //           <p className='px-5 py-10 text-center text-xs font-bold text-slate-400'>
 //             No {title.toLowerCase()} yet.
 //           </p>
 //         ) : (
-//           people.map((p) => (
-//             <div
-//               key={p.key}
-//               className='grid grid-cols-12 items-center px-5 py-4 border-t border-slate-50'
-//             >
-//               <span className='col-span-5 text-xs font-black text-gray-800 flex items-center'>
-//                 {p.name}
-//                 {p.isNew && (
-//                   <span className='ml-2 text-[8px] font-black uppercase text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded'>
-//                     New
-//                   </span>
-//                 )}
-//               </span>
-//               <span className='col-span-4 text-[10px] font-bold text-slate-500 flex items-center gap-1 truncate'>
-//                 <Mail size={10} /> {p.email}
-//               </span>
-//               <span className='col-span-3 text-[10px] font-bold text-slate-500'>
-//                 {p.extra || '—'}
-//               </span>
-//             </div>
-//           ))
+//           people.map((p) => {
+//             const rowId = p.id || p.key
+//             const isRowLoading = actionLoadingId === rowId
+//             const isSuspended = p.status === 'suspended'
+
+//             return (
+//               <div
+//                 key={p.key}
+//                 className={`grid grid-cols-12 items-center px-5 py-4 border-t border-slate-50 transition-colors ${
+//                   isSuspended ? 'bg-slate-50/50' : ''
+//                 }`}
+//               >
+//                 <span className='col-span-4 text-xs font-black text-gray-800 flex items-center gap-1.5'>
+//                   {p.name}
+//                   {p.isNew && (
+//                     <span className='text-[8px] font-black uppercase text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded'>
+//                       New
+//                     </span>
+//                   )}
+//                 </span>
+//                 <span className='col-span-3 text-[10px] font-bold text-slate-500 flex items-center gap-1 truncate'>
+//                   <Mail size={10} /> {p.email}
+//                 </span>
+//                 <span className='col-span-2 text-[10px] font-bold text-slate-500 truncate'>
+//                   {p.extra || '—'}
+//                 </span>
+//                 <span className='col-span-1 flex justify-center'>
+//                   <Badge
+//                     className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${
+//                       isSuspended
+//                         ? 'bg-amber-50 text-amber-600 border border-amber-200'
+//                         : 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+//                     }`}
+//                   >
+//                     {isSuspended ? 'Suspended' : 'Active'}
+//                   </Badge>
+//                 </span>
+
+//                 {/* Actions Dropdown / Buttons */}
+//                 <span className='col-span-2 flex items-center justify-end gap-1'>
+//                   {isRowLoading ? (
+//                     <Loader2
+//                       size={14}
+//                       className='animate-spin text-slate-400 mr-2'
+//                     />
+//                   ) : (
+//                     <>
+//                       {isSuspended ? (
+//                         <button
+//                           onClick={() => handleStatusChange(p, 'active')}
+//                           title='Activate User'
+//                           className='p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 transition-colors'
+//                         >
+//                           <UserCheck size={14} />
+//                         </button>
+//                       ) : (
+//                         <button
+//                           onClick={() => handleStatusChange(p, 'suspended')}
+//                           title='Suspend User'
+//                           className='p-1.5 rounded-lg text-amber-600 hover:bg-amber-50 transition-colors'
+//                         >
+//                           <UserX size={14} />
+//                         </button>
+//                       )}
+//                       <button
+//                         onClick={() => handleDelete(p)}
+//                         title='Delete User'
+//                         className='p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 transition-colors'
+//                       >
+//                         <Trash2 size={14} />
+//                       </button>
+//                     </>
+//                   )}
+//                 </span>
+//               </div>
+//             )
+//           })
 //         )}
 //       </div>
 
 //       <p className='text-[10px] font-medium text-slate-400'>
 //         {source === 'server'
 //           ? 'Live from the server.'
-//           : `Showing this browser’s list — the server users API (GET /admin/users?role=${
+//           : `Showing this browser’s list — the server users API (GET /api/admin/users?role=${
 //               isTutor ? 'tutor' : 'parent'
 //             }) is not live yet.`}
 //       </p>
@@ -342,14 +383,16 @@
 //     }
 
 //     setSubmitting(true)
-//     const payload: Partial<StaffRoleItem> = {
+//     const payload: Partial<StaffRoleItem> & {
+//       name: string
+//       permissions: string[]
+//     } = {
 //       name: roleName.trim().toLowerCase(),
 //       permissions: selectedPermissions,
 //     }
 //     if (roleId.trim()) payload.id = roleId.trim()
 
 //     try {
-//       // Calls adminApi.upsertRole -> POST /api/admin/roles
 //       await adminApi.upsertRole(payload)
 
 //       setStatusMsg({
@@ -528,7 +571,12 @@ import {
   UserCheck,
   UserX,
   Trash2,
-  MoreVertical,
+  ChevronDown,
+  ChevronUp,
+  User,
+  BookOpen,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -542,7 +590,6 @@ import {
   type AdminUserListItem,
 } from '@/lib/admin-api'
 
-// Available permission keys as required by the backend
 export const PERMISSION_KEYS = [
   'payments.verify',
   'payments.view',
@@ -561,6 +608,7 @@ export type PermissionKey = (typeof PERMISSION_KEYS)[number]
 export interface ExtendedDirectoryPerson extends DirectoryPerson {
   id?: string
   status?: 'active' | 'suspended' | 'inactive' | string
+  raw?: Record<string, unknown>
 }
 
 function mapPerson(
@@ -587,6 +635,7 @@ function mapPerson(
         : String(s.wardName || s.ward || '') || undefined,
     status: (s.status ||
       (s.isActive === false ? 'suspended' : 'active')) as string,
+    raw: s,
   }
 }
 
@@ -600,6 +649,7 @@ export default function PeopleRoster({
   const [source, setSource] = useState<'server' | 'local'>('local')
   const [showRoleModal, setShowRoleModal] = useState(false)
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -634,11 +684,16 @@ export default function PeopleRoster({
     }
   }, [kind])
 
-  // Handlers for user state operations
+  const toggleExpand = (id: string) => {
+    setExpandedId((prev) => (prev === id ? null : id))
+  }
+
   const handleStatusChange = async (
+    e: React.MouseEvent,
     person: ExtendedDirectoryPerson,
     newStatus: 'active' | 'suspended',
   ) => {
+    e.stopPropagation()
     const targetId = person.id || person.key
     setActionLoadingId(targetId)
 
@@ -671,7 +726,11 @@ export default function PeopleRoster({
     }
   }
 
-  const handleDelete = async (person: ExtendedDirectoryPerson) => {
+  const handleDelete = async (
+    e: React.MouseEvent,
+    person: ExtendedDirectoryPerson,
+  ) => {
+    e.stopPropagation()
     const targetId = person.id || person.key
     if (!confirm(`Are you sure you want to delete ${person.name}?`)) return
 
@@ -751,99 +810,190 @@ export default function PeopleRoster({
         </button>
       </div>
 
-      {/* Roster Table */}
-      <div className='bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden'>
-        <div className='grid grid-cols-12 px-5 py-3 bg-slate-50 text-[9px] font-black uppercase text-gray-400'>
-          <span className='col-span-4'>Name</span>
-          <span className='col-span-3'>Email</span>
-          <span className='col-span-2'>{extraLabel}</span>
-          <span className='col-span-1 text-center'>Status</span>
-          <span className='col-span-2 text-right'>Actions</span>
+      {/* Cards Box Grid */}
+      {people.length === 0 ? (
+        <div className='bg-white rounded-2xl border border-slate-100 p-10 text-center text-xs font-bold text-slate-400 shadow-sm'>
+          No {title.toLowerCase()} yet.
         </div>
-        {people.length === 0 ? (
-          <p className='px-5 py-10 text-center text-xs font-bold text-slate-400'>
-            No {title.toLowerCase()} yet.
-          </p>
-        ) : (
-          people.map((p) => {
+      ) : (
+        <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+          {people.map((p) => {
             const rowId = p.id || p.key
             const isRowLoading = actionLoadingId === rowId
             const isSuspended = p.status === 'suspended'
+            const isExpanded = expandedId === rowId
 
             return (
               <div
                 key={p.key}
-                className={`grid grid-cols-12 items-center px-5 py-4 border-t border-slate-50 transition-colors ${
-                  isSuspended ? 'bg-slate-50/50' : ''
-                }`}
+                onClick={() => toggleExpand(rowId)}
+                className={`group cursor-pointer rounded-2xl border transition-all duration-200 bg-white hover:shadow-md ${
+                  isExpanded
+                    ? 'border-[#002EFF] ring-2 ring-blue-500/10 shadow-md'
+                    : 'border-slate-200/80 hover:border-slate-300'
+                } ${isSuspended ? 'bg-slate-50/50' : ''}`}
               >
-                <span className='col-span-4 text-xs font-black text-gray-800 flex items-center gap-1.5'>
-                  {p.name}
-                  {p.isNew && (
-                    <span className='text-[8px] font-black uppercase text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded'>
-                      New
-                    </span>
-                  )}
-                </span>
-                <span className='col-span-3 text-[10px] font-bold text-slate-500 flex items-center gap-1 truncate'>
-                  <Mail size={10} /> {p.email}
-                </span>
-                <span className='col-span-2 text-[10px] font-bold text-slate-500 truncate'>
-                  {p.extra || '—'}
-                </span>
-                <span className='col-span-1 flex justify-center'>
-                  <Badge
-                    className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${
-                      isSuspended
-                        ? 'bg-amber-50 text-amber-600 border border-amber-200'
-                        : 'bg-emerald-50 text-emerald-600 border border-emerald-200'
-                    }`}
-                  >
-                    {isSuspended ? 'Suspended' : 'Active'}
-                  </Badge>
-                </span>
+                {/* Main Card View */}
+                <div className='p-4 space-y-3'>
+                  <div className='flex items-start justify-between gap-2'>
+                    <div className='flex items-center gap-3'>
+                      <div className='w-10 h-10 rounded-xl bg-blue-50 text-[#002EFF] flex items-center justify-center font-black text-sm shrink-0 border border-blue-100/50'>
+                        {p.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <div className='flex items-center gap-1.5'>
+                          <h3 className='text-sm font-black text-slate-900 leading-tight'>
+                            {p.name}
+                          </h3>
+                          {p.isNew && (
+                            <span className='text-[8px] font-black uppercase text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded'>
+                              New
+                            </span>
+                          )}
+                        </div>
+                        <p className='text-xs font-bold text-slate-500 flex items-center gap-1 mt-0.5'>
+                          <Mail size={11} className='text-slate-400 shrink-0' />
+                          <span className='truncate max-w-[180px]'>
+                            {p.email}
+                          </span>
+                        </p>
+                      </div>
+                    </div>
 
-                {/* Actions Dropdown / Buttons */}
-                <span className='col-span-2 flex items-center justify-end gap-1'>
-                  {isRowLoading ? (
-                    <Loader2
-                      size={14}
-                      className='animate-spin text-slate-400 mr-2'
-                    />
-                  ) : (
-                    <>
-                      {isSuspended ? (
-                        <button
-                          onClick={() => handleStatusChange(p, 'active')}
-                          title='Activate User'
-                          className='p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 transition-colors'
-                        >
-                          <UserCheck size={14} />
-                        </button>
+                    {/* Status Badge */}
+                    <Badge
+                      className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full shrink-0 ${
+                        isSuspended
+                          ? 'bg-amber-50 text-amber-600 border border-amber-200'
+                          : 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+                      }`}
+                    >
+                      {isSuspended ? 'Suspended' : 'Active'}
+                    </Badge>
+                  </div>
+
+                  {/* Summary Footer Bar */}
+                  <div className='pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] font-semibold text-slate-500'>
+                    <div className='flex items-center gap-1 truncate'>
+                      <BookOpen size={12} className='text-slate-400 shrink-0' />
+                      <span>{extraLabel}:</span>
+                      <strong className='text-slate-800 font-bold truncate'>
+                        {p.extra || '—'}
+                      </strong>
+                    </div>
+
+                    <div className='flex items-center gap-1 text-[#002EFF] font-bold text-[10px] uppercase tracking-wider shrink-0 ml-2'>
+                      <span>{isExpanded ? 'Less' : 'Details'}</span>
+                      {isExpanded ? (
+                        <ChevronUp size={14} />
                       ) : (
-                        <button
-                          onClick={() => handleStatusChange(p, 'suspended')}
-                          title='Suspend User'
-                          className='p-1.5 rounded-lg text-amber-600 hover:bg-amber-50 transition-colors'
-                        >
-                          <UserX size={14} />
-                        </button>
+                        <ChevronDown size={14} />
                       )}
-                      <button
-                        onClick={() => handleDelete(p)}
-                        title='Delete User'
-                        className='p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 transition-colors'
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </>
-                  )}
-                </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Expanded Details Box */}
+                {isExpanded && (
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    className='px-4 pb-4 pt-3 border-t border-slate-100 bg-slate-50/70 rounded-b-2xl space-y-3 text-xs'
+                  >
+                    <div className='grid grid-cols-2 gap-2 bg-white p-3 rounded-xl border border-slate-100 text-slate-600'>
+                      <div>
+                        <span className='text-[9px] font-black text-slate-400 uppercase tracking-widest block'>
+                          User ID
+                        </span>
+                        <span className='font-mono text-[10px] font-bold text-slate-700 truncate block'>
+                          {p.id || p.key}
+                        </span>
+                      </div>
+                      <div>
+                        <span className='text-[9px] font-black text-slate-400 uppercase tracking-widest block'>
+                          Role Type
+                        </span>
+                        <span className='font-bold text-slate-700 capitalize'>
+                          {kind === 'tutors' ? 'Tutor' : 'Guardian / Parent'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className='text-[9px] font-black text-slate-400 uppercase tracking-widest block'>
+                          {extraLabel}
+                        </span>
+                        <span className='font-bold text-slate-700'>
+                          {p.extra || 'Not specified'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className='text-[9px] font-black text-slate-400 uppercase tracking-widest block'>
+                          Account Status
+                        </span>
+                        <span className='font-bold flex items-center gap-1'>
+                          {isSuspended ? (
+                            <>
+                              <XCircle size={12} className='text-amber-500' />
+                              <span className='text-amber-600'>Suspended</span>
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle2
+                                size={12}
+                                className='text-emerald-500'
+                              />
+                              <span className='text-emerald-600'>Active</span>
+                            </>
+                          )}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Actions Row */}
+                    <div className='flex items-center justify-end gap-2 pt-1'>
+                      {isRowLoading ? (
+                        <div className='flex items-center gap-2 text-slate-400 font-bold text-xs py-1 px-2'>
+                          <Loader2 size={14} className='animate-spin' />
+                          Updating...
+                        </div>
+                      ) : (
+                        <>
+                          {isSuspended ? (
+                            <button
+                              onClick={(e) =>
+                                handleStatusChange(e, p, 'active')
+                              }
+                              className='flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 font-bold hover:bg-emerald-100 border border-emerald-200 transition-colors text-xs'
+                            >
+                              <UserCheck size={14} />
+                              Activate Account
+                            </button>
+                          ) : (
+                            <button
+                              onClick={(e) =>
+                                handleStatusChange(e, p, 'suspended')
+                              }
+                              className='flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 text-amber-700 font-bold hover:bg-amber-100 border border-amber-200 transition-colors text-xs'
+                            >
+                              <UserX size={14} />
+                              Suspend Account
+                            </button>
+                          )}
+                          <button
+                            onClick={(e) => handleDelete(e, p)}
+                            className='flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 text-rose-600 font-bold hover:bg-rose-100 border border-rose-200 transition-colors text-xs'
+                          >
+                            <Trash2 size={14} />
+                            Delete
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             )
-          })
-        )}
-      </div>
+          })}
+        </div>
+      )}
 
       <p className='text-[10px] font-medium text-slate-400'>
         {source === 'server'
@@ -861,9 +1011,7 @@ export default function PeopleRoster({
   )
 }
 
-/* ------------------------------------------------------------------ */
-/* Modal Component: POST /api/admin/roles via adminApi.upsertRole     */
-/* ------------------------------------------------------------------ */
+/* Modal Component */
 function RoleUpsertModal({ onClose }: { onClose: () => void }) {
   const [roleName, setRoleName] = useState('secretary')
   const [roleId, setRoleId] = useState('')
