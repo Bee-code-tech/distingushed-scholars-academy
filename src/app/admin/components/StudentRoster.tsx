@@ -548,6 +548,9 @@ import {
   BookOpen,
   X,
   AlertCircle,
+  Eye,
+  CheckCircle2,
+  ShieldAlert,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { adminApi, type AdminUserListItem } from '@/lib/admin-api'
@@ -596,8 +599,42 @@ export default function StudentRoster() {
   const [students, setStudents] = useState<ExtendedStudentPerson[]>([])
   const [source, setSource] = useState<'server' | 'local'>('local')
   const [searchQuery, setSearchQuery] = useState('')
+
+  // Modals state
   const [showAddModal, setShowAddModal] = useState(false)
+  const [selectedStudent, setSelectedStudent] =
+    useState<ExtendedStudentPerson | null>(null)
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null)
+
+  // Custom Alert Modal State
+  const [alertConfig, setAlertConfig] = useState<{
+    isOpen: boolean
+    title: string
+    message: string
+    type: 'info' | 'error' | 'confirm'
+    onConfirm?: () => void
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'info',
+  })
+
+  const showAlert = (
+    title: string,
+    message: string,
+    type: 'info' | 'error' = 'info',
+  ) => {
+    setAlertConfig({ isOpen: true, title, message, type })
+  }
+
+  const showConfirm = (
+    title: string,
+    message: string,
+    onConfirm: () => void,
+  ) => {
+    setAlertConfig({ isOpen: true, title, message, type: 'confirm', onConfirm })
+  }
 
   const fetchStudents = useCallback(async (query = '') => {
     setLoading(true)
@@ -622,7 +659,6 @@ export default function StudentRoster() {
         throw new Error('No server data')
       }
     } catch {
-      // Fallback empty array or static mock with explicit types
       const localFallback: ExtendedStudentPerson[] = []
       setStudents(
         localFallback.map((s: ExtendedStudentPerson, i: number) => ({
@@ -672,18 +708,32 @@ export default function StudentRoster() {
         }
       }
 
+      const updatedPerson = { ...person, status: newStatus }
+
       setStudents((prev) =>
         prev.map((p) =>
-          p.id === targetId || p.key === targetId
-            ? { ...p, status: newStatus }
-            : p,
+          p.id === targetId || p.key === targetId ? updatedPerson : p,
         ),
       )
+
+      if (
+        selectedStudent &&
+        (selectedStudent.id === targetId || selectedStudent.key === targetId)
+      ) {
+        setSelectedStudent(updatedPerson)
+      }
+
+      showAlert(
+        'Status Updated',
+        `Student has been successfully ${newStatus === 'active' ? 'reactivated' : 'suspended'}.`,
+      )
     } catch (err) {
-      alert(
+      showAlert(
+        'Action Failed',
         `Failed to ${newStatus === 'active' ? 'reactivate' : 'suspend'} student: ${
           err instanceof Error ? err.message : 'Unknown error'
         }`,
+        'error',
       )
     } finally {
       setActionLoadingId(null)
@@ -692,32 +742,48 @@ export default function StudentRoster() {
 
   const handleDelete = async (person: ExtendedStudentPerson) => {
     const targetId = person.id || person.key
-    if (!confirm(`Are you sure you want to soft-delete ${person.name}?`)) return
 
-    setActionLoadingId(targetId)
+    showConfirm(
+      'Confirm Deletion',
+      `Are you sure you want to soft-delete ${person.name}?`,
+      async () => {
+        setActionLoadingId(targetId)
+        try {
+          if (source === 'server' && person.id) {
+            const api = adminApi as unknown as {
+              deleteUser?: (id: string) => Promise<unknown>
+            }
+            if (typeof api.deleteUser === 'function') {
+              await api.deleteUser(person.id)
+            }
+          }
 
-    try {
-      if (source === 'server' && person.id) {
-        const api = adminApi as unknown as {
-          deleteUser?: (id: string) => Promise<unknown>
+          setStudents((prev) =>
+            prev.filter((p) => (p.id ? p.id !== targetId : p.key !== targetId)),
+          )
+
+          if (
+            selectedStudent &&
+            (selectedStudent.id === targetId ||
+              selectedStudent.key === targetId)
+          ) {
+            setSelectedStudent(null)
+          }
+
+          showAlert('Student Removed', `${person.name} has been soft-deleted.`)
+        } catch (err) {
+          showAlert(
+            'Delete Failed',
+            `Failed to delete student: ${
+              err instanceof Error ? err.message : 'Unknown error'
+            }`,
+            'error',
+          )
+        } finally {
+          setActionLoadingId(null)
         }
-        if (typeof api.deleteUser === 'function') {
-          await api.deleteUser(person.id)
-        }
-      }
-
-      setStudents((prev) =>
-        prev.filter((p) => (p.id ? p.id !== targetId : p.key !== targetId)),
-      )
-    } catch (err) {
-      alert(
-        `Failed to delete student: ${
-          err instanceof Error ? err.message : 'Unknown error'
-        }`,
-      )
-    } finally {
-      setActionLoadingId(null)
-    }
+      },
+    )
   }
 
   return (
@@ -782,110 +848,226 @@ export default function StudentRoster() {
         </button>
       </form>
 
-      {/* Roster Table */}
-      <div className='bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden'>
-        <div className='grid grid-cols-12 px-5 py-3 bg-slate-50 text-[9px] font-black uppercase text-gray-400'>
-          <span className='col-span-4'>Student Name</span>
-          <span className='col-span-3'>Email</span>
-          <span className='col-span-2'>Track / Mode</span>
-          <span className='col-span-1 text-center'>Status</span>
-          <span className='col-span-2 text-right'>Actions</span>
+      {/* Content View: Desktop Table vs Mobile/Tablet Cards */}
+      {loading ? (
+        <div className='py-12 flex justify-center bg-white rounded-2xl border border-slate-100'>
+          <Loader2 className='animate-spin text-[#002EFF]' />
         </div>
+      ) : students.length === 0 ? (
+        <div className='bg-white rounded-2xl border border-slate-100 p-10 text-center'>
+          <p className='text-xs font-bold text-slate-400'>No students found.</p>
+        </div>
+      ) : (
+        <>
+          {/* 1. Mobile/Tablet Card View (Visible on < md screens) */}
+          <div className='grid grid-cols-1 sm:grid-cols-2 gap-3 md:hidden'>
+            {students.map((p) => {
+              const rowId = p.id || p.key
+              const isRowLoading = actionLoadingId === rowId
+              const isSuspended = p.status === 'suspended'
 
-        {loading ? (
-          <div className='py-12 flex justify-center'>
-            <Loader2 className='animate-spin text-[#002EFF]' />
-          </div>
-        ) : students.length === 0 ? (
-          <p className='px-5 py-10 text-center text-xs font-bold text-slate-400'>
-            No students found.
-          </p>
-        ) : (
-          students.map((p) => {
-            const rowId = p.id || p.key
-            const isRowLoading = actionLoadingId === rowId
-            const isSuspended = p.status === 'suspended'
-
-            return (
-              <div
-                key={p.key}
-                className={`grid grid-cols-12 items-center px-5 py-4 border-t border-slate-50 transition-colors ${
-                  isSuspended ? 'bg-slate-50/50' : ''
-                }`}
-              >
-                <div className='col-span-4 flex flex-col'>
-                  <span className='text-xs font-black text-gray-800'>
-                    {p.name}
-                  </span>
-                  {p.studentCode && (
-                    <span className='text-[9px] font-bold text-slate-400'>
-                      ID: {p.studentCode}
-                    </span>
-                  )}
-                </div>
-
-                <span className='col-span-3 text-[10px] font-bold text-slate-500 flex items-center gap-1 truncate'>
-                  <Mail size={10} /> {p.email}
-                </span>
-
-                <span className='col-span-2 text-[10px] font-bold text-slate-500 truncate flex items-center gap-1'>
-                  <BookOpen size={10} className='text-slate-400' />
-                  {p.examTrack || p.learningMode || p.extra || '—'}
-                </span>
-
-                <span className='col-span-1 flex justify-center'>
-                  <Badge
-                    className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${
-                      isSuspended
-                        ? 'bg-amber-50 text-amber-600 border border-amber-200'
-                        : 'bg-emerald-50 text-emerald-600 border border-emerald-200'
-                    }`}
-                  >
-                    {isSuspended ? 'Suspended' : 'Active'}
-                  </Badge>
-                </span>
-
-                {/* Actions */}
-                <span className='col-span-2 flex items-center justify-end gap-1'>
-                  {isRowLoading ? (
-                    <Loader2
-                      size={14}
-                      className='animate-spin text-slate-400 mr-2'
-                    />
-                  ) : (
-                    <>
-                      {isSuspended ? (
-                        <button
-                          onClick={() => handleStatusChange(p, 'active')}
-                          title='Activate Student'
-                          className='p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 transition-colors'
-                        >
-                          <UserCheck size={14} />
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => handleStatusChange(p, 'suspended')}
-                          title='Suspend Student'
-                          className='p-1.5 rounded-lg text-amber-600 hover:bg-amber-50 transition-colors'
-                        >
-                          <UserX size={14} />
-                        </button>
-                      )}
-                      <button
-                        onClick={() => handleDelete(p)}
-                        title='Soft Delete Student'
-                        className='p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 transition-colors'
+              return (
+                <div
+                  key={p.key}
+                  className={`p-4 bg-white rounded-2xl border ${
+                    isSuspended
+                      ? 'border-amber-200 bg-amber-50/20'
+                      : 'border-slate-100'
+                  } shadow-sm space-y-3 flex flex-col justify-between`}
+                >
+                  <div className='space-y-2'>
+                    <div className='flex items-start justify-between gap-2'>
+                      <div>
+                        <h3 className='text-xs font-black text-slate-900 line-clamp-1'>
+                          {p.name}
+                        </h3>
+                        {p.studentCode && (
+                          <span className='text-[9px] font-bold text-slate-400 block'>
+                            ID: {p.studentCode}
+                          </span>
+                        )}
+                      </div>
+                      <Badge
+                        className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full shrink-0 ${
+                          isSuspended
+                            ? 'bg-amber-50 text-amber-600 border border-amber-200'
+                            : 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+                        }`}
                       >
-                        <Trash2 size={14} />
-                      </button>
-                    </>
-                  )}
-                </span>
-              </div>
-            )
-          })
-        )}
-      </div>
+                        {isSuspended ? 'Suspended' : 'Active'}
+                      </Badge>
+                    </div>
+
+                    <div className='text-[10px] font-bold text-slate-500 space-y-1 pt-1 border-t border-slate-50'>
+                      <div className='flex items-center gap-1.5 truncate'>
+                        <Mail size={11} className='text-slate-400 shrink-0' />
+                        <span className='truncate'>{p.email}</span>
+                      </div>
+                      <div className='flex items-center gap-1.5 truncate'>
+                        <BookOpen
+                          size={11}
+                          className='text-slate-400 shrink-0'
+                        />
+                        <span>
+                          {p.examTrack || p.learningMode || p.extra || '—'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Actions & View Details */}
+                  <div className='flex items-center justify-between pt-2 border-t border-slate-100 gap-2'>
+                    <button
+                      onClick={() => setSelectedStudent(p)}
+                      className='flex items-center gap-1 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-black transition-all'
+                    >
+                      <Eye size={12} /> View Details
+                    </button>
+
+                    <div className='flex items-center gap-1'>
+                      {isRowLoading ? (
+                        <Loader2
+                          size={14}
+                          className='animate-spin text-slate-400'
+                        />
+                      ) : (
+                        <>
+                          {isSuspended ? (
+                            <button
+                              onClick={() => handleStatusChange(p, 'active')}
+                              title='Activate Student'
+                              className='p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 transition-colors'
+                            >
+                              <UserCheck size={14} />
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleStatusChange(p, 'suspended')}
+                              title='Suspend Student'
+                              className='p-1.5 rounded-lg text-amber-600 hover:bg-amber-50 transition-colors'
+                            >
+                              <UserX size={14} />
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleDelete(p)}
+                            title='Soft Delete Student'
+                            className='p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 transition-colors'
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* 2. Desktop Table View (Visible on >= md screens) */}
+          <div className='hidden md:block bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden'>
+            <div className='grid grid-cols-12 px-5 py-3 bg-slate-50 text-[9px] font-black uppercase text-gray-400'>
+              <span className='col-span-4'>Student Name</span>
+              <span className='col-span-3'>Email</span>
+              <span className='col-span-2'>Track / Mode</span>
+              <span className='col-span-1 text-center'>Status</span>
+              <span className='col-span-2 text-right'>Actions</span>
+            </div>
+
+            {students.map((p) => {
+              const rowId = p.id || p.key
+              const isRowLoading = actionLoadingId === rowId
+              const isSuspended = p.status === 'suspended'
+
+              return (
+                <div
+                  key={p.key}
+                  className={`grid grid-cols-12 items-center px-5 py-4 border-t border-slate-50 transition-colors ${
+                    isSuspended ? 'bg-slate-50/50' : ''
+                  }`}
+                >
+                  <div className='col-span-4 flex flex-col'>
+                    <span className='text-xs font-black text-gray-800'>
+                      {p.name}
+                    </span>
+                    {p.studentCode && (
+                      <span className='text-[9px] font-bold text-slate-400'>
+                        ID: {p.studentCode}
+                      </span>
+                    )}
+                  </div>
+
+                  <span className='col-span-3 text-[10px] font-bold text-slate-500 flex items-center gap-1 truncate'>
+                    <Mail size={10} /> {p.email}
+                  </span>
+
+                  <span className='col-span-2 text-[10px] font-bold text-slate-500 truncate flex items-center gap-1'>
+                    <BookOpen size={10} className='text-slate-400' />
+                    {p.examTrack || p.learningMode || p.extra || '—'}
+                  </span>
+
+                  <span className='col-span-1 flex justify-center'>
+                    <Badge
+                      className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${
+                        isSuspended
+                          ? 'bg-amber-50 text-amber-600 border border-amber-200'
+                          : 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+                      }`}
+                    >
+                      {isSuspended ? 'Suspended' : 'Active'}
+                    </Badge>
+                  </span>
+
+                  {/* Actions */}
+                  <span className='col-span-2 flex items-center justify-end gap-1'>
+                    <button
+                      onClick={() => setSelectedStudent(p)}
+                      title='View Details'
+                      className='p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 transition-colors'
+                    >
+                      <Eye size={14} />
+                    </button>
+                    {isRowLoading ? (
+                      <Loader2
+                        size={14}
+                        className='animate-spin text-slate-400 mr-2'
+                      />
+                    ) : (
+                      <>
+                        {isSuspended ? (
+                          <button
+                            onClick={() => handleStatusChange(p, 'active')}
+                            title='Activate Student'
+                            className='p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 transition-colors'
+                          >
+                            <UserCheck size={14} />
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleStatusChange(p, 'suspended')}
+                            title='Suspend Student'
+                            className='p-1.5 rounded-lg text-amber-600 hover:bg-amber-50 transition-colors'
+                          >
+                            <UserX size={14} />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleDelete(p)}
+                          title='Soft Delete Student'
+                          className='p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 transition-colors'
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </>
+                    )}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        </>
+      )}
 
       <p className='text-[10px] font-medium text-slate-400'>
         {source === 'server'
@@ -893,13 +1075,176 @@ export default function StudentRoster() {
           : 'Showing local fallback data. Server API not connected yet.'}
       </p>
 
+      {/* Student Details Modal */}
+      {selectedStudent && (
+        <StudentDetailsModal
+          student={selectedStudent}
+          onClose={() => setSelectedStudent(null)}
+          onStatusChange={handleStatusChange}
+          onDelete={handleDelete}
+          isLoading={
+            actionLoadingId === (selectedStudent.id || selectedStudent.key)
+          }
+        />
+      )}
+
       {/* Add Student Modal */}
       {showAddModal && (
         <CreateStudentModal
           onClose={() => setShowAddModal(false)}
           onSuccess={() => fetchStudents(searchQuery)}
+          showAlert={showAlert}
         />
       )}
+
+      {/* Custom Alert Modal */}
+      {alertConfig.isOpen && (
+        <AlertModal
+          title={alertConfig.title}
+          message={alertConfig.message}
+          type={alertConfig.type}
+          onConfirm={() => {
+            if (alertConfig.onConfirm) alertConfig.onConfirm()
+            setAlertConfig((prev) => ({ ...prev, isOpen: false }))
+          }}
+          onClose={() => setAlertConfig((prev) => ({ ...prev, isOpen: false }))}
+        />
+      )}
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/* Modal Component: Student Details                                  */
+/* ------------------------------------------------------------------ */
+function StudentDetailsModal({
+  student,
+  onClose,
+  onStatusChange,
+  onDelete,
+  isLoading,
+}: {
+  student: ExtendedStudentPerson
+  onClose: () => void
+  onStatusChange: (
+    person: ExtendedStudentPerson,
+    newStatus: 'active' | 'suspended',
+  ) => void
+  onDelete: (person: ExtendedStudentPerson) => void
+  isLoading: boolean
+}) {
+  const isSuspended = student.status === 'suspended'
+
+  return (
+    <div className='fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200'>
+      <div className='w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden'>
+        <div className='flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50'>
+          <div className='flex items-center gap-2.5'>
+            <div className='h-8 w-8 rounded-xl bg-[#002EFF] text-white flex items-center justify-center shadow-md shadow-blue-200'>
+              <GraduationCap size={16} />
+            </div>
+            <div>
+              <h3 className='text-xs font-black text-slate-900 uppercase tracking-wider'>
+                Student Profile
+              </h3>
+              <p className='text-[9px] font-bold text-slate-400'>
+                {student.studentCode ? `ID: ${student.studentCode}` : 'Details'}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className='p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-colors'
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className='p-6 space-y-4'>
+          <div className='flex items-center justify-between bg-slate-50 p-4 rounded-2xl border border-slate-100'>
+            <div>
+              <h2 className='text-base font-black text-slate-900'>
+                {student.name}
+              </h2>
+              <p className='text-xs font-bold text-slate-500 flex items-center gap-1 mt-0.5'>
+                <Mail size={12} /> {student.email}
+              </p>
+            </div>
+            <Badge
+              className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-full ${
+                isSuspended
+                  ? 'bg-amber-50 text-amber-600 border border-amber-200'
+                  : 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+              }`}
+            >
+              {isSuspended ? 'Suspended' : 'Active'}
+            </Badge>
+          </div>
+
+          <div className='grid grid-cols-2 gap-3 text-xs'>
+            <div className='p-3 bg-slate-50 rounded-xl border border-slate-100'>
+              <span className='text-[9px] font-black uppercase tracking-wider text-slate-400 block'>
+                Exam Track
+              </span>
+              <span className='font-bold text-slate-800 mt-1 block'>
+                {student.examTrack || 'Not Specified'}
+              </span>
+            </div>
+
+            <div className='p-3 bg-slate-50 rounded-xl border border-slate-100'>
+              <span className='text-[9px] font-black uppercase tracking-wider text-slate-400 block'>
+                Learning Mode
+              </span>
+              <span className='font-bold text-slate-800 mt-1 block'>
+                {student.learningMode || 'Not Specified'}
+              </span>
+            </div>
+          </div>
+
+          <div className='flex items-center justify-between gap-2 pt-4 border-t border-slate-100'>
+            <button
+              type='button'
+              onClick={() => onDelete(student)}
+              disabled={isLoading}
+              className='flex items-center gap-1.5 px-3 py-2 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-xl text-xs font-bold transition-all disabled:opacity-50'
+            >
+              <Trash2 size={14} /> Soft Delete
+            </button>
+
+            <div className='flex items-center gap-2'>
+              {isSuspended ? (
+                <button
+                  type='button'
+                  onClick={() => onStatusChange(student, 'active')}
+                  disabled={isLoading}
+                  className='flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-200 disabled:opacity-50'
+                >
+                  {isLoading ? (
+                    <Loader2 size={14} className='animate-spin' />
+                  ) : (
+                    <UserCheck size={14} />
+                  )}{' '}
+                  Re-activate
+                </button>
+              ) : (
+                <button
+                  type='button'
+                  onClick={() => onStatusChange(student, 'suspended')}
+                  disabled={isLoading}
+                  className='flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-amber-200 disabled:opacity-50'
+                >
+                  {isLoading ? (
+                    <Loader2 size={14} className='animate-spin' />
+                  ) : (
+                    <UserX size={14} />
+                  )}{' '}
+                  Suspend
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
@@ -910,9 +1255,11 @@ export default function StudentRoster() {
 function CreateStudentModal({
   onClose,
   onSuccess,
+  showAlert,
 }: {
   onClose: () => void
   onSuccess: () => void
+  showAlert: (title: string, message: string, type?: 'info' | 'error') => void
 }) {
   const [fullname, setFullname] = useState('')
   const [email, setEmail] = useState('')
@@ -921,20 +1268,16 @@ function CreateStudentModal({
   const [learningMode, setLearningMode] = useState('Online')
 
   const [submitting, setSubmitting] = useState(false)
-  const [statusMsg, setStatusMsg] = useState<{
-    type: 'error' | 'success'
-    text: string
-  } | null>(null)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setStatusMsg(null)
 
     if (!fullname.trim() || !email.trim() || !password.trim()) {
-      setStatusMsg({
-        type: 'error',
-        text: 'Fullname, email, and password are required.',
-      })
+      showAlert(
+        'Missing Fields',
+        'Fullname, email, and password are required.',
+        'error',
+      )
       return
     }
 
@@ -961,22 +1304,21 @@ function CreateStudentModal({
           : null
 
       if (res?.success) {
-        setStatusMsg({
-          type: 'success',
-          text: `Student account created! Credentials sent to ${email}`,
-        })
-        setTimeout(() => {
-          onSuccess()
-          onClose()
-        }, 1200)
+        showAlert(
+          'Success',
+          `Student account created! Credentials sent to ${email}`,
+        )
+        onSuccess()
+        onClose()
       } else {
         throw new Error(res?.message || 'Failed to create student account')
       }
     } catch (err: unknown) {
-      setStatusMsg({
-        type: 'error',
-        text: err instanceof Error ? err.message : 'Failed to create student',
-      })
+      showAlert(
+        'Creation Failed',
+        err instanceof Error ? err.message : 'Failed to create student',
+        'error',
+      )
     } finally {
       setSubmitting(false)
     }
@@ -1008,19 +1350,6 @@ function CreateStudentModal({
         </div>
 
         <form onSubmit={handleSubmit} className='p-6 space-y-4'>
-          {statusMsg && (
-            <div
-              className={`flex items-start gap-2 p-3 rounded-xl text-[11px] font-bold ${
-                statusMsg.type === 'error'
-                  ? 'bg-rose-50 text-rose-600 border border-rose-100'
-                  : 'bg-emerald-50 text-emerald-600 border border-emerald-100'
-              }`}
-            >
-              <AlertCircle size={14} className='shrink-0 mt-0.5' />
-              <span>{statusMsg.text}</span>
-            </div>
-          )}
-
           <div className='space-y-1'>
             <label className='text-[9px] font-black uppercase tracking-widest text-slate-400 block'>
               Full Name <span className='text-rose-500'>*</span>
@@ -1113,6 +1442,78 @@ function CreateStudentModal({
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/* Modal Component: Reusable Alert / Confirm Dialog                   */
+/* ------------------------------------------------------------------ */
+function AlertModal({
+  title,
+  message,
+  type,
+  onConfirm,
+  onClose,
+}: {
+  title: string
+  message: string
+  type: 'info' | 'error' | 'confirm'
+  onConfirm: () => void
+  onClose: () => void
+}) {
+  return (
+    <div className='fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200'>
+      <div className='w-full max-w-sm bg-white rounded-3xl shadow-2xl border border-slate-100 p-6 space-y-4 text-center'>
+        <div className='flex justify-center'>
+          {type === 'error' ? (
+            <div className='h-12 w-12 rounded-2xl bg-rose-50 text-rose-500 flex items-center justify-center'>
+              <AlertCircle size={24} />
+            </div>
+          ) : type === 'confirm' ? (
+            <div className='h-12 w-12 rounded-2xl bg-amber-50 text-amber-500 flex items-center justify-center'>
+              <ShieldAlert size={24} />
+            </div>
+          ) : (
+            <div className='h-12 w-12 rounded-2xl bg-blue-50 text-[#002EFF] flex items-center justify-center'>
+              <CheckCircle2 size={24} />
+            </div>
+          )}
+        </div>
+
+        <div className='space-y-1'>
+          <h3 className='text-sm font-black text-slate-900'>{title}</h3>
+          <p className='text-xs font-bold text-slate-500 leading-relaxed'>
+            {message}
+          </p>
+        </div>
+
+        <div className='flex items-center justify-center gap-2 pt-2'>
+          {type === 'confirm' ? (
+            <>
+              <button
+                onClick={onClose}
+                className='w-1/2 h-10 rounded-xl bg-slate-100 text-slate-600 font-bold text-xs hover:bg-slate-200 transition-all'
+              >
+                Cancel
+              </button>
+              <button
+                onClick={onConfirm}
+                className='w-1/2 h-10 rounded-xl bg-rose-600 text-white font-bold text-xs hover:bg-rose-700 shadow-md shadow-rose-200 transition-all'
+              >
+                Confirm
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={onConfirm}
+              className='w-full h-10 rounded-xl bg-slate-900 text-white font-bold text-xs hover:bg-slate-800 transition-all'
+            >
+              OK
+            </button>
+          )}
+        </div>
       </div>
     </div>
   )
