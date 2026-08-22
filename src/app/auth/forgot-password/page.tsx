@@ -174,7 +174,7 @@ export default function ForgotPassword() {
                   </Form>
                   <div className='mt-8 text-center'>
                     <Link
-                      href='/auth/login'
+                      href='/auth/signin'
                       className='inline-flex items-center gap-2 text-gray-400 hover:text-[#002EFF] font-bold text-xs uppercase transition-colors'
                     >
                       <ArrowLeft size={14} /> Back to Login
@@ -207,7 +207,7 @@ export default function ForgotPassword() {
                     asChild
                     className='w-full py-7 bg-black text-white font-black rounded-2xl hover:bg-[#002EFF] transition-all shadow-xl'
                   >
-                    <Link href='/auth/login'>RETURN TO LOGIN</Link>
+                    <Link href='/auth/signin'>RETURN TO LOGIN</Link>
                   </Button>
 
                   <button
