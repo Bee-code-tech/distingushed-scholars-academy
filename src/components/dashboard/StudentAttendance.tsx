@@ -150,6 +150,15 @@ export default function StudentAttendance() {
 
   useEffect(() => {
     void load()
+    // Poll so a tutor activating attendance shows up without a manual reload.
+    if (!isLive()) return
+    const id = setInterval(() => void load(), 20000)
+    const onFocus = () => void load()
+    window.addEventListener('focus', onFocus)
+    return () => {
+      clearInterval(id)
+      window.removeEventListener('focus', onFocus)
+    }
   }, [load])
 
   const markPresent = async () => {
