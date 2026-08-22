@@ -289,6 +289,7 @@ import {
   AlertCircle,
 } from 'lucide-react'
 import { adminApi } from '@/lib/admin-api'
+import { dsaApi } from '@/lib/api'
 
 interface AttendanceSession {
   active: boolean
@@ -316,8 +317,32 @@ export default function TakeAttendance() {
   const [actionLoading, setActionLoading] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // The ids of students this tutor is in charge of. null = show everyone
+  // (admin, or roster unavailable). Used to scope the monitor so a tutor only
+  // sees their own students' check-ins even though the session is shared.
+  const [rosterIds, setRosterIds] = useState<Set<string> | null>(null)
 
   const pollTimerRef = useRef<NodeJS.Timeout | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const roster = (await dsaApi.analytics.tutorStudents()) as Record<
+          string,
+          unknown
+        >[]
+        if (cancelled) return
+        // Admin gets all students back here, so this is a no-op filter for them.
+        setRosterIds(new Set(roster.map((s) => String(s.id ?? s._id ?? ''))))
+      } catch {
+        setRosterIds(null) // no scoping if the roster can't be read
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const formatTime = (isoString?: string | null) => {
     if (!isoString) return ''
@@ -434,6 +459,11 @@ export default function TakeAttendance() {
     )
   }
 
+  // Scope the monitor to this tutor's own students (no-op for admin).
+  const visibleCheckIns = rosterIds
+    ? checkIns.filter((c) => rosterIds.has(String(c.studentId)))
+    : checkIns
+
   return (
     <div className='space-y-6 max-w-3xl mx-auto'>
       <div className='flex items-center justify-between'>
@@ -527,7 +557,7 @@ export default function TakeAttendance() {
             <div className='flex items-center gap-2 text-gray-500'>
               <Users size={15} />
               <span className='text-[11px] font-black uppercase'>
-                {checkIns.length} checked in
+                {visibleCheckIns.length} checked in
               </span>
             </div>
             <button
@@ -544,7 +574,7 @@ export default function TakeAttendance() {
           </div>
 
           <Card className='rounded-3xl border-none shadow-sm bg-white overflow-hidden'>
-            {checkIns.length === 0 ? (
+            {visibleCheckIns.length === 0 ? (
               <div className='p-8 text-center'>
                 <Clock size={26} className='text-slate-300 mx-auto mb-2' />
                 <p className='text-[11px] font-bold text-slate-400'>
@@ -553,7 +583,7 @@ export default function TakeAttendance() {
                 </p>
               </div>
             ) : (
-              checkIns.map((c) => (
+              visibleCheckIns.map((c) => (
                 <div
                   key={c.studentId || c.studentCode || c.email}
                   className='flex items-center justify-between px-5 py-3.5 border-t border-slate-50 first:border-t-0'

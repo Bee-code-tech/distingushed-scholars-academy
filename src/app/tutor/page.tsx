@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
   LayoutDashboard,
   Users,
@@ -107,7 +107,19 @@ function TrackBadge({ track }: { track: string }) {
 
 export default function TutorDashboard() {
   const { user, loading, logout } = useDashboardSession('tutor')
-  const [view, setView] = useState('overview')
+  const [view, setViewState] = useState('overview')
+  // Persist the active tab in the URL (?tab=) so a browser refresh keeps you on
+  // the same screen instead of resetting to Overview.
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get('tab')
+    if (t) setViewState(t)
+  }, [])
+  const setView = useCallback((key: string) => {
+    setViewState(key)
+    const url = new URL(window.location.href)
+    url.searchParams.set('tab', key)
+    window.history.replaceState(null, '', url.toString())
+  }, [])
   // Live-first: a real JWT reads the tutor roster + overview (GET
   // /tutors/me/students, /tutors/me/analytics); demo/offline falls back to the
   // local stores keyed off the tutor's assigned courses.
