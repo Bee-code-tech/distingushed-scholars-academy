@@ -149,7 +149,13 @@ export default function Header() {
               ))}
             </nav>
 
-            <div className='flex items-center gap-4'>
+            <div className='flex items-center gap-2 md:gap-3'>
+              <Link
+                href='/auth/signin'
+                className='hidden md:flex items-center px-5 py-3 rounded-2xl font-black text-xs uppercase tracking-widest text-[#002EFF] hover:bg-blue-50 transition-all active:scale-95'
+              >
+                Login
+              </Link>
               <Link
                 href='/auth/signup'
                 className='hidden md:flex items-center gap-2 px-6 py-3 bg-[#002EFF] text-white rounded-2xl font-black text-xs uppercase hover:bg-blue-600 transition-all active:scale-95 group'
@@ -284,6 +290,13 @@ export default function Header() {
                       Ready to excel? Let's start your journey today.
                     </p>
                   </div>
+                  <Link
+                    href='/auth/signin'
+                    onClick={() => setOpen(false)}
+                    className='w-full mb-3 py-4 bg-white border-2 border-[#002EFF]/20 text-[#002EFF] rounded-2xl font-black uppercase tracking-widest text-[11px] text-center flex items-center justify-center gap-2 hover:bg-blue-50 active:scale-95 transition-all'
+                  >
+                    Login <ArrowRight size={16} />
+                  </Link>
                   <Link
                     href='/auth/signup'
                     onClick={() => setOpen(false)}
