@@ -323,7 +323,8 @@ import {
   GraduationCap,
 } from 'lucide-react'
 import { adminApi } from '@/lib/admin-api'
-import { getStudents, type StoredStudent } from '@/lib/studentsStore'
+import type { StoredStudent } from '@/lib/studentsStore'
+import { dsaApi } from '@/lib/api'
 import { addGuardian } from '@/lib/directoryStore'
 
 interface FieldState {
@@ -397,8 +398,43 @@ export default function CreateGuardian() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
-  // Ward list comes from the students store (same source the tutor roster uses).
-  useEffect(() => setStudents(getStudents()), [])
+  // Real students from the backend so the ward link uses a valid studentId
+  // (the backend rejects a wardId that isn't an active student).
+  useEffect(() => {
+    const token =
+      typeof window !== 'undefined'
+        ? localStorage.getItem('admin_token') ||
+          localStorage.getItem('token') ||
+          undefined
+        : undefined
+    let cancelled = false
+    ;(async () => {
+      try {
+        const rows = (await dsaApi.admin.listUsers(
+          'student',
+          token,
+        )) as Record<string, unknown>[]
+        if (cancelled) return
+        setStudents(
+          rows.map((s) => ({
+            key: String(s.studentId ?? s.id ?? s._id ?? ''),
+            name: String(s.fullname ?? s.fullName ?? 'Student'),
+            track: String(s.examTrack ?? s.level ?? ''),
+            mode:
+              (s.learningMode as string) === 'physical' ||
+              (s.learningMode as string) === 'online'
+                ? (s.learningMode as string)
+                : undefined,
+          })),
+        )
+      } catch {
+        setStudents([])
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const set = (k: keyof FieldState, v: string) =>
     setValues((prev) => ({ ...prev, [k]: v }))
