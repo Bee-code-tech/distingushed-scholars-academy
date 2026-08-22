@@ -12,8 +12,16 @@
 // In Cloudinary: Settings → Upload → Upload presets → add an **Unsigned** preset
 // (optionally lock it down: allowed formats, a target folder, max file size).
 
-const CLOUD_NAME = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME
-const UPLOAD_PRESET = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET
+// These are PUBLIC values (cloud name + an *unsigned* preset) — they ship in the
+// client bundle on the live site regardless, so committing them as defaults is
+// safe and means uploads work in every environment without per-host env config.
+// Override per-environment with the NEXT_PUBLIC_CLOUDINARY_* vars if needed.
+// (Lock the preset down in Cloudinary — allowed formats, folder, limits — to
+// limit abuse, since any unsigned preset is by nature exposed to the browser.)
+const CLOUD_NAME =
+  process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'dxpbjxzfv'
+const UPLOAD_PRESET =
+  process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || 'dsa_academy'
 
 /** True when the two public Cloudinary env vars are set. */
 export function cloudinaryConfigured(): boolean {
