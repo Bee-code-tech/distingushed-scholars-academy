@@ -178,10 +178,17 @@ export function getAdminUser(): AdminUser | null {
 export function clearAdminSession(): void {
   if (typeof window === 'undefined') return
 
+  // Admin keys
   localStorage.removeItem(TOKEN_KEY)
   localStorage.removeItem(USER_KEY)
   localStorage.removeItem(ROLE_KEY)
   localStorage.removeItem('token')
+  // Student/shared keys too — otherwise a stale session survives admin logout
+  // and the /auth/signin & /auth/signup guards bounce the user back to /admin
+  // (→ /adminLogin) via dashboardPathForRole.
+  localStorage.removeItem('dsa_token')
+  localStorage.removeItem('dsa_user')
+  localStorage.removeItem('user_role')
 
   const expiredDate = 'Thu, 01 Jan 1970 00:00:00 GMT'
   document.cookie = `admin_token=; path=/; expires=${expiredDate}`

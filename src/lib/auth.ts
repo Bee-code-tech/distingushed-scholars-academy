@@ -112,7 +112,13 @@ export function clearSession(): void {
   localStorage.removeItem('token') // the adminApi mirror set in setSession
   localStorage.removeItem(USER_KEY)
   localStorage.removeItem(ROLE_KEY)
+  // Also clear any admin session keys/cookies so switching roles is clean and
+  // no stale session bounces the user to /adminLogin.
+  localStorage.removeItem('admin_token')
+  localStorage.removeItem('admin_user')
+  localStorage.removeItem('admin_role')
   document.cookie = `${ADMIN_COOKIE}=; path=/; max-age=0; SameSite=Lax`
+  document.cookie = `admin_role=; path=/; max-age=0; SameSite=Lax`
 }
 
 export function rememberEmail(email: string, remember: boolean): void {
