@@ -39,6 +39,24 @@ interface OverviewUIProps {
   student: StudentProfile
 }
 
+function isLive(): boolean {
+  const t = getToken()
+  return !!t && !isDemoToken(t)
+}
+
+// Consecutive most-recent sessions the student was marked present.
+function currentStreak(records: { date?: string; status?: string }[]): number {
+  const sorted = [...records].sort((a, b) =>
+    String(a.date).localeCompare(String(b.date)),
+  )
+  let s = 0
+  for (let i = sorted.length - 1; i >= 0; i--) {
+    if (sorted[i].status === 'present') s++
+    else break
+  }
+  return s
+}
+
 function SmallStat({ label, value, icon: Icon, color }: any) {
   return (
     <Card className='p-3 rounded-2xl border-none shadow-sm bg-white flex items-center gap-3'>
@@ -232,6 +250,16 @@ export default function OverviewUI({
     elapsed: false,
   })
 
+  // Real performance figures (null until loaded / for demo sessions).
+  const [perf, setPerf] = useState<{
+    avg: number | null
+    progress: number
+    rate: number
+    present: number
+    total: number
+  } | null>(null)
+  const [streak, setStreak] = useState(0)
+
   useEffect(() => {
     setTime(examCountdown(trackConfig.nextExamDate))
     const id = setInterval(
@@ -241,6 +269,36 @@ export default function OverviewUI({
     return () => clearInterval(id)
   }, [trackConfig.nextExamDate])
 
+  useEffect(() => {
+    if (!isLive()) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const [a, me] = await Promise.all([
+          dsaApi.analytics.me() as Promise<Record<string, unknown>>,
+          dsaApi.attendance.me() as Promise<Record<string, unknown>>,
+        ])
+        if (cancelled) return
+        setPerf({
+          avg: typeof a.averageScore === 'number' ? a.averageScore : null,
+          progress: typeof a.progressPercent === 'number' ? a.progressPercent : 0,
+          rate: typeof a.attendanceRate === 'number' ? a.attendanceRate : 0,
+          present: typeof a.present === 'number' ? a.present : 0,
+          total: typeof a.totalSessions === 'number' ? a.totalSessions : 0,
+        })
+        const recs = Array.isArray(me.records)
+          ? (me.records as { date?: string; status?: string }[])
+          : []
+        setStreak(currentStreak(recs))
+      } catch {
+        /* leave figures blank */
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   return (
     <div className='space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500 max-w-6xl mx-auto'>
       <div className='grid grid-cols-1 lg:grid-cols-3 gap-6'>
@@ -248,9 +306,12 @@ export default function OverviewUI({
         <section className='lg:col-span-2 relative overflow-hidden bg-[#002EFF] rounded-4xl p-8 text-white shadow-lg'>
           <div className='relative z-10 space-y-4'>
             <div className='flex items-center gap-2'>
-              <Badge className='bg-[#FCB900] text-[#002EFF] hover:bg-[#FCB900] border-none font-black px-3 py-1'>
-                <Flame size={12} className='mr-1 fill-[#002EFF]' /> 15 DAY STREAK
-              </Badge>
+              {streak > 0 && (
+                <Badge className='bg-[#FCB900] text-[#002EFF] hover:bg-[#FCB900] border-none font-black px-3 py-1'>
+                  <Flame size={12} className='mr-1 fill-[#002EFF]' /> {streak} DAY
+                  STREAK
+                </Badge>
+              )}
               <Badge className='bg-white/15 text-white border-none font-bold px-3 py-1'>
                 <ModeIcon size={11} className='mr-1' />
                 {modeConfig.label}
@@ -341,12 +402,6 @@ export default function OverviewUI({
             </div>
           )}
 
-          <div className='w-full mt-6 h-2 bg-blue-50 rounded-full overflow-hidden'>
-            <div
-              className='bg-linear-to-r from-[#002EFF] to-[#FCB900] h-full transition-all duration-1000'
-              style={{ width: time.elapsed ? '100%' : '65%' }}
-            />
-          </div>
         </Card>
       </div>
 
@@ -357,27 +412,27 @@ export default function OverviewUI({
         <div className='lg:col-span-2 grid grid-cols-2 gap-4 content-start'>
           <SmallStat
             label='Avg Score'
-            value='78%'
+            value={perf?.avg != null ? `${perf.avg}%` : '—'}
             icon={Timer}
             color='text-blue-600'
           />
           <SmallStat
-            label='Topics'
-            value={`12/${trackConfig.totalTopics}`}
+            label='Progress'
+            value={perf ? `${perf.progress}%` : '—'}
             icon={Zap}
             color='text-yellow-500'
           />
           <SmallStat
-            label='Global Rank'
-            value='#12'
-            icon={Trophy}
-            color='text-orange-500'
-          />
-          <SmallStat
-            label='Accuracy'
-            value='92%'
+            label='Attendance'
+            value={perf && perf.total ? `${perf.rate}%` : '—'}
             icon={CheckCircle2}
             color='text-emerald-500'
+          />
+          <SmallStat
+            label='Present'
+            value={perf ? `${perf.present}/${perf.total}` : '—'}
+            icon={CalendarCheck}
+            color='text-orange-500'
           />
           <Card className='col-span-2 p-4 rounded-2xl border border-blue-50 bg-blue-50/40 flex items-center gap-3'>
             <div className='h-9 w-9 bg-white rounded-xl flex items-center justify-center shrink-0 text-[#002EFF] shadow-sm'>

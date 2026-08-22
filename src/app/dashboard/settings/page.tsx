@@ -151,6 +151,9 @@ export default function SettingsView() {
           email: email.toLowerCase(),
           avatarUrl: profileImage,
         } as DsaUser)
+      // Tell the dashboard shell to refresh the header (name/avatar) without a
+      // full reload.
+      window.dispatchEvent(new Event('dsa:user-updated'))
       setSaveMsg('Saved successfully.')
     } catch (err) {
       if (isBackendUnreachable(err)) setSaveMsg('Saved locally — server unreachable.')

@@ -463,6 +463,22 @@ export default function AcademyDashboard() {
     initDashboard()
   }, [router, handleLogout])
 
+  // Refresh the header name/avatar when the profile is edited in Settings,
+  // without forcing a full page reload.
+  useEffect(() => {
+    const onUpdated = () => {
+      const u = getUser()
+      if (!u) return
+      setUser((prev) => ({
+        ...prev,
+        name: u.fullName || u.username || prev.name,
+        avatar: u.avatarUrl || prev.avatar,
+      }))
+    }
+    window.addEventListener('dsa:user-updated', onUpdated)
+    return () => window.removeEventListener('dsa:user-updated', onUpdated)
+  }, [])
+
   const navigation = [
     { icon: LayoutDashboard, label: 'Overview', view: 'overview' as ViewState },
     {
