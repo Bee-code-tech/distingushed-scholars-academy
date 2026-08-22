@@ -19,9 +19,8 @@ const GUARDIANS_KEY = 'dsa_guardians'
 // "tutor_demo") so the admin's Tutors list & course-assignment dropdown have a
 // tutor to work with, and courses assigned to them link to the tutor dashboard.
 // Guardians are created by the admin (Create Guardian).
-const SEED_TUTORS: DirectoryPerson[] = [
-  { key: 'tutor_demo', name: 'Mr. Timilehin', email: 'tutor@dsa.demo', extra: 'Mathematics' },
-]
+// Tutors are real (admin-created via the backend); no seeded tutor.
+const SEED_TUTORS: DirectoryPerson[] = []
 const SEED_GUARDIANS: DirectoryPerson[] = []
 
 function read(key: string): DirectoryPerson[] {

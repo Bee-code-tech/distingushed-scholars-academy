@@ -29,16 +29,8 @@ export interface DemoAccount {
 const PASSWORD = 'demo1234'
 
 export const DEMO_ACCOUNTS: DemoAccount[] = [
-  {
-    email: 'tutor@dsa.demo',
-    password: PASSWORD,
-    profile: {
-      email: 'tutor@dsa.demo',
-      username: 'tutor_demo',
-      fullName: 'Mr. Timilehin (Tutor)',
-      role: 'tutor',
-    },
-  },
+  // Tutors are real now (admin-created, real backend login), so the demo tutor
+  // login is removed. Guardian has no backend flow yet, so its demo login stays.
   {
     email: 'guardian@dsa.demo',
     password: PASSWORD,
