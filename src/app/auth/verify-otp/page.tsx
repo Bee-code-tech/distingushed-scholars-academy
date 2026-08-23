@@ -104,9 +104,9 @@ export default function VerifyOTP() {
     setApiSuccess(null)
 
     try {
-      await dsaApi.auth.sendOtp(email)
+      const res = await dsaApi.auth.sendOtp(email)
 
-      setApiSuccess('A fresh verification code has been sent.')
+      setApiSuccess(res?.message || 'A fresh verification code has been sent.')
       startCooldown()
     } catch (error) {
       setApiError(
