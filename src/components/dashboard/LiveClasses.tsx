@@ -12,6 +12,7 @@ import {
   Info,
   Loader2,
   PlayCircle,
+  BookOpen,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -31,14 +32,9 @@ import {
 import { getUser, getToken } from '@/lib/auth'
 import { isDemoToken } from '@/lib/demoAccounts'
 import { dsaApi } from '@/lib/api'
+import { getCourses } from '@/lib/coursesStore'
 import { normaliseTrack, EXAM_TRACKS } from '@/lib/studentProfile'
 import type { ExamTrack } from '@/lib/studentProfile'
-
-const TRACKS: { id: ExamTrack; label: string }[] = [
-  { id: 'jamb', label: 'JAMB' },
-  { id: 'waec', label: 'WAEC' },
-  { id: 'postutme', label: 'Post-UTME' },
-]
 
 function isLive(): boolean {
   const t = getToken()
@@ -168,26 +164,86 @@ export default function LiveClasses({
   return <StudentLive track={track} />
 }
 
-/* ---------------- Tutor: upload link + control status ---------------- */
+/* ---------------- Tutor: upload link + control status (per course) ---------------- */
+type TutorCourse = { id: string; title: string; track: ExamTrack }
+
 function TutorLive() {
   const live = isLive()
-  const [track, setTrack] = useState<ExamTrack>('jamb')
+  const [courses, setCourses] = useState<TutorCourse[]>([])
+  const [courseId, setCourseId] = useState('')
+  const [loadingCourses, setLoadingCourses] = useState(true)
   const [link, setLink] = useState('')
   const [status, setStatus] = useState<LiveStatus>('scheduled')
   const [saved, setSaved] = useState(false)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
 
+  const selected = courses.find((c) => c.id === courseId)
+  const track = selected?.track ?? 'jamb'
+
+  // Load the tutor's courses.
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      if (live) {
+        try {
+          const cs = (await dsaApi.courses.list({
+            tutorId: 'me',
+          })) as Record<string, unknown>[]
+          if (cancelled) return
+          const mapped: TutorCourse[] = cs.map((c) => ({
+            id: String(c.id ?? c._id ?? ''),
+            title: String(c.title ?? 'Course'),
+            track: normaliseTrack(
+              (c.category as string) ||
+                (c.track as string) ||
+                (c.subject as string) ||
+                '',
+            ),
+          }))
+          setCourses(mapped)
+          setCourseId((p) => p || mapped[0]?.id || '')
+          setLoadingCourses(false)
+          return
+        } catch {
+          /* fall through to local */
+        }
+      }
+      if (cancelled) return
+      const cs = getCourses().map((c) => ({
+        id: c.id,
+        title: c.title,
+        track: normaliseTrack(
+          (c as { track?: string; category?: string }).track ||
+            (c as { category?: string }).category ||
+            c.title,
+        ),
+      }))
+      setCourses(cs)
+      setCourseId((p) => p || cs[0]?.id || '')
+      setLoadingCourses(false)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [live])
+
   const load = useCallback(async () => {
     setErr('')
+    if (!courseId) {
+      setLink('')
+      setStatus('scheduled')
+      setSaved(false)
+      return
+    }
     if (live) {
       try {
-        const d = (await dsaApi.liveClasses.next(track)) as {
-          meetLink?: string
-          status?: string
-        }
-        setLink(d?.meetLink || '')
-        setStatus(normStatus(d?.status))
+        const rows = (await dsaApi.liveClasses.list({
+          courseId,
+        })) as Record<string, unknown>[]
+        const rec = rows.find((r) => String(r.courseId ?? '') === courseId) ?? rows[0]
+        setLink((rec?.meetLink as string) || '')
+        setStatus(normStatus(rec?.status))
         setSaved(false)
         return
       } catch {
@@ -197,7 +253,7 @@ function TutorLive() {
     setLink(getMeetLink(track))
     setStatus(getLiveStatus(track))
     setSaved(false)
-  }, [track, live])
+  }, [courseId, track, live])
 
   useEffect(() => {
     void load()
@@ -210,9 +266,10 @@ function TutorLive() {
       setSaved(true)
       return
     }
+    if (!courseId) return
     setBusy(true)
     try {
-      await dsaApi.liveClasses.uploadLink(track, link.trim())
+      await dsaApi.liveClasses.uploadLinkForCourse(courseId, link.trim())
       setSaved(true)
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Failed to save the link')
@@ -228,9 +285,10 @@ function TutorLive() {
       setStatus(s)
       return
     }
+    if (!courseId) return
     setBusy(true)
     try {
-      await dsaApi.liveClasses.setStatus(track, { status: s })
+      await dsaApi.liveClasses.setStatusForCourse(courseId, { status: s })
       setStatus(s)
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Failed to update the class status')
@@ -257,28 +315,35 @@ function TutorLive() {
         <Info size={15} className='text-amber-600 shrink-0 mt-0.5' />
         <p className='text-[11px] font-bold text-amber-800 leading-relaxed'>
           The admin generates the Google Meet link and shares it with you. Paste
-          it here per track, then set the class <b>Live</b> when it starts.
+          it here per course, then set the class <b>Live</b> when it starts.
         </p>
       </div>
 
-      <div className='inline-flex gap-1 p-1 bg-slate-100 rounded-xl'>
-        {TRACKS.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTrack(t.id)}
-            className={`px-4 py-2 rounded-lg text-[11px] font-black uppercase transition-all ${
-              track === t.id ? 'bg-white text-[#002EFF] shadow-sm' : 'text-slate-400 hover:text-slate-600'
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
+      {/* Course picker */}
+      <div className='flex items-center gap-2 flex-wrap'>
+        <BookOpen size={15} className='text-slate-400' />
+        <select
+          value={courseId}
+          onChange={(e) => setCourseId(e.target.value)}
+          className='h-10 px-3 rounded-lg bg-slate-50 border border-transparent focus:border-[#002EFF]/30 focus:bg-white outline-none text-sm font-bold'
+        >
+          {courses.length === 0 && (
+            <option value=''>
+              {loadingCourses ? 'Loading courses…' : 'No courses assigned'}
+            </option>
+          )}
+          {courses.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.title}
+            </option>
+          ))}
+        </select>
       </div>
 
       <Card className='p-5 rounded-3xl border-none shadow-sm bg-white space-y-4'>
         <div className='flex items-center justify-between'>
           <p className='text-[10px] font-black uppercase text-gray-400'>
-            {EXAM_TRACKS[track].label} online class
+            {selected ? selected.title : EXAM_TRACKS[track].label} online class
           </p>
           <StatusPill status={status} />
         </div>
@@ -303,7 +368,7 @@ function TutorLive() {
             />
             <button
               onClick={save}
-              disabled={busy || !link.trim()}
+              disabled={busy || !link.trim() || !courseId}
               className='flex items-center gap-1.5 px-4 h-11 rounded-xl bg-[#002EFF] text-white text-[10px] font-black uppercase hover:bg-blue-700 disabled:opacity-50'
             >
               <Save size={13} /> {saved ? 'Saved' : 'Save'}
@@ -317,14 +382,14 @@ function TutorLive() {
           </span>
           <button
             onClick={() => changeStatus('live')}
-            disabled={busy || !link.trim()}
+            disabled={busy || !link.trim() || !courseId}
             className='flex items-center gap-1.5 h-9 px-3 rounded-lg bg-red-500 text-white text-[10px] font-black uppercase disabled:opacity-40 hover:brightness-105'
           >
             <Radio size={13} /> Go live
           </button>
           <button
             onClick={() => changeStatus('ended')}
-            disabled={busy}
+            disabled={busy || !courseId}
             className='flex items-center gap-1.5 h-9 px-3 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-black uppercase hover:bg-slate-200 disabled:opacity-50'
           >
             <Square size={12} /> End
