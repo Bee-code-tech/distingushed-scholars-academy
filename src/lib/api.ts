@@ -774,6 +774,46 @@ export const dsaApi = {
         .then((r) => (r as { data?: unknown }).data ?? r),
   },
 
+  // Guardian (parent) — read-only views of a linked ward, scoped and verified
+  // server-side to the logged-in parent (docs/*). Use the ward's ObjectId (`id`
+  // from wards) for the path, not the studentId (which contains slashes).
+  guardian: {
+    // GET /parents/me/wards — the parent's linked ward(s).
+    wards: (token?: string) =>
+      fetch(`${BASE_URL}/parents/me/wards`, { headers: getHeaders(token) })
+        .then((r) =>
+          handleResponse<
+            Record<string, unknown>[] | { data?: Record<string, unknown>[] }
+          >(r),
+        )
+        .then((res) => (Array.isArray(res) ? res : (res?.data ?? []))),
+
+    // GET /parents/me/wards/:id — one ward's profile.
+    ward: (wardId: string, token?: string) =>
+      fetch(`${BASE_URL}/parents/me/wards/${encodeURIComponent(wardId)}`, {
+        headers: getHeaders(token),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+
+    // GET /parents/me/wards/:id/performance — academic + attendance snapshot.
+    performance: (wardId: string, token?: string) =>
+      fetch(
+        `${BASE_URL}/parents/me/wards/${encodeURIComponent(wardId)}/performance`,
+        { headers: getHeaders(token) },
+      )
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+
+    // GET /parents/me/wards/:id/fees — fee / payment status.
+    fees: (wardId: string, token?: string) =>
+      fetch(`${BASE_URL}/parents/me/wards/${encodeURIComponent(wardId)}/fees`, {
+        headers: getHeaders(token),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+  },
+
   // Notifications — a per-user inbox with server-side read state. Populated by
   // the backend from announcements, attendance opens, grades, etc.
   notifications: {
