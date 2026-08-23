@@ -304,15 +304,26 @@ export const dsaApi = {
         .then((res) => (Array.isArray(res) ? res : (res?.data ?? []))),
   },
 
-  // Attendance — self check-in flow (docs/attendance.md). Each returns the
+  // Attendance — per-COURSE self check-in (docs/attendance.md). A tutor opens
+  // attendance for one of their courses; enrolled students mark themselves
+  // present for that course. courseId is required to activate/close and scopes
+  // check-in, the monitor list, and the "is it open" check. Each returns the
   // unwrapped `data` payload.
   attendance: {
-    current: (token?: string) =>
-      fetch(`${BASE_URL}/attendance/sessions/current`, { headers: getHeaders(token) })
+    // GET /attendance/sessions/current?courseId= — is this course's attendance open?
+    current: (courseId?: string, token?: string) =>
+      fetch(
+        `${BASE_URL}/attendance/sessions/current${courseId ? `?courseId=${encodeURIComponent(courseId)}` : ''}`,
+        { headers: getHeaders(token) },
+      )
         .then((r) => handleResponse<{ data?: unknown }>(r))
         .then((r) => (r as { data?: unknown }).data ?? r),
 
-    activate: (body: { date?: string; courseId?: string } = {}, token?: string) =>
+    // POST /attendance/sessions { courseId, date? } — tutor/admin activate.
+    activate: (
+      body: { courseId: string; date?: string },
+      token?: string,
+    ) =>
       fetch(`${BASE_URL}/attendance/sessions`, {
         method: 'POST',
         headers: getHeaders(token),
@@ -321,30 +332,46 @@ export const dsaApi = {
         .then((r) => handleResponse<{ data?: unknown }>(r))
         .then((r) => (r as { data?: unknown }).data ?? r),
 
-    close: (date: string, token?: string) =>
-      fetch(`${BASE_URL}/attendance/sessions/${encodeURIComponent(date)}`, {
-        method: 'DELETE',
-        headers: getHeaders(token),
-      })
+    // DELETE /attendance/sessions/:date?courseId= — close a course's session.
+    close: (date: string, courseId: string, token?: string) =>
+      fetch(
+        `${BASE_URL}/attendance/sessions/${encodeURIComponent(date)}?courseId=${encodeURIComponent(courseId)}`,
+        { method: 'DELETE', headers: getHeaders(token) },
+      )
         .then((r) => handleResponse<{ data?: unknown }>(r))
         .then((r) => (r as { data?: unknown }).data ?? r),
 
-    checkIn: (token?: string) =>
+    // POST /attendance/check-in { courseId } — student marks self present.
+    checkIn: (courseId?: string, token?: string) =>
       fetch(`${BASE_URL}/attendance/check-in`, {
         method: 'POST',
         headers: getHeaders(token),
-        body: JSON.stringify({}),
+        body: JSON.stringify(courseId ? { courseId } : {}),
       })
         .then((r) => handleResponse<{ data?: unknown }>(r))
         .then((r) => (r as { data?: unknown }).data ?? r),
 
-    checkIns: (date?: string, token?: string) =>
-      fetch(`${BASE_URL}/attendance/check-ins${date ? `?date=${encodeURIComponent(date)}` : ''}`, {
+    // GET /attendance/check-ins?date=&courseId= — monitor a course's check-ins.
+    checkIns: (
+      params: { date?: string; courseId?: string } = {},
+      token?: string,
+    ) => {
+      const qs = new URLSearchParams()
+      if (params.date) qs.set('date', params.date)
+      if (params.courseId) qs.set('courseId', params.courseId)
+      const q = qs.toString()
+      return fetch(`${BASE_URL}/attendance/check-ins${q ? `?${q}` : ''}`, {
         headers: getHeaders(token),
       })
-        .then((r) => handleResponse<Record<string, unknown>[] | { data?: Record<string, unknown>[] }>(r))
-        .then((res) => (Array.isArray(res) ? res : (res?.data ?? []))),
+        .then((r) =>
+          handleResponse<
+            Record<string, unknown>[] | { data?: Record<string, unknown>[] }
+          >(r),
+        )
+        .then((res) => (Array.isArray(res) ? res : (res?.data ?? [])))
+    },
 
+    // GET /attendance/me — the student's own overall record + rate.
     me: (token?: string) =>
       fetch(`${BASE_URL}/attendance/me`, { headers: getHeaders(token) })
         .then((r) => handleResponse<{ data?: unknown }>(r))

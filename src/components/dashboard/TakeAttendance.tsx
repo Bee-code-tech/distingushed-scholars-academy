@@ -321,6 +321,9 @@ export default function TakeAttendance() {
   // (admin, or roster unavailable). Used to scope the monitor so a tutor only
   // sees their own students' check-ins even though the session is shared.
   const [rosterIds, setRosterIds] = useState<Set<string> | null>(null)
+  // Attendance is per course, so the tutor/admin picks which course to open.
+  const [courses, setCourses] = useState<{ id: string; title: string }[]>([])
+  const [courseId, setCourseId] = useState('')
 
   const pollTimerRef = useRef<NodeJS.Timeout | null>(null)
 
@@ -337,6 +340,24 @@ export default function TakeAttendance() {
         setRosterIds(new Set(roster.map((s) => String(s.id ?? s._id ?? ''))))
       } catch {
         setRosterIds(null) // no scoping if the roster can't be read
+      }
+      // Load the tutor's own courses (fall back to all for admin).
+      try {
+        let list = (await dsaApi.courses.list({ tutorId: 'me' })) as Record<
+          string,
+          unknown
+        >[]
+        if (!list.length)
+          list = (await dsaApi.courses.list({})) as Record<string, unknown>[]
+        if (cancelled) return
+        const mapped = list.map((c) => ({
+          id: String(c.id ?? c._id ?? ''),
+          title: String(c.title ?? 'Course'),
+        }))
+        setCourses(mapped)
+        setCourseId((p) => p || mapped[0]?.id || '')
+      } catch {
+        /* leave empty */
       }
     })()
     return () => {
@@ -355,34 +376,47 @@ export default function TakeAttendance() {
 
   const getTodayISO = () => new Date().toISOString().split('T')[0]
 
-  const refresh = useCallback(async (isManual = false) => {
-    if (isManual) setRefreshing(true)
-    setError(null)
-    try {
-      const sessionRes = await adminApi.getCurrentAttendanceSession()
-
-      if (sessionRes?.success && sessionRes.data) {
-        setSession(sessionRes.data)
-
-        if (sessionRes.data.active) {
-          const targetDate = sessionRes.data.date || getTodayISO()
-          const checkInsRes = await adminApi.getAttendanceCheckIns(targetDate)
-
-          if (checkInsRes?.success) {
-            setCheckIns(checkInsRes.data || [])
-          }
-        } else {
-          setCheckIns([])
-        }
+  const refresh = useCallback(
+    async (isManual = false) => {
+      if (isManual) setRefreshing(true)
+      setError(null)
+      if (!courseId) {
+        setSession({ active: false, date: null, activatedAt: null })
+        setCheckIns([])
+        setLoading(false)
+        setRefreshing(false)
+        return
       }
-    } catch (err: any) {
-      console.error('Failed to fetch attendance state:', err)
-      setError(err?.message || 'Failed to update attendance records.')
-    } finally {
-      setLoading(false)
-      setRefreshing(false)
-    }
-  }, [])
+      try {
+        const sessionRes = await adminApi.getCurrentAttendanceSession(courseId)
+
+        if (sessionRes?.success && sessionRes.data) {
+          setSession(sessionRes.data)
+
+          if (sessionRes.data.active) {
+            const targetDate = sessionRes.data.date || getTodayISO()
+            const checkInsRes = await adminApi.getAttendanceCheckIns(
+              targetDate,
+              courseId,
+            )
+
+            if (checkInsRes?.success) {
+              setCheckIns(checkInsRes.data || [])
+            }
+          } else {
+            setCheckIns([])
+          }
+        }
+      } catch (err: any) {
+        console.error('Failed to fetch attendance state:', err)
+        setError(err?.message || 'Failed to update attendance records.')
+      } finally {
+        setLoading(false)
+        setRefreshing(false)
+      }
+    },
+    [courseId],
+  )
 
   // Initial load
   useEffect(() => {
@@ -412,10 +446,14 @@ export default function TakeAttendance() {
   })
 
   const activate = async () => {
+    if (!courseId) {
+      setError('Pick a course to open attendance for.')
+      return
+    }
     setActionLoading(true)
     setError(null)
     try {
-      const res = await adminApi.activateAttendanceSession()
+      const res = await adminApi.activateAttendanceSession({ courseId })
       if (res?.success) {
         await refresh()
       } else {
@@ -434,7 +472,7 @@ export default function TakeAttendance() {
     setActionLoading(true)
     setError(null)
     try {
-      const res = await adminApi.closeAttendanceSession(currentDate)
+      const res = await adminApi.closeAttendanceSession(currentDate, courseId)
       if (res?.success) {
         await refresh()
       } else {
@@ -484,6 +522,27 @@ export default function TakeAttendance() {
         >
           {session.active ? 'ACTIVE TODAY' : 'NOT ACTIVATED'}
         </Badge>
+      </div>
+
+      {/* Course picker — attendance is opened per course */}
+      <div className='flex items-center gap-2 flex-wrap'>
+        <CalendarCheck size={15} className='text-slate-400' />
+        <span className='text-[10px] font-black uppercase text-slate-400'>Class</span>
+        <select
+          value={courseId}
+          onChange={(e) => {
+            setCourseId(e.target.value)
+            setLoading(true)
+          }}
+          className='h-10 px-3 rounded-lg bg-slate-50 border border-transparent focus:border-[#002EFF]/30 focus:bg-white outline-none text-sm font-bold'
+        >
+          {courses.length === 0 && <option value=''>No courses assigned</option>}
+          {courses.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.title}
+            </option>
+          ))}
+        </select>
       </div>
 
       {error && (

@@ -7,38 +7,16 @@ import {
   CalendarCheck,
   CheckCircle2,
   XCircle,
-  Clock,
   Flame,
   Hand,
   Lock,
+  GraduationCap,
+  Loader2,
 } from 'lucide-react'
-import {
-  STUDENT_ATTENDANCE,
-  attendanceRate,
-  type AttendanceStatus,
-} from '@/lib/attendance'
-import {
-  getSession,
-  getMyCheckIn,
-  checkIn,
-  formatTime,
-  type CheckIn,
-  type AttendanceSession,
-} from '@/lib/attendanceStore'
+import { formatTime } from '@/lib/attendanceStore'
 import { getUser, getToken } from '@/lib/auth'
 import { isDemoToken } from '@/lib/demoAccounts'
 import { dsaApi } from '@/lib/api'
-
-const STATUS: Record<
-  AttendanceStatus,
-  { label: string; icon: typeof CheckCircle2; cls: string; dot: string }
-> = {
-  present: { label: 'Present', icon: CheckCircle2, cls: 'text-emerald-600', dot: 'bg-emerald-500' },
-  late: { label: 'Late', icon: Clock, cls: 'text-amber-600', dot: 'bg-amber-500' },
-  absent: { label: 'Absent', icon: XCircle, cls: 'text-rose-500', dot: 'bg-rose-500' },
-}
-
-type Day = { date: string; status: AttendanceStatus }
 
 function isLive(): boolean {
   const t = getToken()
@@ -49,17 +27,36 @@ function todayKey(): string {
   return new Date().toISOString().slice(0, 10)
 }
 
-function normStatus(s: unknown): AttendanceStatus {
-  return s === 'absent' || s === 'late' ? s : 'present'
+// The API doesn't expose per-course check-in state on read, so remember which
+// courses the student marked present for today (per device) to keep the UI right
+// across reloads. The backend stays the source of truth for the overall rate.
+function checkedStoreKey(studentKey: string): string {
+  return `dsa_attend_${studentKey}_${todayKey()}`
+}
+function getCheckedCourses(studentKey: string): string[] {
+  if (typeof window === 'undefined') return []
+  try {
+    return JSON.parse(localStorage.getItem(checkedStoreKey(studentKey)) || '[]')
+  } catch {
+    return []
+  }
+}
+function addCheckedCourse(studentKey: string, courseId: string) {
+  const arr = getCheckedCourses(studentKey)
+  if (!arr.includes(courseId)) {
+    arr.push(courseId)
+    localStorage.setItem(checkedStoreKey(studentKey), JSON.stringify(arr))
+  }
 }
 
-function streakOf(days: Day[]): number {
-  let streak = 0
-  for (let i = days.length - 1; i >= 0; i--) {
-    if (days[i].status === 'absent') break
-    streak++
-  }
-  return streak
+type CourseSession = {
+  courseId: string
+  title: string
+  subject?: string
+  tutor?: string
+  open: boolean
+  activatedAt?: string
+  checkedIn: boolean
 }
 
 function Tile({ label, value, tint, icon: Icon }: any) {
@@ -77,80 +74,97 @@ function Tile({ label, value, tint, icon: Icon }: any) {
 }
 
 /**
- * Student attendance — self check-in + own history.
+ * Student attendance — per course.
  *
- * Live-first: with a real JWT it reads the backend (GET /attendance/me,
- * /attendance/sessions/current) and checks in via POST /attendance/check-in
- * (docs/attendance.md). On demo/offline it falls back to the local store and
- * the mock history so the preview still works.
+ * Attendance is opened by each tutor for their own course, so a student marks
+ * themselves present per enrolled course. We load the student's courses, make
+ * sure they're enrolled (check-in requires enrollment), then show one card per
+ * course with its live open/closed state. The overall rate comes from
+ * GET /attendance/me. Demo/offline sessions show a simple placeholder.
  */
 export default function StudentAttendance() {
-  const mockDays: Day[] = STUDENT_ATTENDANCE
-  const [days, setDays] = useState<Day[]>(mockDays)
-  const [stats, setStats] = useState(() => {
-    const present = mockDays.filter((d) => d.status === 'present').length
-    const absent = mockDays.filter((d) => d.status === 'absent').length
-    return { rate: attendanceRate(mockDays), present, absent }
-  })
-
-  // Self check-in state — loaded on the client to avoid hydration mismatch.
-  const [session, setSession] = useState<AttendanceSession>({
-    active: false,
-    date: null,
-    activatedAt: null,
-  })
-  const [me, setMe] = useState<{ key: string; name: string } | null>(null)
-  const [myCheckIn, setMyCheckIn] = useState<CheckIn | null>(null)
-  const [busy, setBusy] = useState(false)
-
-  const applyMe = useCallback((data: Record<string, unknown>, name: string) => {
-    const records = Array.isArray(data.records)
-      ? (data.records as Record<string, unknown>[])
-      : []
-    const mapped: Day[] = records.map((r) => ({
-      date: String(r.date ?? ''),
-      status: normStatus(r.status),
-    }))
-    const present = Number(data.present ?? mapped.filter((d) => d.status === 'present').length)
-    const total = Number(data.total ?? mapped.length)
-    const rate = Number(data.rate ?? (total ? Math.round((present / total) * 100) : 0))
-    if (mapped.length) setDays(mapped)
-    setStats({ rate, present, absent: Math.max(0, total - present) })
-    const today = records.find((r) => String(r.date) === todayKey() && normStatus(r.status) === 'present')
-    if (today) setMyCheckIn({ key: '', name, at: String(today.at ?? '') })
-  }, [])
+  const [mounted, setMounted] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [live, setLive] = useState(false)
+  const [sessions, setSessions] = useState<CourseSession[]>([])
+  const [stats, setStats] = useState({ rate: 0, present: 0, total: 0 })
+  const [busy, setBusy] = useState<string | null>(null)
+  const [studentKey, setStudentKey] = useState('me')
 
   const load = useCallback(async () => {
     const u = getUser()
-    const key = u?.username || u?.email || 'student'
-    const name = u?.fullName || u?.username || 'Student'
-    setMe({ key, name })
+    const key = u?.username || u?.email || 'me'
+    setStudentKey(key)
 
-    if (isLive()) {
-      try {
-        const [cur, mine] = await Promise.all([
-          dsaApi.attendance.current(),
-          dsaApi.attendance.me(),
-        ])
-        const c = (cur ?? {}) as Record<string, unknown>
-        setSession({
-          active: !!c.active,
-          date: (c.date as string) ?? null,
-          activatedAt: (c.activatedAt as string) ?? null,
-        })
-        applyMe((mine ?? {}) as Record<string, unknown>, name)
-        return
-      } catch {
-        // fall through to local store
-      }
+    if (!isLive()) {
+      setLive(false)
+      setSessions([])
+      setLoading(false)
+      return
     }
-    setSession(getSession())
-    setMyCheckIn(getMyCheckIn(key))
-  }, [applyMe])
+
+    try {
+      const courses = (await dsaApi.courses.mine()) as Record<string, unknown>[]
+      // Ensure enrolled (check-in requires it). Ignore already-enrolled/errors.
+      await Promise.allSettled(
+        courses.map((c) =>
+          dsaApi.courses.enroll(String(c.id ?? c._id ?? '')).catch(() => {}),
+        ),
+      )
+      const checked = new Set(getCheckedCourses(key))
+      const rows = await Promise.all(
+        courses.map(async (c) => {
+          const id = String(c.id ?? c._id ?? '')
+          const tutorObj = (c.tutor ?? {}) as Record<string, unknown>
+          let open = false
+          let activatedAt: string | undefined
+          try {
+            const cur = (await dsaApi.attendance.current(id)) as Record<
+              string,
+              unknown
+            >
+            open = !!cur.active
+            activatedAt = cur.activatedAt as string | undefined
+          } catch {
+            /* leave closed */
+          }
+          return {
+            courseId: id,
+            title: String(c.title ?? 'Course'),
+            subject: c.subject ? String(c.subject) : undefined,
+            tutor:
+              (c.tutorName as string) ||
+              (tutorObj.fullname as string) ||
+              (tutorObj.fullName as string) ||
+              undefined,
+            open,
+            activatedAt,
+            checkedIn: checked.has(id),
+          } as CourseSession
+        }),
+      )
+      setSessions(rows)
+
+      try {
+        const me = (await dsaApi.attendance.me()) as Record<string, unknown>
+        const present = Number(me.present ?? 0)
+        const total = Number(me.total ?? 0)
+        const rate = Number(me.rate ?? (total ? Math.round((present / total) * 100) : 0))
+        setStats({ rate, present, total })
+      } catch {
+        /* keep zeros */
+      }
+      setLive(true)
+    } catch {
+      setSessions([])
+    } finally {
+      setLoading(false)
+    }
+  }, [])
 
   useEffect(() => {
+    setMounted(true)
     void load()
-    // Poll so a tutor activating attendance shows up without a manual reload.
     if (!isLive()) return
     const id = setInterval(() => void load(), 20000)
     const onFocus = () => void load()
@@ -161,126 +175,147 @@ export default function StudentAttendance() {
     }
   }, [load])
 
-  const markPresent = async () => {
-    if (!me || busy) return
-    setBusy(true)
+  const markPresent = async (courseId: string) => {
+    if (busy) return
+    setBusy(courseId)
     try {
-      if (isLive()) {
-        try {
-          const res = (await dsaApi.attendance.checkIn()) as Record<string, unknown>
-          setMyCheckIn({ key: me.key, name: me.name, at: String(res.at ?? new Date().toISOString()) })
-          // refresh stats/history after a successful check-in
-          try {
-            const mine = (await dsaApi.attendance.me()) as Record<string, unknown>
-            applyMe(mine, me.name)
-          } catch {
-            /* keep optimistic state */
-          }
-          return
-        } catch {
-          // if the backend is unreachable, fall back to a local check-in
-        }
+      await dsaApi.attendance.checkIn(courseId)
+      addCheckedCourse(studentKey, courseId)
+      setSessions((prev) =>
+        prev.map((s) => (s.courseId === courseId ? { ...s, checkedIn: true } : s)),
+      )
+      void load()
+    } catch (err) {
+      // Already checked in today counts as present.
+      const msg = err instanceof Error ? err.message.toLowerCase() : ''
+      if (msg.includes('already')) {
+        addCheckedCourse(studentKey, courseId)
+        setSessions((prev) =>
+          prev.map((s) => (s.courseId === courseId ? { ...s, checkedIn: true } : s)),
+        )
       }
-      const entry = checkIn(me.key, me.name)
-      if (entry) setMyCheckIn(entry)
-      setSession(getSession())
     } finally {
-      setBusy(false)
+      setBusy(null)
     }
   }
 
-  const { rate, present, absent } = stats
-  const streak = streakOf(days)
+  if (!mounted || loading) {
+    return (
+      <div className='py-16 flex justify-center'>
+        <Loader2 className='animate-spin text-[#002EFF]' />
+      </div>
+    )
+  }
+
+  const absent = Math.max(0, stats.total - stats.present)
 
   return (
     <div className='space-y-6 max-w-4xl mx-auto'>
-      <div>
-        <h2 className='text-2xl font-black text-[#002EFF] italic uppercase flex items-center gap-2'>
-          <CalendarCheck size={24} /> My Attendance
-        </h2>
-        <p className='text-[10px] font-bold text-gray-400 uppercase tracking-widest'>
-          Mark yourself present when attendance is open
-        </p>
+      <div className='flex items-start justify-between gap-3'>
+        <div>
+          <h2 className='text-2xl font-black text-[#002EFF] italic uppercase flex items-center gap-2'>
+            <CalendarCheck size={24} /> My Attendance
+          </h2>
+          <p className='text-[10px] font-bold text-gray-400 uppercase tracking-widest'>
+            Mark yourself present in each class when your tutor opens attendance
+          </p>
+        </div>
+        <Badge
+          className={`text-[8px] font-black shrink-0 ${live ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-500'}`}
+        >
+          {live ? 'Live' : 'Local'}
+        </Badge>
       </div>
 
-      {/* Self check-in */}
-      {myCheckIn ? (
-        <Card className='rounded-3xl border-none shadow-sm bg-emerald-500 text-white p-6 flex items-center gap-4'>
-          <div className='h-12 w-12 rounded-2xl bg-white/20 flex items-center justify-center'>
-            <CheckCircle2 size={26} />
-          </div>
-          <div>
-            <p className='text-sm font-black uppercase'>You&apos;re marked present</p>
-            <p className='text-[11px] font-bold text-emerald-50'>
-              Checked in today at {formatTime(myCheckIn.at)}
-            </p>
-          </div>
-        </Card>
-      ) : session.active ? (
-        <Card className='rounded-3xl border-none shadow-lg bg-[#002EFF] text-white p-6 text-center'>
-          <div className='h-12 w-12 mx-auto rounded-2xl bg-white/15 flex items-center justify-center mb-3'>
-            <Hand size={24} className='text-[#FCB900]' />
-          </div>
-          <h3 className='text-sm font-black uppercase'>Attendance is open</h3>
-          <p className='text-[11px] font-medium text-blue-100 mt-1'>
-            Tap below to mark yourself present. Your time will be recorded.
+      {/* Overall stats */}
+      <div className='grid grid-cols-3 gap-4'>
+        <Tile label='Attendance Rate' value={`${stats.rate}%`} tint='bg-blue-50 text-blue-600' icon={CalendarCheck} />
+        <Tile label='Present' value={stats.present} tint='bg-emerald-50 text-emerald-600' icon={CheckCircle2} />
+        <Tile label='Absent' value={absent} tint='bg-rose-50 text-rose-500' icon={XCircle} />
+      </div>
+
+      {/* Per-course sessions */}
+      {!live ? (
+        <Card className='rounded-3xl border-none shadow-sm bg-white p-8 text-center'>
+          <p className='text-[11px] font-bold text-slate-400'>
+            Sign in to your student account to mark attendance.
           </p>
-          <button
-            onClick={markPresent}
-            disabled={busy}
-            className='mt-4 inline-flex items-center gap-2 px-8 h-11 bg-[#FCB900] text-[#002EFF] rounded-xl font-black text-[11px] uppercase shadow-lg hover:brightness-105 active:scale-95 transition-all disabled:opacity-60'
-          >
-            <CheckCircle2 size={15} /> {busy ? 'Marking…' : 'Mark Me Present'}
-          </button>
         </Card>
-      ) : (
-        <Card className='rounded-3xl border-none shadow-sm bg-white p-6 flex items-center gap-4'>
-          <div className='h-12 w-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center'>
+      ) : sessions.length === 0 ? (
+        <Card className='rounded-3xl border-none shadow-sm bg-white p-8 text-center'>
+          <div className='h-12 w-12 mx-auto rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mb-3'>
             <Lock size={22} />
           </div>
-          <div>
-            <p className='text-sm font-black text-gray-800 uppercase'>Attendance not open yet</p>
-            <p className='text-[11px] font-bold text-gray-400'>
-              Your tutor will activate attendance for today. Check back then.
-            </p>
-          </div>
+          <p className='text-sm font-black text-gray-800 uppercase'>No courses yet</p>
+          <p className='text-[11px] font-bold text-gray-400 mt-1'>
+            Once your programme has courses, each class will show here when its
+            tutor opens attendance.
+          </p>
         </Card>
-      )}
-
-      <div className='grid grid-cols-2 md:grid-cols-4 gap-4'>
-        <Tile label='Attendance Rate' value={`${rate}%`} tint='bg-blue-50 text-blue-600' icon={CalendarCheck} />
-        <Tile label='Present' value={present} tint='bg-emerald-50 text-emerald-600' icon={CheckCircle2} />
-        <Tile label='Absent' value={absent} tint='bg-rose-50 text-rose-500' icon={XCircle} />
-        <Tile label='Streak' value={`${streak} days`} tint='bg-amber-50 text-amber-600' icon={Flame} />
-      </div>
-
-      <Card className='rounded-3xl border-none shadow-sm bg-white overflow-hidden'>
-        <div className='px-5 py-3 bg-slate-50 flex items-center justify-between'>
-          <span className='text-[10px] font-black uppercase text-gray-400'>Recent Days</span>
-          <span className='text-[10px] font-black uppercase text-gray-400'>Status</span>
-        </div>
-        {days.length === 0 ? (
-          <div className='px-5 py-8 text-center text-[11px] font-bold text-slate-400'>
-            No attendance recorded yet.
-          </div>
-        ) : (
-          [...days].reverse().map((d, i) => {
-            const s = STATUS[d.status]
-            const Icon = s.icon
-            return (
-              <div key={i} className='flex items-center justify-between px-5 py-3.5 border-t border-slate-50'>
-                <div className='flex items-center gap-3'>
-                  <span className={`h-2 w-2 rounded-full ${s.dot}`} />
-                  <span className='text-xs font-black text-gray-700'>{d.date}</span>
-                </div>
-                <Badge className={`bg-transparent ${s.cls} text-[10px] font-black flex items-center gap-1`}>
-                  <Icon size={13} /> {s.label}
-                </Badge>
+      ) : (
+        <div className='space-y-3'>
+          <p className='text-[10px] font-black uppercase tracking-widest text-slate-400'>
+            Your classes
+          </p>
+          {sessions.map((s) => (
+            <Card
+              key={s.courseId}
+              className={`rounded-2xl border-none shadow-sm p-4 flex items-center gap-4 ${s.checkedIn ? 'bg-emerald-500 text-white' : s.open ? 'bg-[#002EFF] text-white' : 'bg-white'}`}
+            >
+              <div
+                className={`h-11 w-11 rounded-2xl flex items-center justify-center shrink-0 ${s.checkedIn || s.open ? 'bg-white/15' : 'bg-slate-100 text-slate-400'}`}
+              >
+                {s.checkedIn ? (
+                  <CheckCircle2 size={22} />
+                ) : s.open ? (
+                  <Hand size={20} className='text-[#FCB900]' />
+                ) : (
+                  <Lock size={18} />
+                )}
               </div>
-            )
-          })
-        )}
-      </Card>
+              <div className='min-w-0 flex-1'>
+                <p className={`text-sm font-black uppercase truncate ${s.checkedIn || s.open ? 'text-white' : 'text-gray-800'}`}>
+                  {s.title}
+                </p>
+                <p className={`text-[10px] font-bold flex items-center gap-1 truncate ${s.checkedIn ? 'text-emerald-50' : s.open ? 'text-blue-100' : 'text-slate-400'}`}>
+                  <GraduationCap size={11} />
+                  {s.tutor || 'Tutor'}
+                  {s.checkedIn && s.activatedAt ? '' : ''}
+                </p>
+              </div>
+              {s.checkedIn ? (
+                <span className='text-[10px] font-black uppercase text-white/90 flex items-center gap-1 shrink-0'>
+                  <CheckCircle2 size={14} /> Present
+                </span>
+              ) : s.open ? (
+                <button
+                  onClick={() => markPresent(s.courseId)}
+                  disabled={busy === s.courseId}
+                  className='shrink-0 inline-flex items-center gap-1.5 px-4 h-10 bg-[#FCB900] text-[#002EFF] rounded-xl font-black text-[10px] uppercase shadow hover:brightness-105 active:scale-95 transition-all disabled:opacity-60'
+                >
+                  {busy === s.courseId ? (
+                    <Loader2 size={13} className='animate-spin' />
+                  ) : (
+                    <CheckCircle2 size={13} />
+                  )}
+                  {busy === s.courseId ? '…' : 'Mark Present'}
+                </button>
+              ) : (
+                <span className='text-[9px] font-black uppercase text-slate-400 shrink-0'>
+                  Not open
+                </span>
+              )}
+            </Card>
+          ))}
+          <div className='flex items-center gap-1.5 pt-1'>
+            <Flame size={12} className='text-amber-500' />
+            <span className='text-[10px] font-bold text-slate-400'>
+              Present in {sessions.filter((s) => s.checkedIn).length} of{' '}
+              {sessions.length} classes today
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

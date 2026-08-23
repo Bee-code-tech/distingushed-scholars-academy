@@ -1077,21 +1077,23 @@ export const adminApi = {
       body: JSON.stringify(sessionData || {}),
     }),
 
-  /** Close attendance session for a specific date (e.g. '2026-08-11') */
-  closeAttendanceSession: (date: string) =>
+  /** Close a course's attendance session for a specific date. */
+  closeAttendanceSession: (date: string, courseId?: string) =>
     adminFetch<{ success: boolean; message?: string }>(
-      `/api/attendance/sessions/${encodeURIComponent(date)}`,
+      `/api/attendance/sessions/${encodeURIComponent(date)}${courseId ? `?courseId=${encodeURIComponent(courseId)}` : ''}`,
       {
         method: 'DELETE',
       },
     ),
 
-  /** Check if an attendance session is currently active */
-  getCurrentAttendanceSession: () =>
+  /** Check if a course's attendance session is currently active. */
+  getCurrentAttendanceSession: (courseId?: string) =>
     adminFetch<{
       success: boolean
       data: AttendanceSessionData
-    }>('/api/attendance/sessions/current'),
+    }>(
+      `/api/attendance/sessions/current${courseId ? `?courseId=${encodeURIComponent(courseId)}` : ''}`,
+    ),
 
   /** Student self check-in */
   studentCheckIn: () =>
@@ -1107,11 +1109,16 @@ export const adminApi = {
       body: JSON.stringify({}),
     }),
 
-  /** Monitor live student check-ins for a given date (defaults to today) */
-  getAttendanceCheckIns: (date?: string) =>
-    adminFetch<AttendanceCheckInsResponse>(
-      `/api/attendance/check-ins${date ? `?date=${encodeURIComponent(date)}` : ''}`,
-    ),
+  /** Monitor a course's check-ins for a given date (defaults to today). */
+  getAttendanceCheckIns: (date?: string, courseId?: string) => {
+    const qs = new URLSearchParams()
+    if (date) qs.set('date', date)
+    if (courseId) qs.set('courseId', courseId)
+    const q = qs.toString()
+    return adminFetch<AttendanceCheckInsResponse>(
+      `/api/attendance/check-ins${q ? `?${q}` : ''}`,
+    )
+  },
 
   /** Get current student's own attendance record summary & history */
   getMyAttendance: () =>
