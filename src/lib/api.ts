@@ -126,27 +126,17 @@ export const dsaApi = {
       }).then((r) => handleResponse<RegisterResponse>(r)),
 
     /**
-     * Resend the verification code.
-     *
-     * BACKEND GAP: `/auth/send-otp` is not implemented — the live API returns
-     * 404 and it is absent from the OpenAPI spec. The call is kept so this
-     * starts working the moment the endpoint ships; until then a 404 is
-     * translated into a message a student can actually act on, instead of
-     * surfacing a raw "Cannot POST /api/auth/send-otp".
+     * (Re)send the verification code (POST /auth/send-otp). Returns
+     * `{ success, message }`. The backend answers 400 "Account is already
+     * verified" for a verified user and 404 when no such user exists;
+     * handleResponse surfaces those messages as-is.
      */
-    sendOtp: async (email: string) => {
-      const r = await fetch(`${BASE_URL}/auth/send-otp`, {
+    sendOtp: (email: string) =>
+      fetch(`${BASE_URL}/auth/send-otp`, {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify({ email }),
-      })
-      if (r.status === 404) {
-        throw new Error(
-          'Resending codes is not available yet. Please use the code already sent to your email.',
-        )
-      }
-      return handleResponse<{ message: string }>(r)
-    },
+      }).then((r) => handleResponse<{ success?: boolean; message: string }>(r)),
 
     verifyOtp: (email: string, otp: string) =>
       fetch(`${BASE_URL}/auth/verify-otp`, {
@@ -477,12 +467,24 @@ export const dsaApi = {
         .then((r) => handleResponse<{ data?: unknown }>(r))
         .then((r) => (r as { data?: unknown }).data ?? r),
 
-    // POST /materials/:id/complete (student) — recomputes progressPercent.
+    // POST /materials/:id/complete (student) — mark done; recomputes
+    // progressPercent. GET /courses/:id/materials returns a per-student
+    // `completed` boolean reflecting this.
     completeMaterial: (materialId: string, token?: string) =>
       fetch(`${BASE_URL}/materials/${encodeURIComponent(materialId)}/complete`, {
         method: 'POST',
         headers: getHeaders(token),
         body: JSON.stringify({}),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+
+    // DELETE /materials/:id/complete (student) — un-mark; recomputes
+    // progressPercent.
+    uncompleteMaterial: (materialId: string, token?: string) =>
+      fetch(`${BASE_URL}/materials/${encodeURIComponent(materialId)}/complete`, {
+        method: 'DELETE',
+        headers: getHeaders(token),
       })
         .then((r) => handleResponse<{ data?: unknown }>(r))
         .then((r) => (r as { data?: unknown }).data ?? r),
@@ -512,18 +514,28 @@ export const dsaApi = {
         .then((r) => handleResponse<{ data?: unknown }>(r))
         .then((r) => (r as { data?: unknown }).data ?? r),
 
-    // GET /live-classes?track= (any auth) — list of live-class records.
-    list: (track?: string, token?: string) =>
-      fetch(
-        `${BASE_URL}/live-classes${track ? `?track=${encodeURIComponent(track)}` : ''}`,
-        { headers: getHeaders(token) },
-      )
+    // GET /live-classes?track=&courseId= (any auth) — list of live-class
+    // records. Filter by track (per-track records) or courseId (the per-course
+    // records the tutor drives). Accepts a bare track string for back-compat.
+    list: (
+      params: string | { track?: string; courseId?: string } = {},
+      token?: string,
+    ) => {
+      const p = typeof params === 'string' ? { track: params } : params
+      const qs = new URLSearchParams()
+      if (p.track) qs.set('track', p.track)
+      if (p.courseId) qs.set('courseId', p.courseId)
+      const q = qs.toString()
+      return fetch(`${BASE_URL}/live-classes${q ? `?${q}` : ''}`, {
+        headers: getHeaders(token),
+      })
         .then((r) =>
           handleResponse<
             Record<string, unknown>[] | { data?: Record<string, unknown>[] }
           >(r),
         )
-        .then((res) => (Array.isArray(res) ? res : (res?.data ?? []))),
+        .then((res) => (Array.isArray(res) ? res : (res?.data ?? [])))
+    },
 
     // PUT /live-classes/:track/link (tutor / admin) — upload the Meet link.
     uploadLink: (track: string, meetLink: string, token?: string) =>
@@ -547,6 +559,38 @@ export const dsaApi = {
         headers: getHeaders(token),
         body: JSON.stringify(body),
       })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+
+    // PUT /live-classes/course/:courseId/link (tutor / admin) — upload the Meet
+    // link for a single course (the tutor drives link/status per course).
+    uploadLinkForCourse: (courseId: string, meetLink: string, token?: string) =>
+      fetch(
+        `${BASE_URL}/live-classes/course/${encodeURIComponent(courseId)}/link`,
+        {
+          method: 'PUT',
+          headers: getHeaders(token),
+          body: JSON.stringify({ meetLink }),
+        },
+      )
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+
+    // PATCH /live-classes/course/:courseId/status (tutor / admin) — go live /
+    // end for a single course. Going live requires a meetLink.
+    setStatusForCourse: (
+      courseId: string,
+      body: { status: string; recordingUrl?: string },
+      token?: string,
+    ) =>
+      fetch(
+        `${BASE_URL}/live-classes/course/${encodeURIComponent(courseId)}/status`,
+        {
+          method: 'PATCH',
+          headers: getHeaders(token),
+          body: JSON.stringify(body),
+        },
+      )
         .then((r) => handleResponse<{ data?: unknown }>(r))
         .then((r) => (r as { data?: unknown }).data ?? r),
   },
@@ -739,8 +783,9 @@ export const dsaApi = {
   },
 
   // Announcements. The backend supports GET (server-filtered: a student sees
-  // global + their track) and POST (tutor/admin broadcast). There is no delete
-  // or read-state endpoint, so read tracking stays client-side.
+  // global + their track), POST (tutor/admin broadcast), and PUT/DELETE by id
+  // (tutor/admin edit + remove). There is no read-state endpoint, so read
+  // tracking stays client-side.
   announcements: {
     // GET /announcements?scope=&track= — students get their relevant set
     // server-side; tutors/admin can filter.
@@ -769,6 +814,29 @@ export const dsaApi = {
         method: 'POST',
         headers: getHeaders(token),
         body: JSON.stringify(body),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+
+    // PUT /announcements/:id (tutor / admin) — edit title + body.
+    update: (
+      id: string,
+      body: { title: string; body: string },
+      token?: string,
+    ) =>
+      fetch(`${BASE_URL}/announcements/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        headers: getHeaders(token),
+        body: JSON.stringify(body),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+
+    // DELETE /announcements/:id (tutor / admin).
+    remove: (id: string, token?: string) =>
+      fetch(`${BASE_URL}/announcements/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: getHeaders(token),
       })
         .then((r) => handleResponse<{ data?: unknown }>(r))
         .then((r) => (r as { data?: unknown }).data ?? r),

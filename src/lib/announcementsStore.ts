@@ -87,6 +87,22 @@ export function removeAnnouncement(id: string): void {
   write(ANN_KEY, read<Announcement[]>(ANN_KEY, []).filter((a) => a.id !== id))
 }
 
+/** Edit an existing (non-seed) announcement's title + body. */
+export function updateAnnouncement(
+  id: string,
+  patch: { title: string; body: string },
+): void {
+  if (SEED_ANNOUNCEMENTS.some((a) => a.id === id)) return
+  write(
+    ANN_KEY,
+    read<Announcement[]>(ANN_KEY, []).map((a) =>
+      a.id === id
+        ? { ...a, title: patch.title.trim(), body: patch.body.trim() }
+        : a,
+    ),
+  )
+}
+
 // ---- Read state (per user) ----
 function reads(): Record<string, string[]> {
   return read<Record<string, string[]>>(READ_KEY, {})

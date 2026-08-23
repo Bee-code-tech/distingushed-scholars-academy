@@ -5,6 +5,9 @@ import {
   Megaphone,
   Send,
   Trash2,
+  Pencil,
+  Check,
+  X,
   Globe,
   GraduationCap,
   CheckCheck,
@@ -20,6 +23,7 @@ import {
   getForStudent as getLocalForStudent,
   addAnnouncement as addLocalAnnouncement,
   removeAnnouncement as removeLocalAnnouncement,
+  updateAnnouncement as updateLocalAnnouncement,
   getReadIds,
   markRead as markReadLocal,
   markAllRead as markAllReadLocal,
@@ -128,6 +132,13 @@ function TutorAnnouncements() {
   const [error, setError] = useState('')
   const [sent, setSent] = useState(false)
 
+  // Inline edit of an existing announcement.
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editTitle, setEditTitle] = useState('')
+  const [editBody, setEditBody] = useState('')
+  const [savingEdit, setSavingEdit] = useState(false)
+  const [rowError, setRowError] = useState('')
+
   const load = useCallback(async () => {
     setLoading(true)
     if (isLive()) {
@@ -193,10 +204,47 @@ function TutorAnnouncements() {
     }
   }
 
-  const handleDelete = (id: string) => {
-    // The backend has no delete endpoint yet; only wired for the local store.
-    removeLocalAnnouncement(id)
-    void load()
+  const handleDelete = async (id: string) => {
+    setRowError('')
+    if (editingId === id) cancelEdit()
+    try {
+      if (live) await dsaApi.announcements.remove(id)
+      else removeLocalAnnouncement(id)
+      await load()
+    } catch (err) {
+      setRowError(err instanceof Error ? err.message : 'Failed to delete')
+    }
+  }
+
+  const startEdit = (a: Announcement) => {
+    setRowError('')
+    setEditingId(a.id)
+    setEditTitle(a.title)
+    setEditBody(a.body)
+  }
+
+  const cancelEdit = () => {
+    setEditingId(null)
+    setEditTitle('')
+    setEditBody('')
+  }
+
+  const saveEdit = async (id: string) => {
+    setRowError('')
+    if (editTitle.trim().length < 2) return setRowError('Enter a title')
+    if (editBody.trim().length < 3) return setRowError('Write a message')
+    setSavingEdit(true)
+    try {
+      const patch = { title: editTitle.trim(), body: editBody.trim() }
+      if (live) await dsaApi.announcements.update(id, patch)
+      else updateLocalAnnouncement(id, patch)
+      cancelEdit()
+      await load()
+    } catch (err) {
+      setRowError(err instanceof Error ? err.message : 'Failed to save changes')
+    } finally {
+      setSavingEdit(false)
+    }
   }
 
   return (
@@ -264,6 +312,9 @@ function TutorAnnouncements() {
 
       {/* Sent list */}
       <div className='space-y-2'>
+        {rowError && editingId === null && (
+          <p className='text-[11px] font-bold text-rose-600'>{rowError}</p>
+        )}
         {loading ? (
           <div className='py-8 flex justify-center'>
             <Loader2 className='animate-spin text-[#002EFF]' />
@@ -273,36 +324,90 @@ function TutorAnnouncements() {
             No announcements yet.
           </p>
         ) : (
-          announcements.map((a) => (
-            <Card
-              key={a.id}
-              className='p-4 rounded-2xl border-none shadow-sm bg-white'
-            >
-              <div className='flex items-center gap-2 mb-1'>
-                <Megaphone size={14} className='text-[#002EFF]' />
-                <p className='text-xs font-black text-gray-800 flex-1 truncate'>
-                  {a.title}
-                </p>
-                <ScopeBadge a={a} />
-                <span className='text-[9px] font-bold text-slate-400'>
-                  {timeAgo(a.createdAt)}
-                </span>
-                {!live && (
-                  <button
-                    onClick={() => handleDelete(a.id)}
-                    className='p-1 text-slate-400 hover:text-rose-600'
-                    title='Delete'
-                  >
-                    <Trash2 size={14} />
-                  </button>
+          announcements.map((a) => {
+            const editing = editingId === a.id
+            return (
+              <Card
+                key={a.id}
+                className='p-4 rounded-2xl border-none shadow-sm bg-white'
+              >
+                {editing ? (
+                  <div className='space-y-2'>
+                    {rowError && (
+                      <p className='text-[11px] font-bold text-rose-600'>
+                        {rowError}
+                      </p>
+                    )}
+                    <input
+                      value={editTitle}
+                      onChange={(e) => setEditTitle(e.target.value)}
+                      placeholder='Title'
+                      className='w-full h-10 px-3 rounded-lg bg-slate-50 border border-transparent focus:border-[#002EFF]/30 focus:bg-white outline-none text-sm font-medium'
+                    />
+                    <textarea
+                      value={editBody}
+                      onChange={(e) => setEditBody(e.target.value)}
+                      placeholder='Message…'
+                      rows={3}
+                      className='w-full px-3 py-2 rounded-lg bg-slate-50 border border-transparent focus:border-[#002EFF]/30 focus:bg-white outline-none text-sm font-medium resize-none'
+                    />
+                    <div className='flex items-center gap-2'>
+                      <button
+                        onClick={() => saveEdit(a.id)}
+                        disabled={savingEdit}
+                        className='flex items-center gap-1.5 h-9 px-4 rounded-lg bg-[#002EFF] text-white text-[10px] font-black uppercase hover:bg-blue-700 disabled:opacity-50'
+                      >
+                        {savingEdit ? (
+                          <Loader2 size={13} className='animate-spin' />
+                        ) : (
+                          <Check size={13} />
+                        )}
+                        {savingEdit ? 'Saving…' : 'Save'}
+                      </button>
+                      <button
+                        onClick={cancelEdit}
+                        disabled={savingEdit}
+                        className='flex items-center gap-1.5 h-9 px-3 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-black uppercase hover:bg-slate-200 disabled:opacity-50'
+                      >
+                        <X size={13} /> Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className='flex items-center gap-2 mb-1'>
+                      <Megaphone size={14} className='text-[#002EFF]' />
+                      <p className='text-xs font-black text-gray-800 flex-1 truncate'>
+                        {a.title}
+                      </p>
+                      <ScopeBadge a={a} />
+                      <span className='text-[9px] font-bold text-slate-400'>
+                        {timeAgo(a.createdAt)}
+                      </span>
+                      <button
+                        onClick={() => startEdit(a)}
+                        className='p-1 text-slate-400 hover:text-[#002EFF]'
+                        title='Edit'
+                      >
+                        <Pencil size={14} />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(a.id)}
+                        className='p-1 text-slate-400 hover:text-rose-600'
+                        title='Delete'
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                    <p className='text-[11px] text-slate-600'>{a.body}</p>
+                    <p className='text-[9px] font-bold text-slate-400 mt-1'>
+                      by {a.authorName}
+                    </p>
+                  </>
                 )}
-              </div>
-              <p className='text-[11px] text-slate-600'>{a.body}</p>
-              <p className='text-[9px] font-bold text-slate-400 mt-1'>
-                by {a.authorName}
-              </p>
-            </Card>
-          ))
+              </Card>
+            )
+          })
         )}
       </div>
     </div>

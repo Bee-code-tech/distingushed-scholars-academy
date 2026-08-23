@@ -497,12 +497,22 @@ function StudentMaterials({
           string,
           unknown
         >[]
+        // Collect per-student completion straight from the API `completed`
+        // flag on each material, so the ticks reflect the server (not the
+        // client-side store).
+        const completedIds = new Set<string>()
         const perCourse = await Promise.all(
           courses.map(async (c) => {
             const id = String(c.id ?? c._id ?? '')
-            const materials = (
-              (await dsaApi.courses.materials(id)) as Record<string, unknown>[]
-            ).map(mapMaterial)
+            const rows = (await dsaApi.courses.materials(id)) as Record<
+              string,
+              unknown
+            >[]
+            const materials = rows.map((row) => {
+              const mat = mapMaterial(row)
+              if (row.completed) completedIds.add(mat.id)
+              return mat
+            })
             const p =
               typeof c.progressPercent === 'number'
                 ? (c.progressPercent as number)
@@ -516,6 +526,7 @@ function StudentMaterials({
         )
         const withMats = perCourse.filter((g) => g.materials.length)
         setGroups(withMats)
+        setDone(completedIds)
         setProgress(
           withMats.length
             ? Math.round(
@@ -551,11 +562,11 @@ function StudentMaterials({
 
   const markComplete = async (id: string) => {
     if (live) {
-      // The backend has no un-complete; once done it stays done.
-      if (done.has(id)) return
+      // Toggle against the server: POST to mark, DELETE to un-mark. The
+      // reload re-reads the `completed` flags + progressPercent.
       try {
-        await dsaApi.courses.completeMaterial(id)
-        if (!getCompleted(studentKey).includes(id)) toggleComplete(studentKey, id)
+        if (done.has(id)) await dsaApi.courses.uncompleteMaterial(id)
+        else await dsaApi.courses.completeMaterial(id)
         await load()
       } catch {
         /* ignore; the bar reflects the server on next load */
@@ -643,7 +654,7 @@ function StudentMaterials({
                   <button
                     onClick={() => markComplete(m.id)}
                     className={`p-1.5 ${completed ? 'text-emerald-600' : 'text-slate-300 hover:text-slate-500'}`}
-                    title={completed ? 'Completed' : 'Mark complete'}
+                    title={completed ? 'Completed — click to un-mark' : 'Mark complete'}
                   >
                     {completed ? (
                       <CheckCircle2 size={20} />
