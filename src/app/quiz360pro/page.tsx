@@ -155,7 +155,7 @@ export default function Quiz360ProLanding() {
           >
             <span className='w-2 h-2 bg-[#002EFF] rounded-full' />
             <span className='text-[#002EFF] text-[10px] md:text-xs font-black uppercase tracking-[0.2em]'>
-              Quiz360Pro · Nigeria's Smart CBT Platform
+              Scholars Drill · Nigeria's Smart CBT Platform
             </span>
           </div>
 
@@ -173,7 +173,7 @@ export default function Quiz360ProLanding() {
             data-aos-delay='200'
             className='mt-6 text-base md:text-lg text-gray-600 max-w-2xl mx-auto leading-relaxed font-medium'
           >
-            Quiz360Pro is a complete CBT practice platform built for Nigerian
+            Scholars Drill is a complete CBT practice platform built for Nigerian
             students. Simulate the real exam, study smarter with verified
             answers and AI explanations, and watch your score climb.
           </p>
@@ -237,7 +237,7 @@ export default function Quiz360ProLanding() {
               className='mt-5 text-gray-500 max-w-2xl mx-auto font-medium'
             >
               Whether you are preparing for JAMB, WAEC or a Post-UTME
-              screening, Quiz360Pro gives every student the same powerful tools.
+              screening, Scholars Drill gives every student the same powerful tools.
             </p>
           </div>
 
@@ -289,7 +289,7 @@ export default function Quiz360ProLanding() {
               data-aos-delay='100'
               className='text-3xl md:text-4xl font-black text-gray-900 tracking-tight max-w-3xl mx-auto'
             >
-              How Quiz360Pro raises your{' '}
+              How Scholars Drill raises your{' '}
               <span className='text-[#002EFF]'>JAMB score</span>
             </h2>
             <p
@@ -337,7 +337,7 @@ export default function Quiz360ProLanding() {
               className='bg-white rounded-3xl border border-gray-100 shadow-sm p-8 md:p-10'
             >
               <h3 className='text-xl font-black text-gray-900 tracking-tight mb-6'>
-                Why Jambites choose Quiz360Pro
+                Why Jambites choose Scholars Drill
               </h3>
               <ul className='space-y-4'>
                 {jambBenefits.map((b) => (

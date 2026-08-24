@@ -113,7 +113,7 @@
 //             data-aos-delay='100'
 //             className='text-4xl md:text-5xl font-black text-black uppercase tracking-tight'
 //           >
-//             Quiz360Pro <span className='text-[#002EFF]'>Portal</span>
+//             Scholars Drill <span className='text-[#002EFF]'>Portal</span>
 //           </h2>
 //           <div
 //             data-aos='zoom-in'
@@ -336,7 +336,7 @@ export default function Quiz360Pro() {
             data-aos-delay='100'
             className='text-4xl md:text-5xl font-black text-black uppercase tracking-tight'
           >
-            Quiz360Pro <span className='text-[#002EFF]'>Portal</span>
+            Scholars Drill <span className='text-[#002EFF]'>Portal</span>
           </h2>
           <div
             data-aos='zoom-in'
@@ -392,7 +392,7 @@ export default function Quiz360Pro() {
             href='/quiz360pro'
             className='group px-12 py-5 bg-[#FCB900] text-black font-black rounded-2xl shadow-xl shadow-yellow-100 hover:bg-[#002EFF] hover:text-white transition-all duration-300 flex items-center gap-4 active:scale-95'
           >
-            EXPLORE QUIZ360PRO
+            EXPLORE SCHOLARS DRILL
             <ArrowRight
               size={22}
               className='group-hover:translate-x-2 transition-transform'
