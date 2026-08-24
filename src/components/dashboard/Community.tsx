@@ -115,8 +115,10 @@ export default function Community({
   const videoInput = useRef<HTMLInputElement | null>(null)
   const docInput = useRef<HTMLInputElement | null>(null)
 
-  const canCompose = mode !== 'admin'
-  const canRecord = mode === 'tutor'
+  // Everyone can post. Tutors and admins additionally get voice notes; admins
+  // also moderate (delete any message). Students get everything except audio.
+  const canCompose = true
+  const canRecord = mode === 'tutor' || mode === 'admin'
   const isModerator = mode === 'admin'
 
   // Identify the current user so their own bubbles align right.
@@ -367,7 +369,7 @@ export default function Community({
           </h2>
           <p className='text-[11px] font-medium text-zinc-500'>
             {isModerator
-              ? 'Moderation view — every message from tutors and students.'
+              ? 'Post updates, share files and voice notes — and delete any message.'
               : 'Chat with tutors and students. Share notes, files and updates.'}
           </p>
         </div>

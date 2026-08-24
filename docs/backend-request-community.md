@@ -21,12 +21,13 @@ change.
 |------|----------|----------|-----------------------|
 | Tutor | ✅ | ✅ | text, image, video, **audio**, file (pdf/doc) |
 | Student | ✅ | ✅ | text, image, video, file (pdf/doc) — **no audio** |
-| Admin | ✅ (all) | — | — (moderation only) |
+| Admin | ✅ (all) | ✅ | everything a tutor can — text, image, video, **audio**, file — **and** delete any message |
 
 - Guardians and other roles should get **403** on all community routes.
 - Students posting `type: "audio"` should be rejected (**403 / 422**) — the UI
   hides the button, but please enforce it server-side too.
-- Only **admin** can delete any message. A member may delete **their own**.
+- **Admin can post like a tutor** (all types, including audio) **and** can
+  delete any message. A tutor/student may delete only **their own**.
 
 ## Endpoints
 
