@@ -930,6 +930,67 @@ export const dsaApi = {
         .then((r) => handleResponse<{ data?: unknown }>(r))
         .then((r) => (r as { data?: unknown }).data ?? r),
   },
+
+  // Community — one shared channel for tutors + students. Admin moderates
+  // (sees every message and can delete any). Attachments (image / video /
+  // audio / pdf / doc) upload straight to Cloudinary from the browser; only the
+  // resulting URL is sent here, never the file bytes. Role rules (students may
+  // not post audio notes) are enforced server-side from the JWT.
+  // See docs/backend-request-community.md for the endpoint contract.
+  community: {
+    // GET /community/messages?limit=&before= — a page of the channel, oldest to
+    // newest. `before` (a message id or ISO timestamp) loads older history.
+    list: (
+      params: { limit?: number; before?: string } = {},
+      token?: string,
+    ) => {
+      const qs = new URLSearchParams()
+      if (params.limit) qs.set('limit', String(params.limit))
+      if (params.before) qs.set('before', params.before)
+      const q = qs.toString()
+      return fetch(`${BASE_URL}/community/messages${q ? `?${q}` : ''}`, {
+        headers: getHeaders(token),
+      })
+        .then((r) =>
+          handleResponse<
+            Record<string, unknown>[] | { data?: Record<string, unknown>[] }
+          >(r),
+        )
+        .then((res) => (Array.isArray(res) ? res : (res?.data ?? [])))
+    },
+
+    // POST /community/messages (tutor / student). The server stamps the sender
+    // from the JWT; the client only says what kind of message it is.
+    send: (
+      body: {
+        type: 'text' | 'image' | 'video' | 'audio' | 'file'
+        text?: string
+        fileUrl?: string
+        fileName?: string
+        fileType?: string
+        fileSize?: number
+        durationSec?: number
+      },
+      token?: string,
+    ) =>
+      fetch(`${BASE_URL}/community/messages`, {
+        method: 'POST',
+        headers: getHeaders(token),
+        body: JSON.stringify(body),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+
+    // DELETE /community/messages/:id — admin removes any message; a member may
+    // remove their own. The server enforces who is allowed from the JWT.
+    remove: (id: string, token?: string) =>
+      fetch(`${BASE_URL}/community/messages/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: getHeaders(token),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+  },
 }
 
 /**

@@ -740,6 +740,7 @@ import {
   BookOpen,
   ShieldCheck,
   Megaphone,
+  MessagesSquare,
   LogOut,
   Menu,
   Bell,
@@ -771,6 +772,7 @@ import Library from './components/Library'
 import TakeAttendance from '@/components/dashboard/TakeAttendance'
 import TimetableEditor from '@/components/dashboard/TimetableEditor'
 import Announcements from '@/components/dashboard/Announcements'
+import CommunityModeration from './components/CommunityModeration'
 import RolesPermissions from './components/RolesPermissions'
 import { AnimatePresence, motion } from 'framer-motion'
 import { isAdmin, clearSession } from '@/lib/admin-auth'
@@ -789,6 +791,7 @@ type AdminTab =
   | 'attendance'
   | 'timetable'
   | 'broadcast'
+  | 'community'
   | 'roles'
 
 export default function AdminAdmin() {
@@ -894,6 +897,11 @@ export default function AdminAdmin() {
           label: 'Announcements',
           icon: Megaphone,
         },
+        {
+          id: 'community' as AdminTab,
+          label: 'Community',
+          icon: MessagesSquare,
+        },
       ],
     },
     {
@@ -930,6 +938,8 @@ export default function AdminAdmin() {
         return <TimetableEditor />
       case 'broadcast':
         return <Announcements mode='tutor' />
+      case 'community':
+        return <CommunityModeration />
       case 'roles':
         return <RolesPermissions />
       default:

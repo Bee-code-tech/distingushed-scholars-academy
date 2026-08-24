@@ -498,7 +498,6 @@ export default function AcademyDashboard() {
       icon: Users,
       label: 'Community',
       view: 'community' as ViewState,
-      premium: true,
     },
     { icon: Calendar, label: 'Exam Schedule', view: 'schedule' as ViewState },
     { icon: Settings, label: 'Settings', view: 'settings' as ViewState },

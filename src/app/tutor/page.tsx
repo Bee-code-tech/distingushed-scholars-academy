@@ -14,6 +14,7 @@ import {
   ClipboardList,
   Megaphone,
   Award,
+  MessagesSquare,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -29,6 +30,7 @@ import Assignments from '@/components/dashboard/Assignments'
 import Gradebook from '@/components/dashboard/Gradebook'
 import Analytics from '@/components/dashboard/Analytics'
 import Announcements from '@/components/dashboard/Announcements'
+import Community from '@/components/dashboard/Community'
 import { getStudents, type StoredStudent } from '@/lib/studentsStore'
 import { getCourses, categoryForTrack, getCoursesForTutor } from '@/lib/coursesStore'
 import { getAssignments, getSubmissions } from '@/lib/assignmentsStore'
@@ -79,6 +81,7 @@ const NAV: NavItem[] = [
   { key: 'assignments', label: 'Assignments', icon: ClipboardList },
   { key: 'gradebook', label: 'Gradebook', icon: Award },
   { key: 'announcements', label: 'Announcements', icon: Megaphone },
+  { key: 'community', label: 'Community', icon: MessagesSquare },
   { key: 'attendance', label: 'Take Attendance', icon: CalendarCheck },
   { key: 'live', label: 'Live Classes', icon: Video },
   { key: 'timetable', label: 'Timetable', icon: CalendarDays },
@@ -320,6 +323,8 @@ export default function TutorDashboard() {
       {view === 'gradebook' && <Gradebook />}
 
       {view === 'announcements' && <Announcements mode='tutor' />}
+
+      {view === 'community' && <Community mode='tutor' />}
 
       {view === 'attendance' && <TakeAttendance />}
 
