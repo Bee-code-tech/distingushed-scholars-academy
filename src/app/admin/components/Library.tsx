@@ -1,3 +1,4 @@
+// //src/app/admin/components/Library.tsx
 // 'use client'
 
 // import React, { useState, useEffect, useMemo, useRef } from 'react'
@@ -56,8 +57,9 @@
 //  * Helper to safely extract payload whether the API returns raw item or { success: true, data: item }
 //  */
 // function unwrapApiResponse<T>(res: any): T {
-//   if (res && typeof res === 'object' && 'data' in res) {
-//     return res.data as T
+//   if (res && typeof res === 'object') {
+//     if ('data' in res) return res.data as T
+//     if ('materials' in res) return res.materials as T
 //   }
 //   return res as T
 // }
@@ -80,18 +82,28 @@
 //   const fileInputRef = useRef<HTMLInputElement>(null)
 
 //   // ---------------------------------------------------------------------------
-//   // 1. Initial Load: Fetch Live Materials from API
+//   // 1. Initial Load: Fetch Live Materials from API safely
 //   // ---------------------------------------------------------------------------
 //   const loadMaterials = async () => {
 //     setIsLoading(true)
 //     setFetchError(null)
 //     try {
-//       const data = await fetchLibraryMaterials()
-//       const items = unwrapApiResponse<Material[]>(data)
-//       setMaterials(Array.isArray(items) ? items : [])
+//       const response = await fetchLibraryMaterials()
+//       const items = unwrapApiResponse<Material[]>(response)
+
+//       if (Array.isArray(items)) {
+//         setMaterials(items)
+//       } else {
+//         setMaterials([])
+//         console.warn('API returned non-array payload:', response)
+//       }
 //     } catch (err: any) {
 //       console.error('Failed to load library materials:', err)
-//       setFetchError(err?.message || 'Failed to fetch library resources.')
+//       const message =
+//         err?.response?.data?.message ||
+//         err?.message ||
+//         'Failed to connect to library backend services.'
+//       setFetchError(message)
 //     } finally {
 //       setIsLoading(false)
 //     }
@@ -137,7 +149,11 @@
 //         message?: string
 //       }>(signResult)
 
-//       const { uploadUrl, fileUrl, key } = signData
+//       const { uploadUrl, fileUrl, key } = signData || {}
+
+//       if (!fileUrl) {
+//         throw new Error('Presigned upload URL generation failed.')
+//       }
 
 //       // Step B: Transfer raw file bytes if active presigned uploadUrl exists
 //       if (uploadUrl) {
@@ -150,7 +166,9 @@
 //         })
 
 //         if (!uploadRes.ok) {
-//           throw new Error('Failed to push binary data to storage destination.')
+//           throw new Error(
+//             'Failed to push binary data to cloud storage destination.',
+//           )
 //         }
 //       }
 
@@ -624,6 +642,9 @@
 //   )
 // }
 
+
+
+// src/app/admin/components/Library.tsx
 'use client'
 
 import React, { useState, useEffect, useMemo, useRef } from 'react'
@@ -632,7 +653,6 @@ import {
   FileText,
   Search,
   Trash2,
-  Download,
   Plus,
   FolderOpen,
   HardDrive,
@@ -645,12 +665,15 @@ import {
   ExternalLink,
   AlertCircle,
   Inbox,
+  X,
+  AlertTriangle,
+  RefreshCw,
+  XCircle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 
-// Integrated API Service Methods
 import {
   fetchLibraryMaterials,
   deleteLibraryMaterial,
@@ -670,6 +693,16 @@ export interface Material {
   key?: string
 }
 
+interface ToastNotification {
+  id: string
+  type: 'success' | 'error' | 'info'
+  message: string
+}
+
+interface LibraryProps {
+  courseId?: string
+}
+
 const CATEGORIES = [
   'Textbook',
   'Handout',
@@ -678,9 +711,6 @@ const CATEGORIES = [
   'Exam Paper',
 ]
 
-/**
- * Helper to safely extract payload whether the API returns raw item or { success: true, data: item }
- */
 function unwrapApiResponse<T>(res: any): T {
   if (res && typeof res === 'object') {
     if ('data' in res) return res.data as T
@@ -689,171 +719,192 @@ function unwrapApiResponse<T>(res: any): T {
   return res as T
 }
 
-export default function Library() {
+export default function Library({ courseId = '' }: LibraryProps) {
   const [materials, setMaterials] = useState<Material[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [isSyncing, setIsSyncing] = useState(false)
   const [fetchError, setFetchError] = useState<string | null>(null)
 
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('All')
 
-  // Upload modal & signing states
-  const [isUploading, setIsUploading] = useState(false)
-  const [isSigning, setIsSigning] = useState(false)
+  // Ingest state
+  const [isUploadingModalOpen, setIsUploadingModalOpen] = useState(false)
+  const [isIngesting, setIsIngesting] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [pendingFile, setPendingFile] = useState<File | null>(null)
   const [ingestCategory, setIngestCategory] = useState(CATEGORIES[0])
 
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  // Delete modal state
+  const [deleteTarget, setDeleteTarget] = useState<Material | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
-  // ---------------------------------------------------------------------------
-  // 1. Initial Load: Fetch Live Materials from API safely
-  // ---------------------------------------------------------------------------
-  const loadMaterials = async () => {
-    setIsLoading(true)
+  // Toast state
+  const [toasts, setToasts] = useState<ToastNotification[]>([])
+
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const modalFileInputRef = useRef<HTMLInputElement>(null)
+
+  const addToast = (type: 'success' | 'error' | 'info', message: string) => {
+    const id = Math.random().toString(36).substring(2, 9)
+    setToasts((prev) => [...prev, { id, type, message }])
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id))
+    }, 4000)
+  }
+
+  const removeToast = (id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id))
+  }
+
+  // Load materials
+  const loadMaterials = async (isManualSync = false) => {
+    if (isManualSync) setIsSyncing(true)
+    else setIsLoading(true)
+
     setFetchError(null)
     try {
-      const response = await fetchLibraryMaterials()
+      const response = await fetchLibraryMaterials(courseId)
       const items = unwrapApiResponse<Material[]>(response)
 
       if (Array.isArray(items)) {
         setMaterials(items)
+        if (isManualSync) addToast('success', 'Library synchronized with backend.')
       } else {
         setMaterials([])
-        console.warn('API returned non-array payload:', response)
       }
     } catch (err: any) {
-      console.error('Failed to load library materials:', err)
-      const message =
-        err?.response?.data?.message ||
-        err?.message ||
-        'Failed to connect to library backend services.'
-      setFetchError(message)
+      console.error('Failed to load materials:', err)
+      const msg = err?.response?.data?.message || err?.message || 'Failed to connect to backend.'
+      setFetchError(msg)
+      addToast('error', msg)
     } finally {
       setIsLoading(false)
+      setIsSyncing(false)
     }
   }
 
   useEffect(() => {
     loadMaterials()
-  }, [])
+  }, [courseId])
 
-  // ---------------------------------------------------------------------------
-  // 2. File Selection Handler
-  // ---------------------------------------------------------------------------
+  const processFileSelection = (file: File) => {
+    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+      setErrorMsg('Only PDF documents are supported for ingestion.')
+      addToast('error', 'Invalid file type. Select a PDF.')
+      return
+    }
+
+    if (file.size > 50 * 1024 * 1024) {
+      setErrorMsg('File size exceeds maximum limit of 50 MB.')
+      addToast('error', 'File size over 50MB limit.')
+      return
+    }
+
+    setPendingFile(file)
+    setErrorMsg(null)
+    setIsUploadingModalOpen(true)
+  }
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files?.[0]) {
-      setPendingFile(e.target.files[0])
-      setErrorMsg(null)
-      setIsUploading(true)
+      processFileSelection(e.target.files[0])
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // 3. Finalize Ingest: Sign URL -> Upload Raw Bytes -> Create DB Entry
-  // ---------------------------------------------------------------------------
   const finalizeIngest = async () => {
     if (!pendingFile) return
 
-    setIsSigning(true)
+    setIsIngesting(true)
     setErrorMsg(null)
 
     try {
-      // Step A: Get Signed Target from backend API
+      // Step A: Sign URL
       const signResult = await signUploadUrl({
         filename: pendingFile.name,
         contentType: pendingFile.type || 'application/pdf',
         folder: 'materials',
       })
 
-      // Safely unwrap data from response
       const signData = unwrapApiResponse<{
         uploadUrl: string | null
         fileUrl: string
         key: string
-        message?: string
       }>(signResult)
 
       const { uploadUrl, fileUrl, key } = signData || {}
 
-      if (!fileUrl) {
-        throw new Error('Presigned upload URL generation failed.')
-      }
+      if (!fileUrl) throw new Error('Presigned URL generation failed.')
 
-      // Step B: Transfer raw file bytes if active presigned uploadUrl exists
+      // Step B: Direct storage upload
       if (uploadUrl) {
         const uploadRes = await fetch(uploadUrl, {
           method: 'PUT',
-          headers: {
-            'Content-Type': pendingFile.type || 'application/pdf',
-          },
+          headers: { 'Content-Type': pendingFile.type || 'application/pdf' },
           body: pendingFile,
         })
 
-        if (!uploadRes.ok) {
-          throw new Error(
-            'Failed to push binary data to cloud storage destination.',
-          )
-        }
+        if (!uploadRes.ok) throw new Error('Failed to push file bytes to storage bucket.')
       }
 
-      // Step C: Persist node metadata via admin-api using returned fileUrl
+      // Step C: Persist Record
       const sizeFormatted = `${(pendingFile.size / (1024 * 1024)).toFixed(1)} MB`
       const payload = {
         title: pendingFile.name.replace(/\.[^/.]+$/, ''),
         category: ingestCategory,
         size: sizeFormatted,
-        type: pendingFile.name.split('.').pop()?.toUpperCase() || 'PDF',
+        type: 'PDF',
         fileUrl: fileUrl,
         key: key,
       }
 
-      const createdNodeResponse = await createLibraryMaterial(payload)
+      const createdNodeResponse = await createLibraryMaterial(courseId, payload)
       const freshMaterial = unwrapApiResponse<Material>(createdNodeResponse)
 
-      // Prepend newly created real node to UI list
       setMaterials((prev) => [freshMaterial || (payload as Material), ...prev])
-      setIsUploading(false)
+      setIsUploadingModalOpen(false)
       setPendingFile(null)
       if (fileInputRef.current) fileInputRef.current.value = ''
+      if (modalFileInputRef.current) modalFileInputRef.current.value = ''
+
+      addToast('success', 'Asset successfully ingested into library.')
     } catch (err: any) {
-      console.error('Ingest API Error:', err)
-      setErrorMsg(err?.message || 'Failed to complete resource ingestion.')
+      console.error('Ingest Error:', err)
+      const msg = err?.message || 'Failed to complete ingestion.'
+      setErrorMsg(msg)
+      addToast('error', msg)
     } finally {
-      setIsSigning(false)
+      setIsIngesting(false)
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // 4. Delete Material Endpoint
-  // ---------------------------------------------------------------------------
-  const handleDelete = async (id: string) => {
+  const confirmDelete = async () => {
+    if (!deleteTarget) return
+    setIsDeleting(true)
+
     try {
-      await deleteLibraryMaterial(id)
-      setMaterials((prev) => prev.filter((m) => m.id !== id))
+      await deleteLibraryMaterial(deleteTarget.id)
+      setMaterials((prev) => prev.filter((m) => m.id !== deleteTarget.id))
+      addToast('info', `Removed asset: ${deleteTarget.title}`)
+      setDeleteTarget(null)
     } catch (err: any) {
-      console.error('Failed to delete item:', err)
-      alert(err?.message || 'Could not delete resource from library.')
+      console.error('Delete Error:', err)
+      addToast('error', err?.message || 'Failed to delete asset.')
+    } finally {
+      setIsDeleting(false)
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Metrics & Filtering Computations
-  // ---------------------------------------------------------------------------
   const stats = useMemo(() => {
     const totalMB = materials.reduce((acc, curr) => {
-      const parsedSize =
-        typeof curr.size === 'number' ? curr.size : parseFloat(curr.size || '0')
+      const parsedSize = typeof curr.size === 'number' ? curr.size : parseFloat(curr.size || '0')
       return acc + (isNaN(parsedSize) ? 0 : parsedSize)
     }, 0)
 
     const limitGB = 2
     const currentGB = totalMB / 1024
     return {
-      size:
-        totalMB >= 1000
-          ? `${currentGB.toFixed(2)} GB`
-          : `${totalMB.toFixed(2)} MB`,
+      size: totalMB >= 1000 ? `${currentGB.toFixed(2)} GB` : `${totalMB.toFixed(2)} MB`,
       count: materials.length,
       percent: Math.min((currentGB / limitGB) * 100, 100).toFixed(1),
     }
@@ -866,14 +917,13 @@ export default function Library() {
       const matchesSearch =
         title.toLowerCase().includes(searchTerm.toLowerCase()) ||
         id.toLowerCase().includes(searchTerm.toLowerCase())
-      const matchesCategory =
-        selectedCategory === 'All' || file.category === selectedCategory
+      const matchesCategory = selectedCategory === 'All' || file.category === selectedCategory
       return matchesSearch && matchesCategory
     })
   }, [searchTerm, selectedCategory, materials])
 
   return (
-    <div className='flex h-screen w-full overflow-hidden bg-[#F8FAFC] font-sans text-slate-900 antialiased selection:bg-[#FCB900]/30'>
+    <div className='flex h-screen w-full overflow-hidden bg-[#F8FAFC] font-sans text-slate-900 antialiased selection:bg-[#FCB900]/30 relative'>
       {/* SIDEBAR */}
       <aside className='w-[230px] bg-white border-r border-slate-200 flex flex-col shrink-0'>
         <div className='p-4'>
@@ -886,7 +936,6 @@ export default function Library() {
             </h1>
           </div>
 
-          {/* VAULT CAPACITY */}
           <div className='bg-slate-950 rounded-xl p-3 text-white relative overflow-hidden border border-white/5 shadow-xl mb-6'>
             <div className='relative z-10'>
               <div className='flex items-center justify-between mb-2'>
@@ -896,7 +945,7 @@ export default function Library() {
                     Vault Capacity
                   </span>
                 </div>
-                <div className='w-1 h-1 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]' />
+                <div className='w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]' />
               </div>
 
               <div className='flex justify-between items-baseline mb-1'>
@@ -968,10 +1017,12 @@ export default function Library() {
           <div className='flex items-center gap-2'>
             <Button
               variant='ghost'
-              onClick={loadMaterials}
-              className='h-7 rounded-md text-slate-400 text-[9px] font-black px-2 hover:bg-slate-100 uppercase'
+              disabled={isSyncing || isLoading}
+              onClick={() => loadMaterials(true)}
+              className='h-7 rounded-md text-slate-500 text-[9px] font-black px-2 hover:bg-slate-100 uppercase'
             >
-              <Download size={12} className='mr-1.5' /> Sync
+              <RefreshCw size={11} className={`mr-1.5 ${isSyncing ? 'animate-spin' : ''}`} />
+              Sync
             </Button>
             <Button
               onClick={() => fileInputRef.current?.click()}
@@ -985,11 +1036,7 @@ export default function Library() {
         <div className='flex-1 overflow-y-auto p-6 bg-[#F8FAFC]'>
           <div className='max-w-4xl mx-auto space-y-4'>
             <div className='grid grid-cols-3 gap-3'>
-              <CompactStat
-                label='Index Count'
-                value={stats.count}
-                icon={ShieldCheck}
-              />
+              <CompactStat label='Index Count' value={stats.count} icon={ShieldCheck} />
               <CompactStat label='Latency' value='2ms' icon={Activity} />
               <CompactStat
                 label='Integrity'
@@ -1009,7 +1056,6 @@ export default function Library() {
                 </Badge>
               </div>
 
-              {/* LOADING STATE */}
               {isLoading ? (
                 <div className='p-12 flex flex-col items-center justify-center text-slate-400 gap-2'>
                   <Loader2 size={24} className='animate-spin text-[#002EFF]' />
@@ -1018,20 +1064,16 @@ export default function Library() {
                   </span>
                 </div>
               ) : fetchError ? (
-                /* ERROR STATE */
                 <div className='p-8 text-center space-y-3'>
-                  <p className='text-xs font-bold text-rose-500'>
-                    {fetchError}
-                  </p>
+                  <p className='text-xs font-bold text-rose-500'>{fetchError}</p>
                   <Button
-                    onClick={loadMaterials}
+                    onClick={() => loadMaterials()}
                     className='h-7 bg-slate-900 text-white text-[9px] font-bold uppercase'
                   >
                     Retry Connection
                   </Button>
                 </div>
               ) : filteredMaterials.length === 0 ? (
-                /* EMPTY STATE */
                 <div className='p-12 flex flex-col items-center justify-center text-slate-300 gap-2'>
                   <Inbox size={32} strokeWidth={1.5} />
                   <p className='text-[10px] font-bold uppercase tracking-wider text-slate-400'>
@@ -1039,7 +1081,6 @@ export default function Library() {
                   </p>
                 </div>
               ) : (
-                /* DATA TABLE */
                 <div className='overflow-x-auto'>
                   <table className='w-full text-left border-collapse'>
                     <thead>
@@ -1117,7 +1158,7 @@ export default function Library() {
                                 <Button
                                   variant='ghost'
                                   size='icon'
-                                  onClick={() => handleDelete(file.id)}
+                                  onClick={() => setDeleteTarget(file)}
                                   className='h-6 w-6 text-slate-300 hover:text-rose-500'
                                 >
                                   <Trash2 size={11} />
@@ -1136,30 +1177,62 @@ export default function Library() {
         </div>
       </main>
 
-      {/* INGESTION / SIGNING MODAL */}
+      {/* INGEST MODAL */}
       <AnimatePresence>
-        {isUploading && (
-          <div className='fixed inset-0 bg-slate-900/40 backdrop-blur-[2px] z-50 flex items-center justify-center p-4'>
+        {isUploadingModalOpen && (
+          <div className='fixed inset-0 bg-slate-950/50 backdrop-blur-[2px] z-50 flex items-center justify-center p-4'>
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className='bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden border border-slate-200'
+              className='bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden border border-slate-200 relative'
             >
               <div className='p-1 bg-[#FCB900]' />
               <div className='p-6'>
-                <div className='flex items-center gap-3 mb-4'>
-                  <div className='w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center text-[#002EFF]'>
-                    <UploadCloud size={20} />
+                <div className='flex items-center justify-between mb-4'>
+                  <div className='flex items-center gap-3'>
+                    <div className='w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center text-[#002EFF]'>
+                      <UploadCloud size={20} />
+                    </div>
+                    <div>
+                      <h3 className='text-sm font-black uppercase tracking-tight'>
+                        Classify & Ingest
+                      </h3>
+                      <p className='text-[10px] text-slate-400 font-bold truncate max-w-[180px]'>
+                        {pendingFile ? pendingFile.name : 'No file loaded'}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className='text-sm font-black uppercase tracking-tight'>
-                      Classify & Sign Asset
-                    </h3>
-                    <p className='text-[10px] text-slate-400 font-bold truncate max-w-[200px]'>
-                      {pendingFile?.name}
-                    </p>
-                  </div>
+                  <button
+                    disabled={isIngesting}
+                    onClick={() => setIsUploadingModalOpen(false)}
+                    className='text-slate-400 hover:text-slate-600 p-1 rounded-lg'
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+
+                {/* DROP ZONE */}
+                <div
+                  onClick={() => modalFileInputRef.current?.click()}
+                  className='border-2 border-dashed border-slate-200 hover:border-[#002EFF] bg-slate-50/50 rounded-xl p-4 mb-4 text-center cursor-pointer transition-colors'
+                >
+                  <FileText size={20} className='mx-auto text-slate-400 mb-1' />
+                  <p className='text-[10px] font-bold text-slate-600'>
+                    {pendingFile ? pendingFile.name : 'Click to select a file'}
+                  </p>
+                  <p className='text-[8px] font-bold text-slate-400 uppercase mt-0.5'>
+                    PDF files only, max 50MB
+                  </p>
+                  <input
+                    type='file'
+                    ref={modalFileInputRef}
+                    accept='.pdf'
+                    onChange={(e) => {
+                      if (e.target.files?.[0]) processFileSelection(e.target.files[0])
+                    }}
+                    className='hidden'
+                  />
                 </div>
 
                 {errorMsg && (
@@ -1178,7 +1251,7 @@ export default function Library() {
                       {CATEGORIES.map((cat) => (
                         <button
                           key={cat}
-                          disabled={isSigning}
+                          disabled={isIngesting}
                           onClick={() => setIngestCategory(cat)}
                           className={`px-3 py-2 rounded-lg text-[9px] font-black text-left transition-all border ${
                             ingestCategory === cat
@@ -1195,24 +1268,21 @@ export default function Library() {
                   <div className='flex gap-2 pt-2'>
                     <Button
                       variant='ghost'
-                      disabled={isSigning}
-                      onClick={() => {
-                        setIsUploading(false)
-                        setErrorMsg(null)
-                      }}
+                      disabled={isIngesting}
+                      onClick={() => setIsUploadingModalOpen(false)}
                       className='flex-1 h-9 text-[10px] font-black uppercase tracking-widest'
                     >
-                      Abort
+                      Cancel
                     </Button>
                     <Button
                       onClick={finalizeIngest}
-                      disabled={isSigning}
+                      disabled={isIngesting || !pendingFile}
                       className='flex-1 h-9 bg-[#002EFF] hover:bg-blue-700 text-white text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-100 flex items-center justify-center gap-1.5'
                     >
-                      {isSigning ? (
+                      {isIngesting ? (
                         <>
                           <Loader2 size={12} className='animate-spin' />
-                          Signing...
+                          Uploading...
                         </>
                       ) : (
                         'Confirm Ingest'
@@ -1225,6 +1295,88 @@ export default function Library() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* DELETE MODAL */}
+      <AnimatePresence>
+        {deleteTarget && (
+          <div className='fixed inset-0 bg-slate-950/50 backdrop-blur-[2px] z-50 flex items-center justify-center p-4'>
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className='bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden border border-slate-200'
+            >
+              <div className='p-6 text-center space-y-4'>
+                <div className='w-12 h-12 bg-rose-50 text-rose-600 rounded-full flex items-center justify-center mx-auto border border-rose-100'>
+                  <AlertTriangle size={20} />
+                </div>
+                <div>
+                  <h3 className='text-sm font-black uppercase tracking-tight text-slate-900'>
+                    Delete Resource Node?
+                  </h3>
+                  <p className='text-[10px] text-slate-500 font-bold mt-1 max-w-[240px] mx-auto'>
+                    Are you sure you want to remove <span className='text-slate-900 font-black'>"{deleteTarget.title}"</span>? This action cannot be undone.
+                  </p>
+                </div>
+
+                <div className='flex gap-2 pt-2'>
+                  <Button
+                    variant='ghost'
+                    disabled={isDeleting}
+                    onClick={() => setDeleteTarget(null)}
+                    className='flex-1 h-9 text-[10px] font-black uppercase tracking-widest'
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={confirmDelete}
+                    disabled={isDeleting}
+                    className='flex-1 h-9 bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-black uppercase tracking-widest shadow-lg shadow-rose-100 flex items-center justify-center gap-1.5'
+                  >
+                    {isDeleting ? (
+                      <Loader2 size={12} className='animate-spin' />
+                    ) : (
+                      'Delete'
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* TOAST SYSTEM */}
+      <div className='fixed bottom-4 right-4 z-50 space-y-2 pointer-events-none'>
+        <AnimatePresence>
+          {toasts.map((toast) => (
+            <motion.div
+              key={toast.id}
+              initial={{ opacity: 0, y: 20, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -20, scale: 0.9 }}
+              className={`pointer-events-auto p-3 rounded-xl shadow-xl border flex items-center gap-2.5 max-w-xs text-[10px] font-bold ${
+                toast.type === 'success'
+                  ? 'bg-slate-900 text-white border-slate-800'
+                  : toast.type === 'error'
+                  ? 'bg-rose-950 text-rose-100 border-rose-900'
+                  : 'bg-white text-slate-900 border-slate-200'
+              }`}
+            >
+              {toast.type === 'success' && <CheckCircle2 size={14} className='text-emerald-400 shrink-0' />}
+              {toast.type === 'error' && <XCircle size={14} className='text-rose-400 shrink-0' />}
+              {toast.type === 'info' && <AlertCircle size={14} className='text-blue-500 shrink-0' />}
+              <span className='flex-1 leading-tight'>{toast.message}</span>
+              <button
+                onClick={() => removeToast(toast.id)}
+                className='opacity-60 hover:opacity-100 p-0.5'
+              >
+                <X size={12} />
+              </button>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
 
       <input
         type='file'
@@ -1257,9 +1409,7 @@ function CompactStat({
         <p className='text-[7px] font-black text-slate-400 uppercase tracking-widest mb-0.5'>
           {label}
         </p>
-        <p
-          className={`text-xs font-black ${color} tracking-tight leading-none`}
-        >
+        <p className={`text-xs font-black ${color} tracking-tight leading-none`}>
           {value}
         </p>
       </div>
