@@ -204,7 +204,12 @@ export default function StudentWizard() {
     // real successful payment, and in the "backend not reachable yet" fallback
     // so the owner can still preview the flow (OTP 1111 on the next screen).
     const proceedToOtp = () => {
-      rememberEnrolmentChoice({ track, mode })
+      rememberEnrolmentChoice({
+        track,
+        mode,
+        programmes: v.programmes,
+        classLevel: v.classLevel,
+      })
       // Record the student so the tutor/admin roster shows them (browser-local
       // until the backend links students to tutors — see studentsStore.ts).
       addStudent({

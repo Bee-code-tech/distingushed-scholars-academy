@@ -253,24 +253,42 @@ export default function GuardianDashboard() {
               </div>
 
               <Card className='rounded-4xl p-6 bg-white border-none shadow-sm text-center'>
-                <p className='text-[10px] font-black uppercase tracking-widest text-blue-400 mb-4'>
-                  {track.label} {new Date(track.nextExamDate).getFullYear()} — Countdown
-                </p>
-                {time.elapsed ? (
-                  <p className='text-sm font-black text-gray-800 uppercase py-3'>Exam period is here</p>
+                {!track.hasExam ? (
+                  // Programme wards (undergrad / preclinical / after-school) have
+                  // no external exam — show their programme, not a countdown.
+                  <>
+                    <p className='text-[10px] font-black uppercase tracking-widest text-blue-400 mb-3'>
+                      Programme
+                    </p>
+                    <p className='text-base font-black text-gray-800 uppercase leading-none'>
+                      {track.fullName}
+                    </p>
+                    <p className='text-[11px] font-bold text-gray-400 mt-2'>
+                      {track.subjectRule}
+                    </p>
+                  </>
                 ) : (
-                  <div className='flex items-center justify-center gap-2'>
-                    {[['days', time.days], ['hrs', time.hours], ['min', time.minutes], ['sec', time.seconds]].map(
-                      ([l, v], i) => (
-                        <div key={i} className='flex flex-col items-center'>
-                          <span className='text-3xl font-black text-[#002EFF] tabular-nums'>
-                            {String(v).padStart(2, '0')}
-                          </span>
-                          <span className='text-[7px] font-bold text-gray-400 uppercase'>{l}</span>
-                        </div>
-                      ),
+                  <>
+                    <p className='text-[10px] font-black uppercase tracking-widest text-blue-400 mb-4'>
+                      {track.label} {new Date(track.nextExamDate).getFullYear()} — Countdown
+                    </p>
+                    {time.elapsed ? (
+                      <p className='text-sm font-black text-gray-800 uppercase py-3'>Exam period is here</p>
+                    ) : (
+                      <div className='flex items-center justify-center gap-2'>
+                        {[['days', time.days], ['hrs', time.hours], ['min', time.minutes], ['sec', time.seconds]].map(
+                          ([l, v], i) => (
+                            <div key={i} className='flex flex-col items-center'>
+                              <span className='text-3xl font-black text-[#002EFF] tabular-nums'>
+                                {String(v).padStart(2, '0')}
+                              </span>
+                              <span className='text-[7px] font-bold text-gray-400 uppercase'>{l}</span>
+                            </div>
+                          ),
+                        )}
+                      </div>
                     )}
-                  </div>
+                  </>
                 )}
               </Card>
             </>
@@ -350,26 +368,45 @@ export default function GuardianDashboard() {
 
       {view === 'countdown' && (
         <div className='space-y-4'>
-          <h2 className='text-2xl font-black text-[#002EFF] italic uppercase'>Exam Countdown</h2>
+          <h2 className='text-2xl font-black text-[#002EFF] italic uppercase'>
+            {track.hasExam ? 'Exam Countdown' : 'Programme'}
+          </h2>
           <Card className='rounded-4xl p-8 bg-[#002EFF] text-white border-none shadow-lg text-center'>
-            <p className='text-[10px] font-black uppercase tracking-widest text-blue-200 mb-4'>
-              {track.fullName} · {new Date(track.nextExamDate).getFullYear()}
-            </p>
-            {time.elapsed ? (
-              <p className='text-lg font-black uppercase py-4'>Exam period is here — best of luck!</p>
-            ) : (
-              <div className='flex items-center justify-center gap-3'>
-                {[['days', time.days], ['hrs', time.hours], ['min', time.minutes], ['sec', time.seconds]].map(
-                  ([l, v], i) => (
-                    <div key={i} className='flex flex-col items-center'>
-                      <span className='text-4xl md:text-5xl font-black text-[#FCB900] tabular-nums'>
-                        {String(v).padStart(2, '0')}
-                      </span>
-                      <span className='text-[8px] font-bold text-blue-200 uppercase'>{l}</span>
-                    </div>
-                  ),
-                )}
+            {!track.hasExam ? (
+              <div className='flex flex-col items-center gap-2 py-2'>
+                <p className='text-[10px] font-black uppercase tracking-widest text-blue-200'>
+                  {ward?.name.split(' ')[0] ?? 'Your ward'}&apos;s programme
+                </p>
+                <p className='text-xl md:text-2xl font-black uppercase text-[#FCB900] leading-tight'>
+                  {track.fullName}
+                </p>
+                <p className='text-[11px] font-bold text-blue-100 max-w-sm'>
+                  {track.subjectRule}. This is a continuous programme — no fixed
+                  external exam date.
+                </p>
               </div>
+            ) : (
+              <>
+                <p className='text-[10px] font-black uppercase tracking-widest text-blue-200 mb-4'>
+                  {track.fullName} · {new Date(track.nextExamDate).getFullYear()}
+                </p>
+                {time.elapsed ? (
+                  <p className='text-lg font-black uppercase py-4'>Exam period is here — best of luck!</p>
+                ) : (
+                  <div className='flex items-center justify-center gap-3'>
+                    {[['days', time.days], ['hrs', time.hours], ['min', time.minutes], ['sec', time.seconds]].map(
+                      ([l, v], i) => (
+                        <div key={i} className='flex flex-col items-center'>
+                          <span className='text-4xl md:text-5xl font-black text-[#FCB900] tabular-nums'>
+                            {String(v).padStart(2, '0')}
+                          </span>
+                          <span className='text-[8px] font-bold text-blue-200 uppercase'>{l}</span>
+                        </div>
+                      ),
+                    )}
+                  </div>
+                )}
+              </>
             )}
           </Card>
         </div>

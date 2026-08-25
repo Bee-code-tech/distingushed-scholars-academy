@@ -321,10 +321,21 @@ export default function OverviewUI({
                   {DEPARTMENT_LABELS[student.department]}
                 </Badge>
               )}
+              {!trackConfig.hasExam && student.yearLabel && (
+                <Badge className='bg-white/15 text-white border-none font-bold px-3 py-1'>
+                  {student.yearLabel}
+                </Badge>
+              )}
             </div>
             <h1 className='text-3xl md:text-4xl font-black uppercase italic tracking-tight'>
-              Road to{' '}
-              <span className='text-[#FCB900]'>{trackConfig.label}</span>
+              {trackConfig.hasExam ? (
+                <>
+                  Road to{' '}
+                  <span className='text-[#FCB900]'>{trackConfig.label}</span>
+                </>
+              ) : (
+                <span className='text-[#FCB900]'>{trackConfig.fullName}</span>
+              )}
             </h1>
             <p className='text-blue-100 text-xs md:text-sm max-w-sm font-medium'>
               &ldquo;{trackConfig.tagline}&rdquo;
@@ -353,13 +364,36 @@ export default function OverviewUI({
           />
         </section>
 
-        {/* --- DYNAMIC COUNTDOWN CARD --- */}
+        {/* --- DYNAMIC COUNTDOWN / PROGRAMME CARD --- */}
         <Card className='rounded-4xl p-6 bg-white border-none shadow-sm flex flex-col items-center justify-center text-center overflow-hidden'>
-          <p className='text-[10px] font-black uppercase tracking-widest text-blue-400 mb-4'>
-            {trackConfig.examLabel} COUNTDOWN
-          </p>
+          {!trackConfig.hasExam ? (
+            // Programme tracks (undergrad / preclinical / after-school) have no
+            // external exam — show the programme + year focus, not a countdown.
+            <div className='flex flex-col items-center gap-2 py-2'>
+              <p className='text-[10px] font-black uppercase tracking-widest text-blue-400'>
+                {trackConfig.examLabel} FOCUS
+              </p>
+              <div className='h-14 w-14 rounded-2xl bg-blue-50 flex items-center justify-center my-1'>
+                <trackConfig.icon
+                  size={26}
+                  className='text-[#002EFF]'
+                  strokeWidth={2.2}
+                />
+              </div>
+              <p className='text-base font-black text-gray-800 uppercase leading-none'>
+                {student.yearLabel ?? trackConfig.label}
+              </p>
+              <p className='text-[10px] font-bold text-gray-400 max-w-[190px]'>
+                {trackConfig.subjectRule}
+              </p>
+            </div>
+          ) : (
+            <>
+              <p className='text-[10px] font-black uppercase tracking-widest text-blue-400 mb-4'>
+                {trackConfig.examLabel} COUNTDOWN
+              </p>
 
-          {time.elapsed ? (
+              {time.elapsed ? (
             <div className='flex flex-col items-center gap-2 py-3'>
               <CheckCircle2 size={36} className='text-emerald-500' />
               <p className='text-sm font-black text-gray-800 uppercase'>
@@ -400,8 +434,9 @@ export default function OverviewUI({
                 <span className='text-[7px] font-bold text-gray-400'>SEC</span>
               </div>
             </div>
+              )}
+            </>
           )}
-
         </Card>
       </div>
 

@@ -16,8 +16,19 @@ import {
   Video,
 } from 'lucide-react'
 import type { User } from './types'
+import { deriveTrackFromProgrammes } from './registration'
 
-export type ExamTrack = 'jamb' | 'waec' | 'postutme'
+// Exam tracks have a national exam + countdown (JAMB, WAEC, Post-UTME).
+// Programme tracks are the academy's non-exam programmes (undergraduate,
+// preclinical, after-school/summer) — no exam countdown; the dashboard is
+// tailored to the programme / academic year instead.
+export type ExamTrack =
+  | 'jamb'
+  | 'waec'
+  | 'postutme'
+  | 'undergrad'
+  | 'preclinical'
+  | 'afterschool'
 export type StudyMode = 'physical' | 'online'
 export type Department = 'science' | 'art' | 'commercial'
 
@@ -50,6 +61,12 @@ export interface ExamTrackConfig {
   totalTopics: number
   /** Motivational line on the welcome banner. */
   tagline: string
+  /**
+   * True for tracks that sit an external exam (JAMB/WAEC/Post-UTME) and so show
+   * a live countdown. False for programme tracks (undergrad, preclinical,
+   * after-school) — the dashboard shows a programme focus card instead.
+   */
+  hasExam: boolean
 }
 
 export interface StudyModeConfig {
@@ -74,6 +91,7 @@ export const EXAM_TRACKS: Record<ExamTrack, ExamTrackConfig> = {
     totalTopics: 40,
     tagline:
       'The beautiful thing about learning is that no one can take it away from you.',
+    hasExam: true,
   },
   waec: {
     id: 'waec',
@@ -85,6 +103,7 @@ export const EXAM_TRACKS: Record<ExamTrack, ExamTrackConfig> = {
     subjectRule: '8–9 subjects — English & Maths compulsory',
     totalTopics: 60,
     tagline: 'Excellence is not an act, but a habit. Keep practising.',
+    hasExam: true,
   },
   postutme: {
     id: 'postutme',
@@ -96,6 +115,47 @@ export const EXAM_TRACKS: Record<ExamTrack, ExamTrackConfig> = {
     subjectRule: '4 subjects — matches your intended course',
     totalTopics: 40,
     tagline: 'Small daily improvements are the key to staggering results.',
+    hasExam: true,
+  },
+
+  // --- Programme tracks (no external exam / countdown) ---------------------
+
+  undergrad: {
+    id: 'undergrad',
+    label: 'Undergrad',
+    fullName: 'Undergraduate Tutorials',
+    icon: GraduationCap,
+    // No national exam; keep a far session date so any date math stays valid.
+    nextExamDate: '2027-07-31T09:00:00+01:00',
+    examLabel: 'This Semester',
+    subjectRule: 'Course-based tutorials for your level',
+    totalTopics: 48,
+    tagline: 'Master every course, one week at a time.',
+    hasExam: false,
+  },
+  preclinical: {
+    id: 'preclinical',
+    label: 'Preclinical',
+    fullName: 'Preclinical Tutorials',
+    icon: FlaskConical,
+    nextExamDate: '2027-07-31T09:00:00+01:00',
+    examLabel: 'This Semester',
+    subjectRule: 'Anatomy, Physiology & Biochemistry focus',
+    totalTopics: 48,
+    tagline: 'Build the foundation your clinical years will stand on.',
+    hasExam: false,
+  },
+  afterschool: {
+    id: 'afterschool',
+    label: 'After-School',
+    fullName: 'After-School & Summer Tutorials',
+    icon: BookOpen,
+    nextExamDate: '2027-07-31T09:00:00+01:00',
+    examLabel: 'This Term',
+    subjectRule: 'Daily lesson reinforcement across your subjects',
+    totalTopics: 40,
+    tagline: 'A little progress each day adds up to big results.',
+    hasExam: false,
   },
 }
 
@@ -127,6 +187,12 @@ export interface StudentProfile {
   mode: StudyMode
   /** WAEC only — the student's department. Null for JAMB/Post-UTME. */
   department: Department | null
+  /**
+   * The student's class/level as registered (e.g. "100 Level", "SS3"). Shown on
+   * programme dashboards so a 100-Level and a 200-Level student see their own
+   * year. Undefined when not known.
+   */
+  yearLabel?: string
   trackConfig: ExamTrackConfig
   modeConfig: StudyModeConfig
 }
@@ -145,8 +211,21 @@ function normaliseDepartment(raw?: string | null): Department | null {
  */
 export function normaliseTrack(raw?: string | null): ExamTrack {
   const v = (raw ?? '').toString().trim().toLowerCase()
+  // Exam tracks first (Post-UTME before JAMB — "post utme" also contains "utme").
   if (v.includes('post')) return 'postutme'
   if (v.includes('waec') || v.includes('wassce')) return 'waec'
+  // Programme tracks. Check preclinical before the generic level match, and
+  // "jamb/utme" last so a value like "Jambite" still lands on JAMB.
+  if (v.includes('preclinic') || v.includes('pre-clinic')) return 'preclinical'
+  if (
+    v.includes('undergrad') ||
+    v.includes('100') ||
+    v.includes('200') ||
+    v.includes('level tutorial')
+  )
+    return 'undergrad'
+  if (v.includes('after') || v.includes('summer') || v.includes('school leav'))
+    return 'afterschool'
   if (v.includes('jamb') || v.includes('utme')) return 'jamb'
   return DEFAULT_TRACK
 }
@@ -176,11 +255,17 @@ export function normaliseMode(user?: Partial<User> | null): StudyMode | null {
 
 const ENROLMENT_KEY = 'dsa_enrolment_choice'
 
-export function rememberEnrolmentChoice(choice: {
+export interface EnrolmentChoice {
   track?: string
   mode?: StudyMode
   department?: Department
-}): void {
+  /** The programmes the student selected — the primary track signal. */
+  programmes?: string[]
+  /** The class/level the student picked, e.g. "100 Level". */
+  classLevel?: string
+}
+
+export function rememberEnrolmentChoice(choice: EnrolmentChoice): void {
   if (typeof window === 'undefined') return
   try {
     localStorage.setItem(ENROLMENT_KEY, JSON.stringify(choice))
@@ -189,11 +274,7 @@ export function rememberEnrolmentChoice(choice: {
   }
 }
 
-export function getEnrolmentChoice(): {
-  track?: string
-  mode?: StudyMode
-  department?: Department
-} {
+export function getEnrolmentChoice(): EnrolmentChoice {
   if (typeof window === 'undefined') return {}
   try {
     return JSON.parse(localStorage.getItem(ENROLMENT_KEY) || '{}')
@@ -208,10 +289,36 @@ export function resolveStudentProfile(
 ): StudentProfile {
   const remembered = getEnrolmentChoice()
 
-  // The API is authoritative; the remembered choice only fills real gaps.
-  const rawTrack = user?.level ?? user?.examType ?? remembered.track
-  const track = normaliseTrack(rawTrack)
+  // The programmes a student enrolled in are the truest signal and cover every
+  // programme (JAMB … Preclinical), so prefer them. Fall back to an explicit
+  // exam field, then the class level, then the choice remembered at signup.
+  const programmes =
+    (user?.programmes && user.programmes.length
+      ? user.programmes
+      : undefined) ??
+    (user?.subjectsOfInterest && user.subjectsOfInterest.length
+      ? user.subjectsOfInterest
+      : undefined) ??
+    (remembered.programmes && remembered.programmes.length
+      ? remembered.programmes
+      : undefined)
+
+  const track: ExamTrack =
+    programmes && programmes.length
+      ? normaliseTrack(deriveTrackFromProgrammes(programmes))
+      : normaliseTrack(
+          user?.level ??
+            user?.examType ??
+            user?.currentLevel ??
+            remembered.track,
+        )
+
   const mode = normaliseMode(user) ?? remembered.mode ?? DEFAULT_MODE
+
+  // The class/level to display on programme dashboards (e.g. "100 Level").
+  const yearLabel =
+    (user?.currentLevel ?? remembered.classLevel ?? '').toString().trim() ||
+    undefined
 
   // WAEC carries a department (Science/Art/Commercial). The backend stores it as
   // the single entry in subjectsOfInterest; the remembered choice is the
@@ -227,6 +334,7 @@ export function resolveStudentProfile(
     track,
     mode,
     department,
+    yearLabel,
     trackConfig: EXAM_TRACKS[track],
     modeConfig: STUDY_MODES[mode],
   }

@@ -29,6 +29,11 @@ export interface User {
   // whatever comes back onto a known ExamTrack.
   level?: string
   examType?: string
+  // Class/level at registration, e.g. "100 Level", "SS3" (sent as `currentLevel`).
+  currentLevel?: string
+  // Programmes the student enrolled in (e.g. "JAMB Tutorials", "Preclinical
+  // Tutorials"). The primary signal for which dashboard/track to show.
+  programmes?: string[]
   // Study mode. `isDsaStudent` (a physical/on-campus DSA student) is what the
   // signup form submits; `studyMode` is the resolved 'physical' | 'online'.
   isDsaStudent?: boolean

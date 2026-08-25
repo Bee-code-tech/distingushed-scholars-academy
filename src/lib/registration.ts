@@ -41,15 +41,28 @@ export const NIGERIAN_STATES = [
 export const PORTAL_ACCESS_FEE = 2000
 
 /**
- * Map the chosen programmes onto the exam track the dashboard understands
- * (jamb | waec | postutme). Post-UTME is checked first so a student who picked
- * both JAMB and Post-UTME tutorials lands on Post-UTME. Best-effort by priority.
+ * Map the chosen programmes onto the dashboard track. Every programme maps to a
+ * track now — exam tracks (jamb | waec | postutme) and programme tracks
+ * (undergrad | preclinical | afterschool). A student can multi-select, so this
+ * resolves by priority: the exam programmes (which have hard deadlines) win over
+ * the general programmes.
+ *
+ *   Post-UTME Tutorials      → postutme
+ *   JAMB Tutorials           → jamb
+ *   WAEC Tutorials           → waec
+ *   Preclinical Tutorials    → preclinical
+ *   A(100) Level Tutorials   → undergrad
+ *   After-School / Summer    → afterschool
  */
 export function deriveTrackFromProgrammes(programmes: string[]): string {
   const has = (s: string) => programmes.some((p) => p.toLowerCase().includes(s))
   if (has('post-utme') || has('post utme')) return 'postutme'
-  if (has('waec')) return 'waec'
   if (has('jamb')) return 'jamb'
+  if (has('waec')) return 'waec'
+  if (has('preclinic')) return 'preclinical'
+  if (has('100') || has('200') || has('level tutorial') || has('undergrad'))
+    return 'undergrad'
+  if (has('after') || has('summer')) return 'afterschool'
   return 'jamb'
 }
 
