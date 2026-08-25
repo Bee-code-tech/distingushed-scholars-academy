@@ -22,6 +22,12 @@ import {
   Plus,
   Download,
   AlertCircle,
+  Lock,
+  Unlock,
+  Pin,
+  Pencil,
+  Check,
+  X,
 } from 'lucide-react'
 import { dsaApi } from '@/lib/api'
 import { getUser } from '@/lib/auth'
@@ -44,6 +50,7 @@ interface Msg {
   durationSec?: number
   createdAt: number
   own: boolean
+  pinned: boolean
 }
 
 // Largest file we let the browser attempt (Cloudinary's unsigned preset caps it
@@ -120,6 +127,13 @@ export default function Community({
   const canCompose = true
   const canRecord = mode === 'tutor' || mode === 'admin'
   const isModerator = mode === 'admin'
+  // Tutors + admins can pin messages and lock the channel (lesson mode).
+  const canManage = mode === 'tutor' || mode === 'admin'
+
+  // Channel lock (lesson / broadcast mode): when locked, students cannot post;
+  // tutors and admins still can.
+  const [locked, setLockedState] = useState(false)
+  const postingBlocked = locked && mode === 'student'
 
   // Identify the current user so their own bubbles align right.
   const me = getUser() as
@@ -175,6 +189,7 @@ export default function Community({
           typeof raw.durationSec === 'number' ? raw.durationSec : undefined,
         createdAt,
         own,
+        pinned: !!raw.pinned,
       }
     },
     [myId, myName],
@@ -201,17 +216,35 @@ export default function Community({
     [normalize, token],
   )
 
+  // Keep the channel lock state in sync (best-effort: if the settings endpoint
+  // isn't live yet, treat the channel as unlocked so posting still works).
+  const loadSettings = useCallback(async () => {
+    try {
+      const s = await dsaApi.community.getSettings(token)
+      setLockedState(!!s?.locked)
+    } catch {
+      /* settings endpoint not available yet — stay unlocked */
+    }
+  }, [token])
+
   // Initial load + light polling + refresh when the tab regains focus.
   useEffect(() => {
     load(true)
-    const poll = setInterval(() => load(false), 5000)
-    const onFocus = () => load(false)
+    loadSettings()
+    const poll = setInterval(() => {
+      load(false)
+      loadSettings()
+    }, 5000)
+    const onFocus = () => {
+      load(false)
+      loadSettings()
+    }
     window.addEventListener('focus', onFocus)
     return () => {
       clearInterval(poll)
       window.removeEventListener('focus', onFocus)
     }
-  }, [load])
+  }, [load, loadSettings])
 
   // Keep the newest message in view.
   useEffect(() => {
@@ -357,7 +390,51 @@ export default function Community({
     [messages, token],
   )
 
+  // Edit own message text (author only).
+  const editMessage = useCallback(
+    async (id: string, newText: string) => {
+      setError(null)
+      try {
+        await dsaApi.community.update(id, { text: newText }, token)
+        await load(false)
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Could not edit message.')
+      }
+    },
+    [load, token],
+  )
+
+  // Pin / unpin a message (tutor / admin).
+  const togglePin = useCallback(
+    async (m: Msg) => {
+      setError(null)
+      try {
+        await dsaApi.community.update(m.id, { pinned: !m.pinned }, token)
+        await load(false)
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Could not pin message.')
+      }
+    },
+    [load, token],
+  )
+
+  // Lock / unlock the channel (tutor / admin) — optimistic with rollback.
+  const toggleLock = useCallback(async () => {
+    const next = !locked
+    setLockedState(next)
+    setError(null)
+    try {
+      await dsaApi.community.setLocked(next, token)
+    } catch (e) {
+      setLockedState(!next)
+      setError(
+        e instanceof Error ? e.message : 'Could not change the lock state.',
+      )
+    }
+  }, [locked, token])
+
   const busy = sending || uploading
+  const pinned = messages.filter((m) => m.pinned)
 
   return (
     <div className='max-w-3xl mx-auto flex flex-col h-[calc(100vh-9rem)] min-h-[520px]'>
@@ -373,9 +450,25 @@ export default function Community({
               : 'Chat with tutors and students. Share notes, files and updates.'}
           </p>
         </div>
-        <span className='text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded-full bg-emerald-50 text-emerald-600'>
-          {messages.length} message{messages.length === 1 ? '' : 's'}
-        </span>
+        <div className='flex items-center gap-2'>
+          {canManage && (
+            <button
+              onClick={toggleLock}
+              title={locked ? 'Unlock the community' : 'Lock (lesson mode)'}
+              className={`flex items-center gap-1.5 text-[9px] font-black uppercase tracking-wider px-2.5 py-1.5 rounded-full transition-colors ${
+                locked
+                  ? 'bg-rose-50 text-rose-600 hover:bg-rose-100'
+                  : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+              }`}
+            >
+              {locked ? <Lock size={11} /> : <Unlock size={11} />}
+              {locked ? 'Locked' : 'Lock'}
+            </button>
+          )}
+          <span className='text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded-full bg-emerald-50 text-emerald-600'>
+            {messages.length} message{messages.length === 1 ? '' : 's'}
+          </span>
+        </div>
       </div>
 
       {notReady && (
@@ -385,6 +478,48 @@ export default function Community({
             The community channel is being set up on the server. Once it is live,
             messages will appear here automatically.
           </p>
+        </div>
+      )}
+
+      {locked && (
+        <div className='mb-3 flex items-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2.5'>
+          <Lock size={14} className='text-rose-500 shrink-0' />
+          <p className='text-[11px] font-bold text-rose-600'>
+            {canManage
+              ? 'Lesson mode — the community is locked. Students can’t post; you still can.'
+              : 'The community is locked by a tutor right now. You can read but not post.'}
+          </p>
+        </div>
+      )}
+
+      {pinned.length > 0 && (
+        <div className='mb-3 rounded-2xl border border-blue-100 bg-blue-50/50 px-3 py-2'>
+          <p className='text-[9px] font-black uppercase tracking-widest text-[#002EFF] mb-1.5 flex items-center gap-1'>
+            <Pin size={10} /> Pinned
+          </p>
+          <div className='space-y-1'>
+            {pinned.map((m) => (
+              <div key={m.id} className='flex items-center gap-2 text-[11px]'>
+                <span className='font-black text-zinc-700 shrink-0'>
+                  {m.own ? 'You' : m.senderName}:
+                </span>
+                <span className='text-zinc-600 truncate'>
+                  {m.type === 'text'
+                    ? m.text
+                    : `📎 ${m.fileName || m.type}`}
+                </span>
+                {canManage && (
+                  <button
+                    onClick={() => togglePin(m)}
+                    className='ml-auto text-[#002EFF] hover:text-rose-500 shrink-0'
+                    title='Unpin'
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -415,7 +550,11 @@ export default function Community({
               key={m.id}
               m={m}
               showDelete={isModerator || m.own}
+              canEdit={m.own && m.type === 'text'}
+              canPin={canManage}
               onDelete={() => remove(m.id)}
+              onEdit={(newText) => editMessage(m.id, newText)}
+              onPin={() => togglePin(m)}
             />
           ))
         )}
@@ -426,7 +565,14 @@ export default function Community({
       )}
 
       {/* Composer */}
-      {canCompose && (
+      {postingBlocked ? (
+        <div className='pt-3'>
+          <div className='flex items-center gap-2 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-[11px] font-bold text-zinc-500'>
+            <Lock size={14} className='text-zinc-400 shrink-0' />
+            The community is locked. Only tutors can post right now.
+          </div>
+        </div>
+      ) : canCompose ? (
         <div className='pt-3'>
           {recording ? (
             <div className='flex items-center gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3'>
@@ -562,7 +708,7 @@ export default function Community({
             onChange={(e) => handleFile(e.target.files?.[0] ?? null, 'file')}
           />
         </div>
-      )}
+      ) : null}
     </div>
   )
 }
@@ -591,18 +737,35 @@ function AttachItem({
 function MessageBubble({
   m,
   showDelete,
+  canEdit,
+  canPin,
   onDelete,
+  onEdit,
+  onPin,
 }: {
   m: Msg
   showDelete: boolean
+  canEdit: boolean
+  canPin: boolean
   onDelete: () => void
+  onEdit: (newText: string) => void
+  onPin: () => void
 }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(m.text ?? '')
+
   const initials = m.senderName
     .split(' ')
     .map((w) => w[0])
     .join('')
     .slice(0, 2)
     .toUpperCase()
+
+  const saveEdit = () => {
+    const t = draft.trim()
+    setEditing(false)
+    if (t && t !== m.text) onEdit(t)
+  }
 
   return (
     <div className={`flex gap-2.5 group ${m.own ? 'flex-row-reverse' : ''}`}>
@@ -625,15 +788,41 @@ function MessageBubble({
           <span className='text-[9px] font-medium text-zinc-400'>
             {clock(m.createdAt)}
           </span>
-          {showDelete && (
-            <button
-              onClick={onDelete}
-              className='opacity-0 group-hover:opacity-100 transition-opacity text-zinc-300 hover:text-rose-500'
-              aria-label='Delete message'
-            >
-              <Trash2 size={12} />
-            </button>
+          {m.pinned && (
+            <Pin size={11} className='text-[#002EFF] fill-[#002EFF]/20' />
           )}
+          <span className='flex items-center gap-1.5'>
+            {canPin && (
+              <button
+                onClick={onPin}
+                className='opacity-0 group-hover:opacity-100 transition-opacity text-zinc-300 hover:text-[#002EFF]'
+                title={m.pinned ? 'Unpin' : 'Pin'}
+              >
+                <Pin size={12} />
+              </button>
+            )}
+            {canEdit && !editing && (
+              <button
+                onClick={() => {
+                  setDraft(m.text ?? '')
+                  setEditing(true)
+                }}
+                className='opacity-0 group-hover:opacity-100 transition-opacity text-zinc-300 hover:text-[#002EFF]'
+                title='Edit'
+              >
+                <Pencil size={12} />
+              </button>
+            )}
+            {showDelete && (
+              <button
+                onClick={onDelete}
+                className='opacity-0 group-hover:opacity-100 transition-opacity text-zinc-300 hover:text-rose-500'
+                aria-label='Delete message'
+              >
+                <Trash2 size={12} />
+              </button>
+            )}
+          </span>
         </div>
 
         <div
@@ -645,11 +834,43 @@ function MessageBubble({
               : 'bg-white border border-zinc-200 p-1.5'
           }`}
         >
-          {m.type === 'text' && (
-            <p className='text-[13px] leading-relaxed whitespace-pre-wrap break-words'>
-              {m.text}
-            </p>
-          )}
+          {m.type === 'text' &&
+            (editing ? (
+              <div className='min-w-[220px]'>
+                <textarea
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault()
+                      saveEdit()
+                    }
+                    if (e.key === 'Escape') setEditing(false)
+                  }}
+                  autoFocus
+                  rows={2}
+                  className='w-full resize-none rounded-lg bg-white/90 text-zinc-800 text-[13px] p-2 outline-none'
+                />
+                <div className='flex items-center gap-2 mt-1 justify-end'>
+                  <button
+                    onClick={() => setEditing(false)}
+                    className='text-[11px] font-bold text-white/70 hover:text-white'
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={saveEdit}
+                    className='flex items-center gap-1 text-[11px] font-black text-white'
+                  >
+                    <Check size={12} /> Save
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <p className='text-[13px] leading-relaxed whitespace-pre-wrap break-words'>
+                {m.text}
+              </p>
+            ))}
 
           {m.type === 'image' && m.fileUrl && (
             // eslint-disable-next-line @next/next/no-img-element

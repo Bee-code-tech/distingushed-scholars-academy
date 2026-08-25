@@ -99,6 +99,43 @@ Body (the client sends exactly this shape):
 - Otherwise **403**.
 - Return `{ success: true }`.
 
+### 4. `PATCH /api/community/messages/:id`  *(new)*
+
+Edit a message's text, or pin/unpin it. Body carries one or both:
+
+```json
+{ "text": "corrected text", "pinned": true }
+```
+
+- **`text`** — only the **author** may edit their own message's text (**403**
+  otherwise). Optionally stamp `editedAt`.
+- **`pinned`** — only **tutor / admin** may pin or unpin (**403** otherwise).
+  Store a boolean `pinned` on the message.
+- Return the updated message (same shape as a list row).
+
+### 5. Community lock — `GET` / `PATCH /api/community/settings`  *(new)*
+
+A single channel-wide setting so a tutor can run a lesson without students
+posting over it.
+
+- **`GET /api/community/settings`** → `{ "success": true, "data": { "locked": false } }`.
+  Any member may read it.
+- **`PATCH /api/community/settings`** with `{ "locked": true }` → only
+  **tutor / admin** (**403** otherwise).
+- **Enforcement:** while `locked` is true, reject `POST /community/messages`
+  from **students** (**403**); tutors and admins can still post. The client also
+  hides the composer for students, but please enforce server-side too.
+
+#### Permissions summary
+
+| Action | Who |
+|--------|-----|
+| Post | tutor, student, admin (student blocked while locked) |
+| Edit text | the message's author only |
+| Delete | author (own) + admin (any) |
+| Pin / unpin | tutor, admin |
+| Lock / unlock | tutor, admin |
+
 ## Notes
 
 - No realtime needed for v1 — the client polls `GET` every 5 seconds and on tab

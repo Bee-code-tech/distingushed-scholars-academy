@@ -981,12 +981,47 @@ export const dsaApi = {
         .then((r) => handleResponse<{ data?: unknown }>(r))
         .then((r) => (r as { data?: unknown }).data ?? r),
 
+    // PATCH /community/messages/:id — edit a message's text (author only) or
+    // toggle its pinned state (tutor / admin). The server enforces both.
+    update: (
+      id: string,
+      body: { text?: string; pinned?: boolean },
+      token?: string,
+    ) =>
+      fetch(`${BASE_URL}/community/messages/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers: getHeaders(token),
+        body: JSON.stringify(body),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+
     // DELETE /community/messages/:id — admin removes any message; a member may
     // remove their own. The server enforces who is allowed from the JWT.
     remove: (id: string, token?: string) =>
       fetch(`${BASE_URL}/community/messages/${encodeURIComponent(id)}`, {
         method: 'DELETE',
         headers: getHeaders(token),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+
+    // GET /community/settings — channel state, e.g. { locked: boolean }. When
+    // locked, students cannot post (tutors/admin still can).
+    getSettings: (token?: string) =>
+      fetch(`${BASE_URL}/community/settings`, { headers: getHeaders(token) })
+        .then((r) => handleResponse<{ data?: unknown } | { locked?: boolean }>(r))
+        .then((r) => {
+          const obj = r as Record<string, unknown>
+          return (obj.data ?? obj) as { locked?: boolean }
+        }),
+
+    // PATCH /community/settings — lock / unlock the channel (tutor / admin).
+    setLocked: (locked: boolean, token?: string) =>
+      fetch(`${BASE_URL}/community/settings`, {
+        method: 'PATCH',
+        headers: getHeaders(token),
+        body: JSON.stringify({ locked }),
       })
         .then((r) => handleResponse<{ data?: unknown }>(r))
         .then((r) => (r as { data?: unknown }).data ?? r),
