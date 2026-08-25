@@ -28,13 +28,14 @@ import {
   getCompleted,
   toggleComplete,
   trackProgress,
+  categoryLabel,
 } from '@/lib/coursesStore'
 import { getUser, getToken } from '@/lib/auth'
 import { isDemoToken } from '@/lib/demoAccounts'
 import { dsaApi } from '@/lib/api'
 import { uploadToCloudinary, cloudinaryConfigured } from '@/lib/cloudinary'
 import { normaliseTrack } from '@/lib/studentProfile'
-import type { CourseMaterial, MaterialType } from '@/lib/types'
+import type { CourseMaterial, MaterialType, CourseCategory } from '@/lib/types'
 
 const TYPE_META: Record<
   MaterialType,
@@ -138,7 +139,9 @@ export default function CourseMaterials({
 function TutorMaterials() {
   const [live, setLive] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [courses, setCourses] = useState<{ id: string; title: string }[]>([])
+  const [courses, setCourses] = useState<
+    { id: string; title: string; category?: string }[]
+  >([])
   const [courseId, setCourseId] = useState('')
   const [materials, setMaterials] = useState<CourseMaterial[]>([])
 
@@ -187,6 +190,7 @@ function TutorMaterials() {
           const mapped = cs.map((c) => ({
             id: String(c.id ?? c._id ?? ''),
             title: String(c.title ?? 'Course'),
+            category: c.category ? String(c.category) : undefined,
           }))
           setCourses(mapped)
           setLive(true)
@@ -197,7 +201,11 @@ function TutorMaterials() {
         }
       }
       if (cancelled) return
-      const cs = getCourses().map((c) => ({ id: c.id, title: c.title }))
+      const cs = getCourses().map((c) => ({
+        id: c.id,
+        title: c.title,
+        category: c.category,
+      }))
       setCourses(cs)
       setLive(false)
       setCourseId((p) => p || cs[0]?.id || '')
@@ -317,7 +325,9 @@ function TutorMaterials() {
           {courses.length === 0 && <option value=''>No courses assigned</option>}
           {courses.map((c) => (
             <option key={c.id} value={c.id}>
-              {c.title}
+              {c.category
+                ? `${c.title} — ${categoryLabel(c.category as CourseCategory)}`
+                : c.title}
             </option>
           ))}
         </select>
@@ -470,7 +480,7 @@ function TutorMaterials() {
 
 /* ---------------- Student: browse, download, mark complete ---------------- */
 type MatGroup = {
-  course: { id: string; title: string }
+  course: { id: string; title: string; category?: string }
   progress: number
   materials: CourseMaterial[]
 }
@@ -518,7 +528,11 @@ function StudentMaterials({
                 ? (c.progressPercent as number)
                 : 0
             return {
-              course: { id, title: String(c.title ?? 'Course') },
+              course: {
+                id,
+                title: String(c.title ?? 'Course'),
+                category: c.category ? String(c.category) : undefined,
+              },
               progress: p,
               materials,
             }
@@ -623,7 +637,9 @@ function StudentMaterials({
         groups.map((g) => (
           <div key={g.course.id} className='space-y-2'>
             <h3 className='text-[11px] font-black uppercase tracking-widest text-slate-500'>
-              {g.course.title}
+              {g.course.category
+                ? `${g.course.title} — ${categoryLabel(g.course.category as CourseCategory)}`
+                : g.course.title}
             </h3>
             {g.materials.map((m) => {
               const completed = done.has(m.id)

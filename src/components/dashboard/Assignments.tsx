@@ -19,7 +19,8 @@ import {
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { getCourses } from '@/lib/coursesStore'
+import { getCourses, categoryLabel } from '@/lib/coursesStore'
+import type { CourseCategory } from '@/lib/types'
 import {
   getAssignments,
   getAssignmentsForTrack,
@@ -143,7 +144,9 @@ export default function Assignments({
 function TutorAssignments({ onChange }: { onChange: () => void }) {
   const [live, setLive] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [courses, setCourses] = useState<{ id: string; title: string }[]>([])
+  const [courses, setCourses] = useState<
+    { id: string; title: string; category?: string }[]
+  >([])
   const [courseId, setCourseId] = useState('')
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const [subsByA, setSubsByA] = useState<Record<string, Submission[]>>({})
@@ -169,6 +172,7 @@ function TutorAssignments({ onChange }: { onChange: () => void }) {
           const mapped = cs.map((c) => ({
             id: String(c.id ?? c._id ?? ''),
             title: String(c.title ?? 'Course'),
+            category: c.category ? String(c.category) : undefined,
           }))
           setCourses(mapped)
           setLive(true)
@@ -179,7 +183,11 @@ function TutorAssignments({ onChange }: { onChange: () => void }) {
         }
       }
       if (cancelled) return
-      const cs = getCourses().map((c) => ({ id: c.id, title: c.title }))
+      const cs = getCourses().map((c) => ({
+        id: c.id,
+        title: c.title,
+        category: c.category,
+      }))
       setCourses(cs)
       setLive(false)
       setCourseId((p) => p || cs[0]?.id || '')
@@ -336,7 +344,9 @@ function TutorAssignments({ onChange }: { onChange: () => void }) {
           {courses.length === 0 && <option value=''>No courses assigned</option>}
           {courses.map((c) => (
             <option key={c.id} value={c.id}>
-              {c.title}
+              {c.category
+                ? `${c.title} — ${categoryLabel(c.category as CourseCategory)}`
+                : c.title}
             </option>
           ))}
         </select>
@@ -584,7 +594,10 @@ function GradeRow({
 }
 
 /* ---------------- Student: view & submit ---------------- */
-type CourseGroup = { course: { id: string; title: string }; assignments: Assignment[] }
+type CourseGroup = {
+  course: { id: string; title: string; category?: string }
+  assignments: Assignment[]
+}
 
 function StudentAssignments({
   track,
@@ -621,7 +634,11 @@ function StudentAssignments({
                 )) as Record<string, unknown>[]
               ).map(mapAssignment)
               return {
-                course: { id, title: String(c.title ?? 'Course') },
+                course: {
+                  id,
+                  title: String(c.title ?? 'Course'),
+                  category: c.category ? String(c.category) : undefined,
+                },
                 assignments,
               }
             }),
@@ -650,6 +667,7 @@ function StudentAssignments({
         course: {
           id: cid,
           title: getCourses().find((c) => c.id === cid)?.title ?? cid,
+          category: getCourses().find((c) => c.id === cid)?.category,
         },
         assignments: local[cid],
       }))
@@ -704,7 +722,9 @@ function StudentAssignments({
         groups.map((g) => (
           <div key={g.course.id} className='space-y-2'>
             <h3 className='text-[11px] font-black uppercase tracking-widest text-slate-500'>
-              {g.course.title}
+              {g.course.category
+                ? `${g.course.title} — ${categoryLabel(g.course.category as CourseCategory)}`
+                : g.course.title}
             </h3>
             {g.assignments.map((a) => (
               <StudentAssignmentCard

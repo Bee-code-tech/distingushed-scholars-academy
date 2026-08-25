@@ -15,6 +15,8 @@ import { Badge } from '@/components/ui/badge'
 import { getToken } from '@/lib/auth'
 import { isDemoToken } from '@/lib/demoAccounts'
 import { dsaApi } from '@/lib/api'
+import { categoryLabel } from '@/lib/coursesStore'
+import type { CourseCategory } from '@/lib/types'
 
 function isLive(): boolean {
   const t = getToken()
@@ -66,7 +68,9 @@ function mapGrade(g: Record<string, unknown>): GradeRow {
 export default function Gradebook() {
   const [live, setLive] = useState(false)
   const [loadingCourses, setLoadingCourses] = useState(true)
-  const [courses, setCourses] = useState<{ id: string; title: string }[]>([])
+  const [courses, setCourses] = useState<
+    { id: string; title: string; category?: string }[]
+  >([])
   const [courseId, setCourseId] = useState('')
   const [rows, setRows] = useState<GradeRow[]>([])
   const [loadingRows, setLoadingRows] = useState(false)
@@ -101,6 +105,7 @@ export default function Gradebook() {
         const mapped = cs.map((c) => ({
           id: String(c.id ?? c._id ?? ''),
           title: String(c.title ?? 'Course'),
+          category: c.category ? String(c.category) : undefined,
         }))
         setCourses(mapped)
         setCourseId((p) => p || mapped[0]?.id || '')
@@ -218,7 +223,9 @@ export default function Gradebook() {
           {courses.length === 0 && <option value=''>No courses assigned</option>}
           {courses.map((c) => (
             <option key={c.id} value={c.id}>
-              {c.title}
+              {c.category
+                ? `${c.title} — ${categoryLabel(c.category as CourseCategory)}`
+                : c.title}
             </option>
           ))}
         </select>
