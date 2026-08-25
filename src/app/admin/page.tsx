@@ -734,6 +734,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSecureSession } from '@/components/dashboard/useSecureSession'
+import { useTabState } from '@/components/dashboard/useTabState'
 import {
   LayoutDashboard,
   Users,
@@ -797,7 +798,7 @@ type AdminTab =
 export default function AdminAdmin() {
   const [mounted, setMounted] = useState(false)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
-  const [activeTab, setActiveTab] = useState<AdminTab>('dashboard')
+  const [activeTab, setActiveTab] = useTabState<AdminTab>('dashboard')
   const router = useRouter()
 
   // End the admin session and return to sign-in.

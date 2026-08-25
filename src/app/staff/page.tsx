@@ -23,6 +23,7 @@ import DashboardShell, {
   type NavItem,
 } from '@/components/dashboard/DashboardShell'
 import { useDashboardSession } from '@/components/dashboard/useDashboardSession'
+import { useTabState } from '@/components/dashboard/useTabState'
 import TakeAttendance from '@/components/dashboard/TakeAttendance'
 import TimetableEditor from '@/components/dashboard/TimetableEditor'
 import { getStudents, type StoredStudent } from '@/lib/studentsStore'
@@ -64,7 +65,7 @@ function savePayment(key: string, p: ManualPayment | null) {
 
 export default function StaffDashboard() {
   const { user, loading, logout } = useDashboardSession('staff')
-  const [view, setView] = useState('overview')
+  const [view, setView] = useTabState<string>('overview')
 
   // Permissions resolved live from the staff member's role.
   const permissions = useMemo(() => {

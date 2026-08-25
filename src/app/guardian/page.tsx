@@ -20,6 +20,7 @@ import DashboardShell, {
   type NavItem,
 } from '@/components/dashboard/DashboardShell'
 import { useDashboardSession } from '@/components/dashboard/useDashboardSession'
+import { useTabState } from '@/components/dashboard/useTabState'
 import {
   EXAM_TRACKS,
   examCountdown,
@@ -86,7 +87,7 @@ function StatTile({ label, value, icon: Icon, tint }: any) {
 
 export default function GuardianDashboard() {
   const { user, loading, logout } = useDashboardSession('parent')
-  const [view, setView] = useState('overview')
+  const [view, setView] = useTabState<string>('overview')
 
   const [ward, setWard] = useState<Ward | null>(null)
   const [perf, setPerf] = useState<Perf | null>(null)

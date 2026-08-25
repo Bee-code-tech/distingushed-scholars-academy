@@ -364,6 +364,7 @@ import LiveClasses from '@/components/dashboard/LiveClasses'
 import Analytics from '@/components/dashboard/Analytics'
 import MyCourses from '@/components/dashboard/MyCourses'
 import NotificationBell from '@/components/dashboard/NotificationBell'
+import { useTabState } from '@/components/dashboard/useTabState'
 
 type ViewState =
   | 'overview'
@@ -383,7 +384,7 @@ type ViewState =
 export default function AcademyDashboard() {
   const [mounted, setMounted] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
-  const [activeView, setActiveView] = useState<ViewState>('overview')
+  const [activeView, setActiveView] = useTabState<ViewState>('overview')
   const [isSheetOpen, setIsSheetOpen] = useState(false)
   const router = useRouter()
 
