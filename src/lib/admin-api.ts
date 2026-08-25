@@ -1,3 +1,4 @@
+// // // src/lib/admin-api.ts
 // // src/lib/admin-api.ts
 // import { AdminUser, getAdminSession } from './admin-auth'
 
@@ -152,6 +153,18 @@
 //   success?: boolean
 //   count?: number
 //   data: LibraryMaterial[]
+// }
+
+// export interface CourseMaterialsResponse {
+//   success?: boolean
+//   count?: number
+//   data: LibraryMaterial[]
+// }
+
+// export interface MaterialResponse {
+//   success?: boolean
+//   message?: string
+//   data?: LibraryMaterial
 // }
 
 // export interface SignUploadUrlParams {
@@ -412,7 +425,8 @@
 //     }),
 
 //   // ==========================================
-//   // QUIZ MANAGEMENT
+//   // ADMIN QUIZ MANAGEMENT
+//   //src/lib/admin-api.ts
 //   // ==========================================
 
 //   /** Get all quizzes (Optionally filter by courseId) */
@@ -597,10 +611,35 @@
 //       },
 //     ),
 
+//   /** Update an existing course material by ID */
+//   updateLibraryMaterial: (id: string, payload: UpdateMaterialPayload) =>
+//     adminFetch<MaterialResponse>(`/api/materials/${encodeURIComponent(id)}`, {
+//       method: 'PUT',
+//       body: JSON.stringify(payload),
+//     }),
+
 //   /** Delete a course material by ID */
 //   deleteLibraryMaterial: (id: string) =>
 //     adminFetch<{ success: boolean; message?: string }>(
 //       `/api/materials/${encodeURIComponent(id)}`,
+//       {
+//         method: 'DELETE',
+//       },
+//     ),
+
+//   /** Mark material as completed for the active student */
+//   markMaterialComplete: (id: string) =>
+//     adminFetch<MaterialProgressResponse>(
+//       `/api/materials/${encodeURIComponent(id)}/complete`,
+//       {
+//         method: 'POST',
+//       },
+//     ),
+
+//   /** Un-mark material completion for the active student */
+//   unmarkMaterialComplete: (id: string) =>
+//     adminFetch<MaterialProgressResponse>(
+//       `/api/materials/${encodeURIComponent(id)}/complete`,
 //       {
 //         method: 'DELETE',
 //       },
@@ -906,6 +945,28 @@ export interface CreateMaterialPayload {
   key?: string
 }
 
+export interface UpdateMaterialPayload {
+  title?: string
+  type?: 'pdf' | 'video' | 'link' | 'document' | string
+  url?: string
+  description?: string
+  orderIndex?: number
+  isDownloadable?: boolean
+  fileSizeBytes?: number
+  durationSeconds?: number
+}
+
+export interface MaterialProgressData {
+  progressPercent: number
+  completed: number
+  total: number
+}
+
+export interface MaterialProgressResponse {
+  success: boolean
+  data: MaterialProgressData
+}
+
 // ==========================================
 // NOTIFICATION TYPES
 // ==========================================
@@ -1137,7 +1198,7 @@ export const adminApi = {
     }),
 
   // ==========================================
-  // QUIZ MANAGEMENT
+  // ADMIN QUIZ MANAGEMENT
   // ==========================================
 
   /** Get all quizzes (Optionally filter by courseId) */
@@ -1322,10 +1383,35 @@ export const adminApi = {
       },
     ),
 
+  /** Update an existing course material by ID */
+  updateLibraryMaterial: (id: string, payload: UpdateMaterialPayload) =>
+    adminFetch<MaterialResponse>(`/api/materials/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+
   /** Delete a course material by ID */
   deleteLibraryMaterial: (id: string) =>
     adminFetch<{ success: boolean; message?: string }>(
       `/api/materials/${encodeURIComponent(id)}`,
+      {
+        method: 'DELETE',
+      },
+    ),
+
+  /** Mark material as completed for the active student */
+  markMaterialComplete: (id: string) =>
+    adminFetch<MaterialProgressResponse>(
+      `/api/materials/${encodeURIComponent(id)}/complete`,
+      {
+        method: 'POST',
+      },
+    ),
+
+  /** Un-mark material completion for the active student */
+  unmarkMaterialComplete: (id: string) =>
+    adminFetch<MaterialProgressResponse>(
+      `/api/materials/${encodeURIComponent(id)}/complete`,
       {
         method: 'DELETE',
       },
@@ -1398,7 +1484,10 @@ export const attendanceApi = {
 export const fetchLibraryMaterials = adminApi.getLibraryMaterials
 export const signUploadUrl = adminApi.signUploadUrl
 export const createLibraryMaterial = adminApi.createLibraryMaterial
+export const updateLibraryMaterial = adminApi.updateLibraryMaterial
 export const deleteLibraryMaterial = adminApi.deleteLibraryMaterial
+export const markMaterialComplete = adminApi.markMaterialComplete
+export const unmarkMaterialComplete = adminApi.unmarkMaterialComplete
 
 export const libraryApi = {
   getMaterials: adminApi.getLibraryMaterials,
@@ -1406,8 +1495,12 @@ export const libraryApi = {
   signUploadUrl: adminApi.signUploadUrl,
   createMaterial: adminApi.createLibraryMaterial,
   createLibraryMaterial: adminApi.createLibraryMaterial,
+  updateMaterial: adminApi.updateLibraryMaterial,
+  updateLibraryMaterial: adminApi.updateLibraryMaterial,
   deleteMaterial: adminApi.deleteLibraryMaterial,
   deleteLibraryMaterial: adminApi.deleteLibraryMaterial,
+  markMaterialComplete: adminApi.markMaterialComplete,
+  unmarkMaterialComplete: adminApi.unmarkMaterialComplete,
 }
 
 // Direct Named Exports for Notifications Module
