@@ -9,6 +9,8 @@ import {
   Loader2,
   X,
   UserPlus,
+  Pencil,
+  Check,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { COURSE_CATEGORIES } from '@/lib/coursesStore'
@@ -169,6 +171,16 @@ export default function CourseManager() {
     [load],
   )
 
+  /** Rename an existing course (PUT /courses/:id). */
+  const renameCourse = useCallback(
+    async (courseId: string, newTitle: string) => {
+      setError('')
+      await adminApi.updateCourse(courseId, { title: newTitle })
+      await load()
+    },
+    [load],
+  )
+
   const remove = async (id: string) => {
     try {
       await adminApi.deleteCourse(id)
@@ -300,6 +312,7 @@ export default function CourseManager() {
                       course={c}
                       tutors={tutors}
                       onSetTutors={setCourseTutors}
+                      onRename={renameCourse}
                       onRemove={remove}
                     />
                   ))}
@@ -322,15 +335,32 @@ function CourseCard({
   course,
   tutors,
   onSetTutors,
+  onRename,
   onRemove,
 }: {
   course: UICourse
   tutors: UITutor[]
   onSetTutors: (courseId: string, ids: string[]) => Promise<void>
+  onRename: (courseId: string, title: string) => Promise<void>
   onRemove: (id: string) => void
 }) {
   const [adding, setAdding] = useState('')
   const [busy, setBusy] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [titleDraft, setTitleDraft] = useState(course.title)
+
+  const saveTitle = async () => {
+    const t = titleDraft.trim()
+    setEditing(false)
+    if (t && t !== course.title) {
+      setBusy(true)
+      try {
+        await onRename(course.id, t)
+      } finally {
+        setBusy(false)
+      }
+    }
+  }
 
   const nameFor = (id: string) =>
     tutors.find((t) => t.id === id)?.name ?? 'Tutor'
@@ -360,9 +390,42 @@ function CourseCard({
           <BookOpen size={16} />
         </div>
         <div className='min-w-0 flex-1'>
-          <p className='text-xs font-black text-gray-800 truncate'>
-            {course.title}
-          </p>
+          {editing ? (
+            <div className='flex items-center gap-1'>
+              <input
+                value={titleDraft}
+                onChange={(e) => setTitleDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') saveTitle()
+                  if (e.key === 'Escape') setEditing(false)
+                }}
+                autoFocus
+                className='min-w-0 flex-1 h-7 px-2 rounded-lg bg-slate-50 border border-[#002EFF]/30 focus:bg-white outline-none text-xs font-black text-gray-800'
+              />
+              <button
+                onClick={saveTitle}
+                disabled={busy}
+                className='p-1 text-[#002EFF] hover:text-blue-700 disabled:opacity-40'
+                title='Save name'
+              >
+                <Check size={14} />
+              </button>
+            </div>
+          ) : (
+            <p className='text-xs font-black text-gray-800 truncate flex items-center gap-1.5'>
+              {course.title}
+              <button
+                onClick={() => {
+                  setTitleDraft(course.title)
+                  setEditing(true)
+                }}
+                className='text-slate-300 hover:text-[#002EFF] shrink-0'
+                title='Edit name'
+              >
+                <Pencil size={11} />
+              </button>
+            </p>
+          )}
           <p className='text-[9px] font-black uppercase tracking-widest text-slate-400'>
             {course.tutorIds.length} tutor
             {course.tutorIds.length === 1 ? '' : 's'}
