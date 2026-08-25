@@ -365,6 +365,7 @@ import Analytics from '@/components/dashboard/Analytics'
 import MyCourses from '@/components/dashboard/MyCourses'
 import NotificationBell from '@/components/dashboard/NotificationBell'
 import { useTabState } from '@/components/dashboard/useTabState'
+import { recordLogin } from '@/lib/loginStreak'
 
 type ViewState =
   | 'overview'
@@ -432,6 +433,9 @@ export default function AcademyDashboard() {
           handleLogout()
           return
         }
+
+        // Count this visit toward the student's login streak (once per day).
+        recordLogin()
 
         setUser({
           name: profile.fullName || profile.username || 'Student',

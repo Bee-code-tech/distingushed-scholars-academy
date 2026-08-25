@@ -32,6 +32,8 @@ import {
 import { getToken } from '@/lib/auth'
 import { isDemoToken } from '@/lib/demoAccounts'
 import { dsaApi } from '@/lib/api'
+import { recordLogin, getLoginStreak } from '@/lib/loginStreak'
+import { getDailyQuote, publicHolidayName } from '@/lib/dailyQuote'
 
 interface OverviewUIProps {
   setView: (view: any) => void
@@ -44,18 +46,6 @@ function isLive(): boolean {
   return !!t && !isDemoToken(t)
 }
 
-// Consecutive most-recent sessions the student was marked present.
-function currentStreak(records: { date?: string; status?: string }[]): number {
-  const sorted = [...records].sort((a, b) =>
-    String(a.date).localeCompare(String(b.date)),
-  )
-  let s = 0
-  for (let i = sorted.length - 1; i >= 0; i--) {
-    if (sorted[i].status === 'present') s++
-    else break
-  }
-  return s
-}
 
 function SmallStat({ label, value, icon: Icon, color }: any) {
   return (
@@ -259,6 +249,21 @@ export default function OverviewUI({
     total: number
   } | null>(null)
   const [streak, setStreak] = useState(0)
+  // Live clock — drives the date/day/holiday label and the dynamic quote. Null
+  // on the server / first render so SSR and the first client render agree.
+  const [now, setNow] = useState<Date | null>(null)
+
+  useEffect(() => {
+    setNow(new Date())
+    const id = setInterval(() => setNow(new Date()), 1000)
+    return () => clearInterval(id)
+  }, [])
+
+  // Login streak: record today's visit, then count consecutive login days.
+  useEffect(() => {
+    recordLogin()
+    setStreak(getLoginStreak())
+  }, [])
 
   useEffect(() => {
     setTime(examCountdown(trackConfig.nextExamDate))
@@ -274,10 +279,7 @@ export default function OverviewUI({
     let cancelled = false
     ;(async () => {
       try {
-        const [a, me] = await Promise.all([
-          dsaApi.analytics.me() as Promise<Record<string, unknown>>,
-          dsaApi.attendance.me() as Promise<Record<string, unknown>>,
-        ])
+        const a = (await dsaApi.analytics.me()) as Record<string, unknown>
         if (cancelled) return
         setPerf({
           avg: typeof a.averageScore === 'number' ? a.averageScore : null,
@@ -286,10 +288,6 @@ export default function OverviewUI({
           present: typeof a.present === 'number' ? a.present : 0,
           total: typeof a.totalSessions === 'number' ? a.totalSessions : 0,
         })
-        const recs = Array.isArray(me.records)
-          ? (me.records as { date?: string; status?: string }[])
-          : []
-        setStreak(currentStreak(recs))
       } catch {
         /* leave figures blank */
       }
@@ -299,12 +297,45 @@ export default function OverviewUI({
     }
   }, [])
 
+  // Live, holiday-aware date/time label + the dynamic quote (fall back to the
+  // track tagline for the very first paint before the clock is set).
+  const holiday = now ? publicHolidayName(now) : null
+  const quote = now ? getDailyQuote(now) : trackConfig.tagline
+  const dateLabel = now
+    ? now.toLocaleDateString('en-NG', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+      })
+    : ''
+  const timeLabel = now
+    ? now.toLocaleTimeString('en-NG', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      })
+    : ''
+
   return (
     <div className='space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500 max-w-6xl mx-auto'>
       <div className='grid grid-cols-1 lg:grid-cols-3 gap-6'>
         {/* --- MAIN WELCOME BANNER --- */}
         <section className='lg:col-span-2 relative overflow-hidden bg-[#002EFF] rounded-4xl p-8 text-white shadow-lg'>
           <div className='relative z-10 space-y-4'>
+            {now && (
+              <div className='flex flex-wrap items-center gap-x-2 gap-y-1 text-blue-100 text-[11px] font-bold'>
+                <CalendarClock size={13} className='text-[#FCB900]' />
+                <span>{dateLabel}</span>
+                <span className='opacity-50'>·</span>
+                <span className='tabular-nums'>{timeLabel}</span>
+                {holiday && (
+                  <span className='inline-flex items-center gap-1 bg-[#FCB900] text-[#002EFF] font-black px-2 py-0.5 rounded-full text-[9px] uppercase tracking-wide'>
+                    🎉 {holiday}
+                  </span>
+                )}
+              </div>
+            )}
             <div className='flex items-center gap-2'>
               {streak > 0 && (
                 <Badge className='bg-[#FCB900] text-[#002EFF] hover:bg-[#FCB900] border-none font-black px-3 py-1'>
@@ -338,7 +369,7 @@ export default function OverviewUI({
               )}
             </h1>
             <p className='text-blue-100 text-xs md:text-sm max-w-sm font-medium'>
-              &ldquo;{trackConfig.tagline}&rdquo;
+              &ldquo;{quote}&rdquo;
             </p>
             <div className='flex gap-3'>
               <Button
