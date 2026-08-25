@@ -1,3 +1,4 @@
+// // // src/lib/admin-api.ts
 // // src/lib/admin-api.ts
 // import { AdminUser, getAdminSession } from './admin-auth'
 
@@ -82,6 +83,57 @@
 // }
 
 // // ==========================================
+// // USER MANAGEMENT TYPES
+// // ==========================================
+
+// export interface GetUsersParams {
+//   role: 'student' | 'tutor' | 'parent' | 'staff' | 'admin' | string
+//   search?: string
+//   page?: number
+//   limit?: number
+//   status?:
+//     | 'active'
+//     | 'suspended'
+//     | 'pending_payment'
+//     | 'pending_otp'
+//     | 'payment_failed'
+//     | 'deleted'
+//     | 'all'
+//     | string
+// }
+
+// export interface AdminUserListItem {
+//   id: string
+//   fullname: string
+//   email: string
+//   role: string
+//   examTrack?: string
+//   learningMode?: string
+//   subjects?: string[]
+//   wardName?: string
+//   staffRole?: string
+//   permissions?: string[]
+// }
+
+// export interface GetUsersResponse {
+//   success: boolean
+//   count: number
+//   page: number
+//   limit: number
+//   data: AdminUserListItem[]
+// }
+
+// export interface UpdateUserStatusPayload {
+//   status: 'suspended' | 'active' | string
+// }
+
+// export interface ActionSuccessResponse {
+//   success: boolean
+//   message: string
+//   data?: any
+// }
+
+// // ==========================================
 // // LIBRARY & MATERIAL TYPES
 // // ==========================================
 
@@ -101,6 +153,18 @@
 //   success?: boolean
 //   count?: number
 //   data: LibraryMaterial[]
+// }
+
+// export interface CourseMaterialsResponse {
+//   success?: boolean
+//   count?: number
+//   data: LibraryMaterial[]
+// }
+
+// export interface MaterialResponse {
+//   success?: boolean
+//   message?: string
+//   data?: LibraryMaterial
 // }
 
 // export interface SignUploadUrlParams {
@@ -214,24 +278,83 @@
 //   // CORE ADMIN & USER MANAGEMENT
 //   // ==========================================
 
-//   /** List users by role */
-//   getUsers: <T = any>(role?: string) =>
-//     adminFetch<T>(
-//       `/api/admin/users${role ? `?role=${encodeURIComponent(role)}` : ''}`,
+//   /**
+//    * List users by role with support for query parameters (search, page, limit, status)
+//    * Endpoint: GET /api/admin/users
+//    */
+//   getUsers: (params: GetUsersParams | string) => {
+//     if (typeof params === 'string') {
+//       return adminFetch<GetUsersResponse>(
+//         `/api/admin/users?role=${encodeURIComponent(params)}`,
+//       )
+//     }
+
+//     const queryParams = new URLSearchParams()
+//     if (params.role) queryParams.append('role', params.role)
+//     if (params.search) queryParams.append('search', params.search)
+//     if (params.page !== undefined)
+//       queryParams.append('page', params.page.toString())
+//     if (params.limit !== undefined)
+//       queryParams.append('limit', params.limit.toString())
+//     if (params.status) queryParams.append('status', params.status)
+
+//     const queryString = queryParams.toString()
+//     return adminFetch<GetUsersResponse>(
+//       `/api/admin/users${queryString ? `?${queryString}` : ''}`,
+//     )
+//   },
+
+//   /**
+//    * Suspend or reactivate a user account
+//    * Endpoint: PATCH /api/admin/users/{id}/status
+//    */
+//   updateUserStatus: (id: string, payload: UpdateUserStatusPayload) =>
+//     adminFetch<ActionSuccessResponse>(
+//       `/api/admin/users/${encodeURIComponent(id)}/status`,
+//       {
+//         method: 'PATCH',
+//         body: JSON.stringify(payload),
+//       },
 //     ),
 
-//   /** Create tutor, parent, staff, or admin */
-//   createStaff: <T = any>(data: Record<string, any>) =>
+//   /**
+//    * Soft-delete a user
+//    * Endpoint: DELETE /api/admin/users/{id}
+//    */
+//   deleteUser: (id: string) =>
+//     adminFetch<ActionSuccessResponse>(
+//       `/api/admin/users/${encodeURIComponent(id)}`,
+//       {
+//         method: 'DELETE',
+//       },
+//     ),
+
+//   /**
+//    * Create tutor, parent, staff, or admin account directly
+//    * Endpoint: POST /api/admin/staff
+//    */
+//   createStaff: <T = ActionSuccessResponse>(data: Record<string, any>) =>
 //     adminFetch<T>('/api/admin/staff', {
 //       method: 'POST',
 //       body: JSON.stringify(data),
 //     }),
 
-//   /** List staff roles & permissions */
+//   /**
+//    * List staff roles & permissions
+//    * Endpoint: GET /api/admin/roles
+//    */
 //   getRoles: () => adminFetch<RolesApiResponse>('/api/admin/roles'),
 
-//   /** Create or update a staff role */
-//   upsertRole: <T = any>(roleData: Record<string, any>) =>
+//   /**
+//    * Create or update a staff role (Upsert)
+//    * Endpoint: POST /api/admin/roles
+//    */
+//   upsertRole: <T = ActionSuccessResponse>(roleData: {
+//     id?: string
+//     name: string
+//     permissions: string[]
+//     [key: string]: any
+//   }) =>
 //     adminFetch<T>('/api/admin/roles', {
 //       method: 'POST',
 //       body: JSON.stringify(roleData),
@@ -289,10 +412,7 @@
 //     }),
 
 //   /** Update course / assign tutor */
-//   updateCourse: <T = any>(
-//     courseId: string,
-//     courseData: Record<string, any>,
-//   ) =>
+//   updateCourse: <T = any>(courseId: string, courseData: Record<string, any>) =>
 //     adminFetch<T>(`/api/courses/${encodeURIComponent(courseId)}`, {
 //       method: 'PUT',
 //       body: JSON.stringify(courseData),
@@ -305,11 +425,17 @@
 //     }),
 
 //   // ==========================================
-//   // QUIZ MANAGEMENT
+//   // ADMIN QUIZ MANAGEMENT
+//   //src/lib/admin-api.ts
 //   // ==========================================
 
-//   /** Get all quizzes */
-//   getAllQuizzes: <T = any>() => adminFetch<T>('/api/quizzes'),
+//   /** Get all quizzes (Optionally filter by courseId) */
+//   getAllQuizzes: <T = any>(courseId?: string) =>
+//     adminFetch<T>(
+//       courseId
+//         ? `/api/quizzes?courseId=${encodeURIComponent(courseId)}`
+//         : '/api/quizzes',
+//     ),
 
 //   /** Create a new quiz */
 //   createQuiz: <T = any>(quizData: Record<string, any>) =>
@@ -317,6 +443,10 @@
 //       method: 'POST',
 //       body: JSON.stringify(quizData),
 //     }),
+
+//   /** Get quiz by ID */
+//   getQuizById: <T = any>(quizId: string) =>
+//     adminFetch<T>(`/api/quizzes/${encodeURIComponent(quizId)}`),
 
 //   /** Update a quiz */
 //   updateQuiz: <T = any>(quizId: string, quizData: Record<string, any>) =>
@@ -331,14 +461,11 @@
 //       method: 'DELETE',
 //     }),
 
-//   /** Toggle quiz status (active/inactive) */
-//   toggleQuizStatus: <T = any>(
-//     quizId: string,
-//     status: { isActive: boolean },
-//   ) =>
+//   /** Toggle or explicitly set quiz status (active/inactive) */
+//   toggleQuizStatus: <T = any>(quizId: string, status?: { isActive: boolean }) =>
 //     adminFetch<T>(`/api/quizzes/${encodeURIComponent(quizId)}/status`, {
 //       method: 'PATCH',
-//       body: JSON.stringify(status),
+//       ...(status && { body: JSON.stringify(status) }),
 //     }),
 
 //   // ==========================================
@@ -394,21 +521,23 @@
 //       body: JSON.stringify(sessionData || {}),
 //     }),
 
-//   /** Close attendance session for a specific date (e.g. '2026-08-11') */
-//   closeAttendanceSession: (date: string) =>
+//   /** Close a course's attendance session for a specific date. */
+//   closeAttendanceSession: (date: string, courseId?: string) =>
 //     adminFetch<{ success: boolean; message?: string }>(
-//       `/api/attendance/sessions/${encodeURIComponent(date)}`,
+//       `/api/attendance/sessions/${encodeURIComponent(date)}${courseId ? `?courseId=${encodeURIComponent(courseId)}` : ''}`,
 //       {
 //         method: 'DELETE',
 //       },
 //     ),
 
-//   /** Check if an attendance session is currently active */
-//   getCurrentAttendanceSession: () =>
+//   /** Check if a course's attendance session is currently active. */
+//   getCurrentAttendanceSession: (courseId?: string) =>
 //     adminFetch<{
 //       success: boolean
 //       data: AttendanceSessionData
-//     }>('/api/attendance/sessions/current'),
+//     }>(
+//       `/api/attendance/sessions/current${courseId ? `?courseId=${encodeURIComponent(courseId)}` : ''}`,
+//     ),
 
 //   /** Student self check-in */
 //   studentCheckIn: () =>
@@ -424,15 +553,19 @@
 //       body: JSON.stringify({}),
 //     }),
 
-//   /** Monitor live student check-ins for a given date (defaults to today) */
-//   getAttendanceCheckIns: (date?: string) =>
-//     adminFetch<AttendanceCheckInsResponse>(
-//       `/api/attendance/check-ins${date ? `?date=${encodeURIComponent(date)}` : ''}`,
-//     ),
+//   /** Monitor a course's check-ins for a given date (defaults to today). */
+//   getAttendanceCheckIns: (date?: string, courseId?: string) => {
+//     const qs = new URLSearchParams()
+//     if (date) qs.set('date', date)
+//     if (courseId) qs.set('courseId', courseId)
+//     const q = qs.toString()
+//     return adminFetch<AttendanceCheckInsResponse>(
+//       `/api/attendance/check-ins${q ? `?${q}` : ''}`,
+//     )
+//   },
 
 //   /** Get current student's own attendance record summary & history */
-//   getMyAttendance: () =>
-//     adminFetch<MyAttendanceResponse>('/api/attendance/me'),
+//   getMyAttendance: () => adminFetch<MyAttendanceResponse>('/api/attendance/me'),
 
 //   /** Download attendance CSV report with optional date range and course filters */
 //   getAttendanceReport: (params?: {
@@ -455,31 +588,58 @@
 //   // LIBRARY & MATERIAL MANAGEMENT
 //   // ==========================================
 
-//   /** Get all library materials */
-//   getLibraryMaterials: () =>
-//     adminFetch<LibraryMaterialsResponse | LibraryMaterial[]>('/api/library'),
+//   /** Get course materials for a specific course */
+//   getLibraryMaterials: (courseId: string) =>
+//     adminFetch<CourseMaterialsResponse>(
+//       `/api/courses/${encodeURIComponent(courseId)}/materials`,
+//     ),
 
-//   /** Request a presigned URL for direct cloud upload */
+//   /** Request a presigned URL target for direct upload (stub) */
 //   signUploadUrl: (params: SignUploadUrlParams) =>
-//     adminFetch<SignUploadUrlResponse>('/api/library/sign-url', {
+//     adminFetch<SignUploadUrlResponse>('/api/uploads/sign', {
 //       method: 'POST',
 //       body: JSON.stringify(params),
 //     }),
 
-//   /** Create a new library material metadata record */
-//   createLibraryMaterial: (payload: CreateMaterialPayload) =>
-//     adminFetch<{ success: boolean; data: LibraryMaterial } | LibraryMaterial>(
-//       '/api/library',
+//   /** Create/Add a new course material record */
+//   createLibraryMaterial: (courseId: string, payload: CreateMaterialPayload) =>
+//     adminFetch<MaterialResponse>(
+//       `/api/courses/${encodeURIComponent(courseId)}/materials`,
 //       {
 //         method: 'POST',
 //         body: JSON.stringify(payload),
 //       },
 //     ),
 
-//   /** Delete a library material by ID */
+//   /** Update an existing course material by ID */
+//   updateLibraryMaterial: (id: string, payload: UpdateMaterialPayload) =>
+//     adminFetch<MaterialResponse>(`/api/materials/${encodeURIComponent(id)}`, {
+//       method: 'PUT',
+//       body: JSON.stringify(payload),
+//     }),
+
+//   /** Delete a course material by ID */
 //   deleteLibraryMaterial: (id: string) =>
 //     adminFetch<{ success: boolean; message?: string }>(
-//       `/api/library/${encodeURIComponent(id)}`,
+//       `/api/materials/${encodeURIComponent(id)}`,
+//       {
+//         method: 'DELETE',
+//       },
+//     ),
+
+//   /** Mark material as completed for the active student */
+//   markMaterialComplete: (id: string) =>
+//     adminFetch<MaterialProgressResponse>(
+//       `/api/materials/${encodeURIComponent(id)}/complete`,
+//       {
+//         method: 'POST',
+//       },
+//     ),
+
+//   /** Un-mark material completion for the active student */
+//   unmarkMaterialComplete: (id: string) =>
+//     adminFetch<MaterialProgressResponse>(
+//       `/api/materials/${encodeURIComponent(id)}/complete`,
 //       {
 //         method: 'DELETE',
 //       },
@@ -518,6 +678,23 @@
 //         method: 'PATCH',
 //       },
 //     ),
+// }
+
+// // Named exports for User Management
+// export const fetchAdminUsers = adminApi.getUsers
+// export const updateUserStatus = adminApi.updateUserStatus
+// export const deleteAdminUser = adminApi.deleteUser
+// export const createStaffAccount = adminApi.createStaff
+// export const fetchAdminRoles = adminApi.getRoles
+// export const upsertAdminRole = adminApi.upsertRole
+
+// export const userManagementApi = {
+//   getUsers: adminApi.getUsers,
+//   updateUserStatus: adminApi.updateUserStatus,
+//   deleteUser: adminApi.deleteUser,
+//   createStaff: adminApi.createStaff,
+//   getRoles: adminApi.getRoles,
+//   upsertRole: adminApi.upsertRole,
 // }
 
 // // Named exports for Attendance Module
@@ -563,12 +740,14 @@
 // export const dsaApi = {
 //   ...adminApi,
 //   admin: adminApi,
+//   users: userManagementApi,
 //   attendance: attendanceApi,
 //   library: libraryApi,
 //   notifications: notificationsApi,
 //   fetchLibraryMaterials: adminApi.getLibraryMaterials,
 //   fetchNotifications: adminApi.getNotifications,
 // }
+
 
 
 // src/lib/admin-api.ts
@@ -727,6 +906,18 @@ export interface LibraryMaterialsResponse {
   data: LibraryMaterial[]
 }
 
+export interface CourseMaterialsResponse {
+  success?: boolean
+  count?: number
+  data: LibraryMaterial[]
+}
+
+export interface MaterialResponse {
+  success?: boolean
+  message?: string
+  data?: LibraryMaterial
+}
+
 export interface SignUploadUrlParams {
   filename: string
   contentType: string
@@ -752,6 +943,28 @@ export interface CreateMaterialPayload {
   type?: string
   fileUrl?: string
   key?: string
+}
+
+export interface UpdateMaterialPayload {
+  title?: string
+  type?: 'pdf' | 'video' | 'link' | 'document' | string
+  url?: string
+  description?: string
+  orderIndex?: number
+  isDownloadable?: boolean
+  fileSizeBytes?: number
+  durationSeconds?: number
+}
+
+export interface MaterialProgressData {
+  progressPercent: number
+  completed: number
+  total: number
+}
+
+export interface MaterialProgressResponse {
+  success: boolean
+  data: MaterialProgressData
 }
 
 // ==========================================
@@ -972,10 +1185,7 @@ export const adminApi = {
     }),
 
   /** Update course / assign tutor */
-  updateCourse: <T = any>(
-    courseId: string,
-    courseData: Record<string, any>,
-  ) =>
+  updateCourse: <T = any>(courseId: string, courseData: Record<string, any>) =>
     adminFetch<T>(`/api/courses/${encodeURIComponent(courseId)}`, {
       method: 'PUT',
       body: JSON.stringify(courseData),
@@ -988,11 +1198,16 @@ export const adminApi = {
     }),
 
   // ==========================================
-  // QUIZ MANAGEMENT
+  // ADMIN QUIZ MANAGEMENT
   // ==========================================
 
-  /** Get all quizzes */
-  getAllQuizzes: <T = any>() => adminFetch<T>('/api/quizzes'),
+  /** Get all quizzes (Optionally filter by courseId) */
+  getAllQuizzes: <T = any>(courseId?: string) =>
+    adminFetch<T>(
+      courseId
+        ? `/api/quizzes?courseId=${encodeURIComponent(courseId)}`
+        : '/api/quizzes',
+    ),
 
   /** Create a new quiz */
   createQuiz: <T = any>(quizData: Record<string, any>) =>
@@ -1000,6 +1215,10 @@ export const adminApi = {
       method: 'POST',
       body: JSON.stringify(quizData),
     }),
+
+  /** Get quiz by ID */
+  getQuizById: <T = any>(quizId: string) =>
+    adminFetch<T>(`/api/quizzes/${encodeURIComponent(quizId)}`),
 
   /** Update a quiz */
   updateQuiz: <T = any>(quizId: string, quizData: Record<string, any>) =>
@@ -1014,14 +1233,11 @@ export const adminApi = {
       method: 'DELETE',
     }),
 
-  /** Toggle quiz status (active/inactive) */
-  toggleQuizStatus: <T = any>(
-    quizId: string,
-    status: { isActive: boolean },
-  ) =>
+  /** Toggle or explicitly set quiz status (active/inactive) */
+  toggleQuizStatus: <T = any>(quizId: string, status?: { isActive: boolean }) =>
     adminFetch<T>(`/api/quizzes/${encodeURIComponent(quizId)}/status`, {
       method: 'PATCH',
-      body: JSON.stringify(status),
+      ...(status && { body: JSON.stringify(status) }),
     }),
 
   // ==========================================
@@ -1121,8 +1337,7 @@ export const adminApi = {
   },
 
   /** Get current student's own attendance record summary & history */
-  getMyAttendance: () =>
-    adminFetch<MyAttendanceResponse>('/api/attendance/me'),
+  getMyAttendance: () => adminFetch<MyAttendanceResponse>('/api/attendance/me'),
 
   /** Download attendance CSV report with optional date range and course filters */
   getAttendanceReport: (params?: {
@@ -1145,31 +1360,58 @@ export const adminApi = {
   // LIBRARY & MATERIAL MANAGEMENT
   // ==========================================
 
-  /** Get all library materials */
-  getLibraryMaterials: () =>
-    adminFetch<LibraryMaterialsResponse | LibraryMaterial[]>('/api/library'),
+  /** Get course materials for a specific course */
+  getLibraryMaterials: (courseId: string) =>
+    adminFetch<CourseMaterialsResponse>(
+      `/api/courses/${encodeURIComponent(courseId)}/materials`,
+    ),
 
-  /** Request a presigned URL for direct cloud upload */
+  /** Request a presigned URL target for direct upload (stub) */
   signUploadUrl: (params: SignUploadUrlParams) =>
-    adminFetch<SignUploadUrlResponse>('/api/library/sign-url', {
+    adminFetch<SignUploadUrlResponse>('/api/uploads/sign', {
       method: 'POST',
       body: JSON.stringify(params),
     }),
 
-  /** Create a new library material metadata record */
-  createLibraryMaterial: (payload: CreateMaterialPayload) =>
-    adminFetch<{ success: boolean; data: LibraryMaterial } | LibraryMaterial>(
-      '/api/library',
+  /** Create/Add a new course material record */
+  createLibraryMaterial: (courseId: string, payload: CreateMaterialPayload) =>
+    adminFetch<MaterialResponse>(
+      `/api/courses/${encodeURIComponent(courseId)}/materials`,
       {
         method: 'POST',
         body: JSON.stringify(payload),
       },
     ),
 
-  /** Delete a library material by ID */
+  /** Update an existing course material by ID */
+  updateLibraryMaterial: (id: string, payload: UpdateMaterialPayload) =>
+    adminFetch<MaterialResponse>(`/api/materials/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+
+  /** Delete a course material by ID */
   deleteLibraryMaterial: (id: string) =>
     adminFetch<{ success: boolean; message?: string }>(
-      `/api/library/${encodeURIComponent(id)}`,
+      `/api/materials/${encodeURIComponent(id)}`,
+      {
+        method: 'DELETE',
+      },
+    ),
+
+  /** Mark material as completed for the active student */
+  markMaterialComplete: (id: string) =>
+    adminFetch<MaterialProgressResponse>(
+      `/api/materials/${encodeURIComponent(id)}/complete`,
+      {
+        method: 'POST',
+      },
+    ),
+
+  /** Un-mark material completion for the active student */
+  unmarkMaterialComplete: (id: string) =>
+    adminFetch<MaterialProgressResponse>(
+      `/api/materials/${encodeURIComponent(id)}/complete`,
       {
         method: 'DELETE',
       },
@@ -1242,7 +1484,10 @@ export const attendanceApi = {
 export const fetchLibraryMaterials = adminApi.getLibraryMaterials
 export const signUploadUrl = adminApi.signUploadUrl
 export const createLibraryMaterial = adminApi.createLibraryMaterial
+export const updateLibraryMaterial = adminApi.updateLibraryMaterial
 export const deleteLibraryMaterial = adminApi.deleteLibraryMaterial
+export const markMaterialComplete = adminApi.markMaterialComplete
+export const unmarkMaterialComplete = adminApi.unmarkMaterialComplete
 
 export const libraryApi = {
   getMaterials: adminApi.getLibraryMaterials,
@@ -1250,8 +1495,12 @@ export const libraryApi = {
   signUploadUrl: adminApi.signUploadUrl,
   createMaterial: adminApi.createLibraryMaterial,
   createLibraryMaterial: adminApi.createLibraryMaterial,
+  updateMaterial: adminApi.updateLibraryMaterial,
+  updateLibraryMaterial: adminApi.updateLibraryMaterial,
   deleteMaterial: adminApi.deleteLibraryMaterial,
   deleteLibraryMaterial: adminApi.deleteLibraryMaterial,
+  markMaterialComplete: adminApi.markMaterialComplete,
+  unmarkMaterialComplete: adminApi.unmarkMaterialComplete,
 }
 
 // Direct Named Exports for Notifications Module
