@@ -1,7 +1,15 @@
 'use client'
 
 import React, { useCallback, useEffect, useState } from 'react'
-import { BookOpen, Plus, Trash2, GraduationCap, Loader2 } from 'lucide-react'
+import {
+  BookOpen,
+  Plus,
+  Trash2,
+  GraduationCap,
+  Loader2,
+  X,
+  UserPlus,
+} from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { COURSE_CATEGORIES } from '@/lib/coursesStore'
 import { dsaApi } from '@/lib/api'
@@ -14,7 +22,38 @@ type UICourse = {
   title: string
   subject?: string
   category: string
-  tutorName?: string
+  /** Ids of every tutor assigned to this course (one or more). */
+  tutorIds: string[]
+}
+
+/**
+ * Read the assigned tutor ids from a course row, tolerating whatever shape the
+ * backend returns: a `tutorIds` array, a populated `tutors` array, or the older
+ * single `tutorId` / populated `tutor`.
+ */
+function tutorIdsFromCourse(c: Record<string, unknown>): string[] {
+  const ids = new Set<string>()
+  const push = (v: unknown) => {
+    const s = String(v ?? '').trim()
+    if (s) ids.add(s)
+  }
+  if (Array.isArray(c.tutorIds)) c.tutorIds.forEach(push)
+  if (Array.isArray(c.tutors))
+    (c.tutors as unknown[]).forEach((t) =>
+      push(
+        typeof t === 'object' && t
+          ? ((t as Record<string, unknown>).id ??
+              (t as Record<string, unknown>)._id)
+          : t,
+      ),
+    )
+  if (c.tutor && typeof c.tutor === 'object')
+    push(
+      (c.tutor as Record<string, unknown>).id ??
+        (c.tutor as Record<string, unknown>)._id,
+    )
+  push(c.tutorId)
+  return [...ids]
 }
 
 // The admin signs in via /adminLogin, which stores the JWT under 'admin_token' /
@@ -67,10 +106,7 @@ export default function CourseManager() {
           title: String(c.title ?? 'Course'),
           subject: c.subject ? String(c.subject) : undefined,
           category: String(c.category ?? ''),
-          tutorName:
-            (c.tutorName as string) ||
-            ((c.tutor as Record<string, unknown>)?.fullname as string) ||
-            undefined,
+          tutorIds: tutorIdsFromCourse(c),
         })),
       )
     } catch (err) {
@@ -99,7 +135,10 @@ export default function CourseManager() {
         title: title.trim(),
         subject: subject.trim() || title.trim(),
         category,
+        // Send both: `tutorId` for the current backend and `tutorIds` for the
+        // multi-tutor backend (see docs/backend-request-course-tutors.md).
         tutorId: tutorId || undefined,
+        tutorIds: tutorId ? [tutorId] : [],
         isPublished: true,
       })
       setTitle('')
@@ -112,6 +151,23 @@ export default function CourseManager() {
       setBusy(false)
     }
   }
+
+  /**
+   * Assign the given set of tutors to an existing course (PUT /courses/:id) —
+   * this is how a second tutor is added without recreating the course. Sends
+   * `tutorIds` (the full set) plus `tutorId` (the first) for backward compat.
+   */
+  const setCourseTutors = useCallback(
+    async (courseId: string, ids: string[]) => {
+      setError('')
+      await adminApi.updateCourse(courseId, {
+        tutorIds: ids,
+        tutorId: ids[0] ?? null,
+      })
+      await load()
+    },
+    [load],
+  )
 
   const remove = async (id: string) => {
     try {
@@ -239,34 +295,13 @@ export default function CourseManager() {
               ) : (
                 <div className='grid grid-cols-1 sm:grid-cols-2 gap-2'>
                   {list.map((c) => (
-                    <Card
+                    <CourseCard
                       key={c.id}
-                      className='p-3 rounded-2xl border-none shadow-sm bg-white flex items-center gap-3'
-                    >
-                      <div className='h-9 w-9 rounded-xl bg-blue-50 text-[#002EFF] flex items-center justify-center shrink-0'>
-                        <BookOpen size={16} />
-                      </div>
-                      <div className='min-w-0 flex-1'>
-                        <p className='text-xs font-black text-gray-800 truncate'>
-                          {c.title}
-                        </p>
-                        <p className='text-[10px] font-bold text-slate-400 flex items-center gap-1'>
-                          <GraduationCap size={10} />
-                          {c.tutorName ? (
-                            c.tutorName
-                          ) : (
-                            <span className='text-amber-600'>Unassigned</span>
-                          )}
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => remove(c.id)}
-                        className='p-1.5 text-slate-400 hover:text-rose-600'
-                        title='Remove course'
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </Card>
+                      course={c}
+                      tutors={tutors}
+                      onSetTutors={setCourseTutors}
+                      onRemove={remove}
+                    />
                   ))}
                 </div>
               )}
@@ -275,5 +310,120 @@ export default function CourseManager() {
         })
       )}
     </div>
+  )
+}
+
+/**
+ * A single course row with inline tutor management. The admin can assign more
+ * than one tutor to the same course here — adding a tutor updates the existing
+ * course (no need to recreate it).
+ */
+function CourseCard({
+  course,
+  tutors,
+  onSetTutors,
+  onRemove,
+}: {
+  course: UICourse
+  tutors: UITutor[]
+  onSetTutors: (courseId: string, ids: string[]) => Promise<void>
+  onRemove: (id: string) => void
+}) {
+  const [adding, setAdding] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const nameFor = (id: string) =>
+    tutors.find((t) => t.id === id)?.name ?? 'Tutor'
+  const unassigned = tutors.filter((t) => !course.tutorIds.includes(t.id))
+
+  const apply = async (ids: string[]) => {
+    setBusy(true)
+    try {
+      await onSetTutors(course.id, ids)
+    } finally {
+      setBusy(false)
+      setAdding('')
+    }
+  }
+
+  const addTutor = (id: string) => {
+    if (!id || course.tutorIds.includes(id)) return
+    void apply([...course.tutorIds, id])
+  }
+  const removeTutor = (id: string) =>
+    void apply(course.tutorIds.filter((t) => t !== id))
+
+  return (
+    <Card className='p-3 rounded-2xl border-none shadow-sm bg-white flex flex-col gap-2'>
+      <div className='flex items-center gap-3'>
+        <div className='h-9 w-9 rounded-xl bg-blue-50 text-[#002EFF] flex items-center justify-center shrink-0'>
+          <BookOpen size={16} />
+        </div>
+        <div className='min-w-0 flex-1'>
+          <p className='text-xs font-black text-gray-800 truncate'>
+            {course.title}
+          </p>
+          <p className='text-[9px] font-black uppercase tracking-widest text-slate-400'>
+            {course.tutorIds.length} tutor
+            {course.tutorIds.length === 1 ? '' : 's'}
+          </p>
+        </div>
+        <button
+          onClick={() => onRemove(course.id)}
+          className='p-1.5 text-slate-400 hover:text-rose-600'
+          title='Remove course'
+        >
+          <Trash2 size={14} />
+        </button>
+      </div>
+
+      {/* Assigned tutors */}
+      <div className='flex flex-wrap items-center gap-1.5 pl-1'>
+        {course.tutorIds.length === 0 && (
+          <span className='text-[10px] font-bold text-amber-600 flex items-center gap-1'>
+            <GraduationCap size={10} /> Unassigned
+          </span>
+        )}
+        {course.tutorIds.map((id) => (
+          <span
+            key={id}
+            className='inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full bg-blue-50 text-[#002EFF] text-[10px] font-bold'
+          >
+            {nameFor(id)}
+            <button
+              onClick={() => removeTutor(id)}
+              disabled={busy}
+              className='hover:text-rose-600 disabled:opacity-40'
+              title='Remove tutor'
+            >
+              <X size={11} />
+            </button>
+          </span>
+        ))}
+      </div>
+
+      {/* Add another tutor */}
+      {unassigned.length > 0 && (
+        <div className='flex items-center gap-2 pl-1'>
+          <UserPlus size={12} className='text-slate-400 shrink-0' />
+          <select
+            value={adding}
+            disabled={busy}
+            onChange={(e) => addTutor(e.target.value)}
+            className='flex-1 h-8 px-2 rounded-lg bg-slate-50 border border-transparent focus:border-[#002EFF]/30 focus:bg-white outline-none text-[11px] font-bold disabled:opacity-50'
+          >
+            <option value=''>
+              {busy ? 'Saving…' : 'Add a tutor to this course…'}
+            </option>
+            {unassigned.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+                {t.subject ? ` — ${t.subject}` : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+    </Card>
   )
 }
