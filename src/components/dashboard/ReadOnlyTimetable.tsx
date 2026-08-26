@@ -9,19 +9,30 @@ import {
   getEffectiveTimetable,
   gridFromApi,
   tintForSubject,
+  timetableKey,
   type TimetableGrid,
 } from '@/lib/timetable'
-import type { ExamTrack } from '@/lib/studentProfile'
+import {
+  EXAM_TRACKS,
+  DEPARTMENT_LABELS,
+  type ExamTrack,
+  type Department,
+} from '@/lib/studentProfile'
 import { Badge } from '@/components/ui/badge'
 import { getToken } from '@/lib/auth'
 import { isDemoToken } from '@/lib/demoAccounts'
 import { dsaApi } from '@/lib/api'
 
-const TRACKS: { id: ExamTrack; label: string }[] = [
-  { id: 'jamb', label: 'JAMB' },
-  { id: 'waec', label: 'WAEC' },
-  { id: 'postutme', label: 'Post-UTME' },
+const TRACKS: ExamTrack[] = [
+  'jamb',
+  'waec',
+  'postutme',
+  'undergrad',
+  'preclinical',
+  'afterschool',
 ]
+const DEPT_SPLIT: ExamTrack[] = ['waec', 'afterschool']
+const DEPARTMENTS: Department[] = ['science', 'art', 'commercial']
 
 /**
  * Read-only weekly timetable with a track selector. Used where a role can view
@@ -33,21 +44,26 @@ export default function ReadOnlyTimetable({
   initialTrack?: ExamTrack
 }) {
   const [track, setTrack] = useState<ExamTrack>(initialTrack)
+  const [department, setDepartment] = useState<Department>('science')
   const [grid, setGrid] = useState<TimetableGrid>([])
   const [live, setLive] = useState(false)
-  // Live-first: real JWT reads GET /timetable/:track (transposed to [period]
-  // [day]); demo/offline falls back to the local store.
+
+  const isDeptSplit = DEPT_SPLIT.includes(track)
+  const key = timetableKey(track, isDeptSplit ? department : null)
+
+  // Live-first: real JWT reads GET /timetable/:key (transposed to [period][day]);
+  // demo/offline falls back to the local store.
   useEffect(() => {
     let cancelled = false
     const local = () => {
       if (cancelled) return
-      setGrid(getEffectiveTimetable(track))
+      setGrid(getEffectiveTimetable(track, isDeptSplit ? department : null))
       setLive(false)
     }
     const t = getToken()
     if (t && !isDemoToken(t)) {
       dsaApi.timetable
-        .get(track)
+        .get(key)
         .then((res) => {
           if (cancelled) return
           const apiGrid = (res as { grid?: unknown })?.grid
@@ -61,7 +77,7 @@ export default function ReadOnlyTimetable({
     return () => {
       cancelled = true
     }
-  }, [track])
+  }, [track, department, key, isDeptSplit])
 
   return (
     <div className='space-y-5 max-w-5xl mx-auto'>
@@ -79,18 +95,35 @@ export default function ReadOnlyTimetable({
             </Badge>
           </p>
         </div>
-        <div className='inline-flex gap-1 p-1 bg-slate-100 rounded-xl'>
-          {TRACKS.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setTrack(t.id)}
-              className={`px-4 py-2 rounded-lg text-[11px] font-black uppercase transition-all ${
-                track === t.id ? 'bg-white text-[#002EFF] shadow-sm' : 'text-slate-400 hover:text-slate-600'
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
+        <div className='flex flex-col items-end gap-2'>
+          <div className='inline-flex flex-wrap gap-1 p-1 bg-slate-100 rounded-xl'>
+            {TRACKS.map((t) => (
+              <button
+                key={t}
+                onClick={() => setTrack(t)}
+                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${
+                  track === t ? 'bg-white text-[#002EFF] shadow-sm' : 'text-slate-400 hover:text-slate-600'
+                }`}
+              >
+                {EXAM_TRACKS[t].label}
+              </button>
+            ))}
+          </div>
+          {isDeptSplit && (
+            <div className='inline-flex gap-1 p-1 bg-slate-100 rounded-xl'>
+              {DEPARTMENTS.map((dept) => (
+                <button
+                  key={dept}
+                  onClick={() => setDepartment(dept)}
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${
+                    department === dept ? 'bg-white text-[#FCB900] shadow-sm' : 'text-slate-400 hover:text-slate-600'
+                  }`}
+                >
+                  {DEPARTMENT_LABELS[dept]}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -114,15 +147,20 @@ export default function ReadOnlyTimetable({
                 </span>
               </div>
               {DAYS.map((d, dayIdx) => {
-                const subject = grid[slotIdx]?.[dayIdx] ?? ''
+                const cell = grid[slotIdx]?.[dayIdx] ?? []
                 return (
-                  <div key={d} className='px-1.5 py-1.5 border-l border-slate-50 flex items-center justify-center'>
-                    {subject ? (
-                      <span className={`inline-block w-full text-center px-1 py-2 rounded-lg text-[10px] font-black ${tintForSubject(subject)}`}>
-                        {subject}
-                      </span>
+                  <div key={d} className='px-1.5 py-1.5 border-l border-slate-50 flex flex-col gap-1 justify-center'>
+                    {cell.length ? (
+                      cell.map((s, i) => (
+                        <span
+                          key={i}
+                          className={`inline-block w-full text-center px-1 py-1.5 rounded-lg text-[10px] font-black ${tintForSubject(s)}`}
+                        >
+                          {s}
+                        </span>
+                      ))
                     ) : (
-                      <span className='text-[10px] text-slate-300'>—</span>
+                      <span className='text-[10px] text-slate-300 text-center'>—</span>
                     )}
                   </div>
                 )

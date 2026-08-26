@@ -110,16 +110,27 @@ export default function Timetable({
                 </span>
               </div>
               {DAYS.map((d, dayIdx) => {
-                const subject = grid[slotIdx]?.[dayIdx] ?? ''
+                const cell = grid[slotIdx]?.[dayIdx] ?? []
                 return (
                   <div key={d} className='px-2 py-2 border-l border-slate-50'>
-                    <div
-                      className={`rounded-xl px-2 py-2 text-center min-h-[36px] flex items-center justify-center ${subject ? tintForSubject(subject) : 'bg-slate-50 text-slate-300'}`}
-                    >
-                      <p className='text-[10px] font-black leading-tight'>
-                        {subject || '—'}
-                      </p>
-                    </div>
+                    {cell.length ? (
+                      <div className='flex flex-col gap-1'>
+                        {cell.map((s, i) => (
+                          <div
+                            key={i}
+                            className={`rounded-xl px-2 py-1.5 text-center ${tintForSubject(s)}`}
+                          >
+                            <p className='text-[10px] font-black leading-tight'>
+                              {s}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className='rounded-xl px-2 py-2 text-center min-h-[36px] flex items-center justify-center bg-slate-50 text-slate-300'>
+                        <p className='text-[10px] font-black'>—</p>
+                      </div>
+                    )}
                   </div>
                 )
               })}

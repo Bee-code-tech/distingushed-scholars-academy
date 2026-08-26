@@ -37,6 +37,7 @@ import {
   SLOTS,
   getEffectiveTimetable,
   tintForSubject,
+  type TimetableGrid,
 } from '@/lib/timetable'
 import type { ExamTrack } from '@/lib/studentProfile'
 
@@ -586,7 +587,7 @@ function TimetableReadOnly() {
     { id: 'postutme', label: 'Post-UTME' },
   ]
   const [track, setTrack] = useState<ExamTrack>('jamb')
-  const [grid, setGrid] = useState<string[][]>([])
+  const [grid, setGrid] = useState<TimetableGrid>([])
   useEffect(() => setGrid(getEffectiveTimetable(track)), [track])
 
   return (
@@ -640,15 +641,20 @@ function TimetableReadOnly() {
                   </p>
                 </td>
                 {DAYS.map((d, c) => {
-                  const subject = grid[r]?.[c] ?? ''
+                  const cell = grid[r]?.[c] ?? []
                   return (
                     <td key={d} className='px-3 py-3'>
-                      {subject ? (
-                        <span
-                          className={`inline-block px-2.5 py-1 rounded-lg text-[10px] font-black ${tintForSubject(subject)}`}
-                        >
-                          {subject}
-                        </span>
+                      {cell.length ? (
+                        <div className='flex flex-col gap-1'>
+                          {cell.map((s, i) => (
+                            <span
+                              key={i}
+                              className={`inline-block px-2.5 py-1 rounded-lg text-[10px] font-black ${tintForSubject(s)}`}
+                            >
+                              {s}
+                            </span>
+                          ))}
+                        </div>
                       ) : (
                         <span className='text-[10px] text-slate-300'>—</span>
                       )}

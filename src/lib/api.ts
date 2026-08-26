@@ -495,9 +495,22 @@ export const dsaApi = {
   // lib/timetable. Admin/staff edit via adminApi.updateTimetable; this is the
   // any-authenticated read.
   timetable: {
-    get: (track: string, token?: string) =>
-      fetch(`${BASE_URL}/timetable/${encodeURIComponent(track)}`, {
+    // GET /timetable/:key — `key` is a programme (jamb) or programme+department
+    // (waec-science). Returns { key, track, grid } where grid is [day][period]
+    // and each cell is an array of up to two subjects.
+    get: (key: string, token?: string) =>
+      fetch(`${BASE_URL}/timetable/${encodeURIComponent(key)}`, {
         headers: getHeaders(token),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+
+    // PUT /timetable/:key (admin/staff) — save the grid ([day][period] arrays).
+    save: (key: string, grid: string[][][], token?: string) =>
+      fetch(`${BASE_URL}/timetable/${encodeURIComponent(key)}`, {
+        method: 'PUT',
+        headers: getHeaders(token),
+        body: JSON.stringify({ grid }),
       })
         .then((r) => handleResponse<{ data?: unknown }>(r))
         .then((r) => (r as { data?: unknown }).data ?? r),
