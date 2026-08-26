@@ -773,6 +773,7 @@ import Library from './components/Library'
 import TakeAttendance from '@/components/dashboard/TakeAttendance'
 import TimetableEditor from '@/components/dashboard/TimetableEditor'
 import Announcements from '@/components/dashboard/Announcements'
+import QuizBuilder from './components/QuizBuilder'
 import CommunityModeration from './components/CommunityModeration'
 import RolesPermissions from './components/RolesPermissions'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -926,7 +927,7 @@ export default function AdminAdmin() {
       case 'courses':
         return <CourseManager />
       case 'quizzes':
-        return <QuizzeManagement />
+        return <QuizBuilder />
       case 'library':
         return <Library />
       case 'create-tutor':

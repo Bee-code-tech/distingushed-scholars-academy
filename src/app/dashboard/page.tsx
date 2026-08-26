@@ -321,6 +321,7 @@ import {
   Video,
   BarChart3,
   BookOpen,
+  HelpCircle,
 } from 'lucide-react'
 
 // API Utility
@@ -364,6 +365,7 @@ import LiveClasses from '@/components/dashboard/LiveClasses'
 import Analytics from '@/components/dashboard/Analytics'
 import MyCourses from '@/components/dashboard/MyCourses'
 import NotificationBell from '@/components/dashboard/NotificationBell'
+import QuizRunner from '@/components/dashboard/QuizRunner'
 import { useTabState } from '@/components/dashboard/useTabState'
 import { recordLogin } from '@/lib/loginStreak'
 
@@ -381,6 +383,7 @@ type ViewState =
   | 'live'
   | 'analytics'
   | 'community'
+  | 'quizzes'
 
 export default function AcademyDashboard() {
   const [mounted, setMounted] = useState(false)
@@ -496,6 +499,7 @@ export default function AcademyDashboard() {
     { icon: Video, label: 'Live Class', view: 'live' as ViewState },
     { icon: Library, label: 'E-Learning', view: 'resources' as ViewState },
     { icon: ClipboardList, label: 'Assignments', view: 'assignments' as ViewState },
+    { icon: HelpCircle, label: 'Quizzes', view: 'quizzes' as ViewState },
     { icon: BarChart3, label: 'My Performance', view: 'analytics' as ViewState },
     { icon: Megaphone, label: 'Announcements', view: 'announcements' as ViewState },
     { icon: Zap, label: 'Syllabus Mastery', view: 'syllabus' as ViewState },
@@ -714,6 +718,7 @@ export default function AcademyDashboard() {
             {activeView === 'analytics' && <Analytics mode='student' />}
             {activeView === 'syllabus' && <SyllabusMastery />}
             {activeView === 'community' && <CommunityView />}
+            {activeView === 'quizzes' && <QuizRunner />}
             {activeView === 'schedule' && <ExamSchedule mode={student.mode} />}
             {activeView === 'settings' && <SettingsView />}
           </div>

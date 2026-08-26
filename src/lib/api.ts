@@ -248,6 +248,99 @@ export const dsaApi = {
         method: 'GET',
         headers: getHeaders(token),
       }).then((r) => handleResponse<LeaderboardEntry[]>(r)),
+
+    // GET /quizzes — list (admin/tutor see theirs; students see published).
+    list: (token?: string) =>
+      fetch(`${BASE_URL}/quizzes`, { headers: getHeaders(token) })
+        .then((r) =>
+          handleResponse<
+            Record<string, unknown>[] | { data?: Record<string, unknown>[] }
+          >(r),
+        )
+        .then((res) => (Array.isArray(res) ? res : (res?.data ?? []))),
+
+    // GET /quizzes/:id — full quiz with subjects[].questions[].
+    get: (id: string, token?: string) =>
+      fetch(`${BASE_URL}/quizzes/${encodeURIComponent(id)}`, {
+        headers: getHeaders(token),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+
+    // PATCH /quizzes/:id/status — publish / unpublish (isActive).
+    setStatus: (id: string, isActive: boolean, token?: string) =>
+      fetch(`${BASE_URL}/quizzes/${encodeURIComponent(id)}/status`, {
+        method: 'PATCH',
+        headers: getHeaders(token),
+        body: JSON.stringify({ isActive }),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+
+    // DELETE /quizzes/:id.
+    remove: (id: string, token?: string) =>
+      fetch(`${BASE_URL}/quizzes/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: getHeaders(token),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+  },
+
+  // Question bank — tutors contribute questions (bulk via Excel or one by one
+  // with an image); admins pull them into quizzes. See docs/quiz-feature.md.
+  // A question: { subject, topic, body, A, B, C, D, E, Answer, explanation,
+  // mark, imageUrl }. The server also returns normalized fields
+  // (questionText, options[], correctOption/correctAnswer).
+  questions: {
+    // GET /questions?subject=&tutorId=  (tutor own / admin all).
+    list: (
+      params: { subject?: string; tutorId?: string } = {},
+      token?: string,
+    ) => {
+      const qs = new URLSearchParams()
+      if (params.subject) qs.set('subject', params.subject)
+      if (params.tutorId) qs.set('tutorId', params.tutorId)
+      const q = qs.toString()
+      return fetch(`${BASE_URL}/questions${q ? `?${q}` : ''}`, {
+        headers: getHeaders(token),
+      })
+        .then((r) =>
+          handleResponse<
+            Record<string, unknown>[] | { data?: Record<string, unknown>[] }
+          >(r),
+        )
+        .then((res) => (Array.isArray(res) ? res : (res?.data ?? [])))
+    },
+
+    // POST /questions — one question, or many via { questions: [...] }.
+    create: (body: Record<string, unknown>, token?: string) =>
+      fetch(`${BASE_URL}/questions`, {
+        method: 'POST',
+        headers: getHeaders(token),
+        body: JSON.stringify(body),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+
+    // POST /questions with a bulk array.
+    createMany: (questions: Record<string, unknown>[], token?: string) =>
+      fetch(`${BASE_URL}/questions`, {
+        method: 'POST',
+        headers: getHeaders(token),
+        body: JSON.stringify({ questions }),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+
+    // DELETE /questions/:id.
+    remove: (id: string, token?: string) =>
+      fetch(`${BASE_URL}/questions/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: getHeaders(token),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
   },
 
   programs: {
