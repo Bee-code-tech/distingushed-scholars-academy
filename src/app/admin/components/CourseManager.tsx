@@ -13,7 +13,7 @@ import {
   Check,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
-import { COURSE_CATEGORIES } from '@/lib/coursesStore'
+import { COURSE_CATEGORIES, categoryLabel } from '@/lib/coursesStore'
 import { dsaApi } from '@/lib/api'
 import { adminApi } from '@/lib/admin-api'
 import type { CourseCategory } from '@/lib/types'
@@ -130,7 +130,20 @@ export default function CourseManager() {
   const create = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
-    if (title.trim().length < 2) return setError('Enter a course title')
+    const cleanTitle = title.trim()
+    if (cleanTitle.length < 2) return setError('Enter a course title')
+    // Block duplicates: same title + same category already exists. (Same name in
+    // a different category is allowed — e.g. JAMB Chemistry vs WAEC Chemistry.)
+    const exists = courses.some(
+      (c) =>
+        c.category === category &&
+        c.title.trim().toLowerCase() === cleanTitle.toLowerCase(),
+    )
+    if (exists) {
+      return setError(
+        `“${cleanTitle}” already exists in ${categoryLabel(category)}. Assign another tutor to the existing course instead of creating a new one.`,
+      )
+    }
     setBusy(true)
     try {
       await adminApi.createCourse({
