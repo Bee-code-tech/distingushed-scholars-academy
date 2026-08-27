@@ -34,6 +34,12 @@ export interface User {
   // Programmes the student enrolled in (e.g. "JAMB Tutorials", "Preclinical
   // Tutorials"). The primary signal for which dashboard/track to show.
   programmes?: string[]
+  // Payments & access (see docs/payment-plan.md). Level: 'free' (account only),
+  // 'portal' (paid the ₦2,000 access fee), 'tutorial' (active tutorial student).
+  accessLevel?: 'free' | 'portal' | 'tutorial'
+  tutorialExpiry?: string
+  paymentStatus?: 'none' | 'pending-offline' | 'active' | 'expired' | 'disabled'
+  accessEnabled?: boolean
   // Study mode. `isDsaStudent` (a physical/on-campus DSA student) is what the
   // signup form submits; `studyMode` is the resolved 'physical' | 'online'.
   isDsaStudent?: boolean

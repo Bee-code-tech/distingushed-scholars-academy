@@ -322,6 +322,7 @@ import {
   BarChart3,
   BookOpen,
   HelpCircle,
+  Sparkles,
 } from 'lucide-react'
 
 // API Utility
@@ -366,6 +367,7 @@ import Analytics from '@/components/dashboard/Analytics'
 import MyCourses from '@/components/dashboard/MyCourses'
 import NotificationBell from '@/components/dashboard/NotificationBell'
 import QuizRunner from '@/components/dashboard/QuizRunner'
+import UnlockPlans from '@/components/dashboard/UnlockPlans'
 import { useTabState } from '@/components/dashboard/useTabState'
 import { recordLogin } from '@/lib/loginStreak'
 
@@ -384,6 +386,7 @@ type ViewState =
   | 'analytics'
   | 'community'
   | 'quizzes'
+  | 'unlock'
 
 export default function AcademyDashboard() {
   const [mounted, setMounted] = useState(false)
@@ -508,6 +511,7 @@ export default function AcademyDashboard() {
       label: 'Community',
       view: 'community' as ViewState,
     },
+    { icon: Sparkles, label: 'Unlock More', view: 'unlock' as ViewState },
     { icon: Calendar, label: 'Exam Schedule', view: 'schedule' as ViewState },
     { icon: Settings, label: 'Settings', view: 'settings' as ViewState },
   ]
@@ -719,6 +723,7 @@ export default function AcademyDashboard() {
             {activeView === 'syllabus' && <SyllabusMastery />}
             {activeView === 'community' && <CommunityView />}
             {activeView === 'quizzes' && <QuizRunner />}
+            {activeView === 'unlock' && <UnlockPlans />}
             {activeView === 'schedule' && <ExamSchedule mode={student.mode} />}
             {activeView === 'settings' && <SettingsView />}
           </div>

@@ -1058,6 +1058,8 @@ export interface CreateCoursePayload {
   subject: string
   category: CourseCategory
   tutorId?: string
+  // Multiple tutors per course — see docs/backend-request-course-tutors.md.
+  tutorIds?: string[]
   description?: string
   department?: string
   thumbnailUrl?: string

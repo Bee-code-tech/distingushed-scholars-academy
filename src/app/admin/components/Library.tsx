@@ -804,7 +804,10 @@ import {
   CreateMaterialPayload,
 } from '@/lib/admin-api'
 
-export default function LibraryPage() {
+// Accepts an optional `courseId` because LibraryCourseWrapper passes one; it is
+// not consumed yet (course-scoped library still to be wired). Added to unbreak
+// the build after the export was renamed to LibraryPage(). — flagged to owner.
+export default function LibraryPage(_props?: { courseId?: string }) {
   // ==========================================
   // STATE MANAGEMENT
   // ==========================================

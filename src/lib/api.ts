@@ -1132,6 +1132,129 @@ export const dsaApi = {
         .then((r) => handleResponse<{ data?: unknown }>(r))
         .then((r) => (r as { data?: unknown }).data ?? r),
   },
+
+  // Payment plans — admin-managed (see docs/backend-request-payments.md).
+  // A plan: { id, name, kind: 'portal'|'tutorial', amount (kobo/naira),
+  // durationMonths, grantsLevel: 'portal'|'tutorial', active }.
+  plans: {
+    // GET /plans — active plans a student can pick.
+    list: (token?: string) =>
+      fetch(`${BASE_URL}/plans`, { headers: getHeaders(token) })
+        .then((r) =>
+          handleResponse<
+            Record<string, unknown>[] | { data?: Record<string, unknown>[] }
+          >(r),
+        )
+        .then((res) => (Array.isArray(res) ? res : (res?.data ?? []))),
+
+    // GET /admin/plans — all plans (admin).
+    adminList: (token?: string) =>
+      fetch(`${BASE_URL}/admin/plans`, { headers: getHeaders(token) })
+        .then((r) =>
+          handleResponse<
+            Record<string, unknown>[] | { data?: Record<string, unknown>[] }
+          >(r),
+        )
+        .then((res) => (Array.isArray(res) ? res : (res?.data ?? []))),
+
+    create: (body: Record<string, unknown>, token?: string) =>
+      fetch(`${BASE_URL}/admin/plans`, {
+        method: 'POST',
+        headers: getHeaders(token),
+        body: JSON.stringify(body),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+
+    update: (id: string, body: Record<string, unknown>, token?: string) =>
+      fetch(`${BASE_URL}/admin/plans/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers: getHeaders(token),
+        body: JSON.stringify(body),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+
+    remove: (id: string, token?: string) =>
+      fetch(`${BASE_URL}/admin/plans/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: getHeaders(token),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+  },
+
+  // Payments — online (Paystack) + offline proof, plus admin review + access caps.
+  payments: {
+    // POST /payments/online — start a Paystack transaction for a plan; returns
+    // an accessCode the browser resumes (like registration). { planId, months? }.
+    initOnline: (
+      body: { planId: string; months?: number },
+      token?: string,
+    ) =>
+      fetch(`${BASE_URL}/payments/online`, {
+        method: 'POST',
+        headers: getHeaders(token),
+        body: JSON.stringify(body),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+
+    // POST /payments/offline (student) — submit proof of an offline payment.
+    // { planId, months?, amount?, method, reference?, proofUrl } → provisional access.
+    offline: (body: Record<string, unknown>, token?: string) =>
+      fetch(`${BASE_URL}/payments/offline`, {
+        method: 'POST',
+        headers: getHeaders(token),
+        body: JSON.stringify(body),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+
+    // GET /admin/payments/offline — the review queue (admin).
+    offlineQueue: (token?: string) =>
+      fetch(`${BASE_URL}/admin/payments/offline`, { headers: getHeaders(token) })
+        .then((r) =>
+          handleResponse<
+            Record<string, unknown>[] | { data?: Record<string, unknown>[] }
+          >(r),
+        )
+        .then((res) => (Array.isArray(res) ? res : (res?.data ?? []))),
+
+    // PATCH /admin/payments/offline/:id — { decision: 'approve' | 'reject' }.
+    review: (id: string, decision: 'approve' | 'reject', token?: string) =>
+      fetch(`${BASE_URL}/admin/payments/offline/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers: getHeaders(token),
+        body: JSON.stringify({ decision }),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+
+    // PATCH /admin/users/:id/access — master enable/disable a student's access.
+    setUserAccess: (userId: string, enabled: boolean, token?: string) =>
+      fetch(`${BASE_URL}/admin/users/${encodeURIComponent(userId)}/access`, {
+        method: 'PATCH',
+        headers: getHeaders(token),
+        body: JSON.stringify({ enabled }),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+
+    // GET/PATCH /admin/settings/access — the admin-editable L1/L2 caps.
+    getCaps: (token?: string) =>
+      fetch(`${BASE_URL}/admin/settings/access`, { headers: getHeaders(token) })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+    setCaps: (caps: Record<string, number>, token?: string) =>
+      fetch(`${BASE_URL}/admin/settings/access`, {
+        method: 'PATCH',
+        headers: getHeaders(token),
+        body: JSON.stringify(caps),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+  },
 }
 
 /**
