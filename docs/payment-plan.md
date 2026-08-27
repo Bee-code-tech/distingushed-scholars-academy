@@ -190,7 +190,72 @@ limits; L3 is unlimited.
 
 ## 8. Status
 
-All decisions resolved — ready to build **Phase 1** (offline payment + admin
-review, admin plans + caps management, student Unlock/Plans screen, the
-`accessLevel` data fields and the `isFree` class flag), with `PAYWALL_ENABLED`
-off during beta.
+**Phase 1 frontend is BUILT** (behind `PAYWALL_ENABLED` off during beta):
+
+- Student **Unlock More** tab — pick a plan → **Pay Online** or **I've Paid
+  Offline** (proof upload). `src/components/dashboard/UnlockPlans.tsx`.
+- **Registration** step — same two buttons for the ₦2,000 fee.
+  `src/app/auth/signup/StudentWizard.tsx`.
+- Admin **Payments** tab — plans + amounts, access caps, offline proof review.
+  `src/app/admin/components/PaymentsAdmin.tsx`.
+- Access model + helpers `src/lib/access.ts`; API client `dsaApi.plans` /
+  `dsaApi.payments` in `src/lib/api.ts`; user fields in `src/lib/types.ts`.
+- **Permissions:** every admin capability (incl. **View payment history**,
+  Manage plans & caps, Verify manual payments) is assignable in
+  Settings → Permissions (`src/lib/staffStore.ts`).
+
+**Pending: the backend endpoints below.** All were re-checked live on
+2026-08-26 and return **404** — the frontend degrades gracefully until they ship.
+
+---
+
+## 9. API & endpoints (what the frontend calls)
+
+Client wrappers: `dsaApi.plans` and `dsaApi.payments` in `src/lib/api.ts`. Amounts
+are in **naira** (confirm if the model stores kobo). All ❌ below = not live yet.
+
+### Plans (`dsaApi.plans`)
+| Method | Path | Who | Body / returns | Status |
+|--------|------|-----|----------------|:--:|
+| GET | `/api/plans` | any authed | active plans `[{id,name,kind,amount,durationMonths,grantsLevel,active}]` | ❌ 404 |
+| GET | `/api/admin/plans` | admin | all plans | ❌ 404 |
+| POST | `/api/admin/plans` | admin | `{name,kind:'portal'|'tutorial',amount,durationMonths,grantsLevel,active}` | ❌ 404 |
+| PATCH | `/api/admin/plans/:id` | admin | partial (e.g. `{amount}`, `{active}`) | ❌ 404 |
+| DELETE | `/api/admin/plans/:id` | admin | — | ❌ 404 |
+
+### Payments (`dsaApi.payments`)
+| Method | Path | Who | Body / returns | Status |
+|--------|------|-----|----------------|:--:|
+| POST | `/api/payments/online` | student | `{planId,months?}` → **`{accessCode}`** (browser resumes Paystack) | ❌ 404 |
+| POST | `/api/payments/offline` | student | `{planId,months?,amount,method,reference?,proofUrl}` → provisional access (`pending-offline`) | ❌ 404 |
+| GET | `/api/admin/payments/offline` | admin | review queue `[{id,student{id,fullname},planId,amount,method,reference,proofUrl,status,createdAt}]` | ❌ 404 |
+| PATCH | `/api/admin/payments/offline/:id` | admin | `{decision:'approve'|'reject'}` — approve reuses `POST /admin/payments/manual` | ❌ 404 |
+| PATCH | `/api/admin/users/:id/access` | admin | `{enabled:boolean}` — master disable/enable | ❌ 404 |
+| GET | `/api/admin/settings/access` | admin | caps `{freeTests,freeMaterials,freeLiveClasses,portalTests,portalMaterials,portalLiveClasses}` | ❌ 404 |
+| PATCH | `/api/admin/settings/access` | admin | partial caps update | ❌ 404 |
+
+### Registration — offline at signup
+`POST /api/auth/register` (already exists) now **also** carries, on the offline
+path: `paymentMethod:'offline'`, `paymentProofUrl`, `paymentReference`. The
+backend should record a `pending-offline` payment + provisional access and skip
+the gateway. *(The register endpoint exists; these extra fields need handling.)*
+
+### Existing rails to reuse
+- `POST /api/admin/payments/manual` — **already live** — `{studentId, amount,
+  method, reference}` marks a student paid offline (use this to fulfil an
+  approval).
+- Register-first Paystack (`src/lib/paystack.ts`) — the online rail.
+
+### Student fields on `GET /auth/me`
+`accessLevel: 'free'|'portal'|'tutorial'`, `tutorialExpiry`, `paymentStatus`,
+`accessEnabled`.
+
+### Live class
+Add `isFree: boolean` (admin-settable) — a free class is joinable by everyone and
+ignores the caps.
+
+### Enforcement (Phase 2, not now)
+When `PAYWALL_ENABLED` turns on, the level + caps in §1 must be enforced
+**server-side** on the gated routes (community, assignments, live classes, tests,
+materials), and each admin permission key (e.g. `payments.history`,
+`payments.verify`) checked on its endpoint.
