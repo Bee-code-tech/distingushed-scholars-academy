@@ -39,17 +39,27 @@ website only needs **three levels**:
 - **L1 purpose:** taste the platform before paying.
 - **L2 purpose:** intermediate; nudges toward the full tutorial.
 - **L3:** everything on the portal.
-- **Expiry:** when the tutorial period lapses, the student **reverts to Free**
-  (see open question #5 on whether ₦2,000 access should persist as L2 instead).
+- **Expiry:** when the tutorial period lapses, the student **reverts to Free
+  (L1)** — confirmed.
 
-"Limited / more / full" for tests and materials needs concrete caps — proposed
-defaults below (owner to confirm, or make them admin-editable):
+The "limited / more / full" caps are **set by the admin** (not hard-coded), in the
+admin settings — how many free tests, learning materials and live classes L1 and
+L2 each get. L3 is unlimited. Defaults ship as a starting point; the admin can
+change them any time.
 
-| Cap | L1 Free | L2 (₦2,000) | L3 Tutorial |
+| Cap (admin-editable) | L1 Free | L2 (₦2,000) | L3 Tutorial |
 |---|--:|--:|--:|
-| Free tests visible | e.g. 3 | e.g. 10 | ∞ |
-| Learning materials visible | e.g. 5 | e.g. 20 | ∞ |
-| Live classes joinable | 5 | 10 | ∞ |
+| Free tests visible | admin-set (default 3) | admin-set (default 10) | ∞ |
+| Learning materials visible | admin-set (default 5) | admin-set (default 20) | ∞ |
+| Live classes joinable | admin-set (default 5) | admin-set (default 10) | ∞ |
+
+### Free classes — open to everyone
+
+The admin can mark any live class as **Free**. A free class is joinable by **all
+students regardless of level** — including L1 / unpaid — and does **not** count
+against the 5 / 10 live-class cap. This is how DSA runs open or demo classes that
+anyone can attend, and it covers the "free classes for unpaid students" idea with
+a simple per-class flag (so it no longer needs to wait for v2).
 
 ---
 
@@ -121,6 +131,11 @@ At any payment step, **two buttons** instead of one:
 **Payment plan:** `{ id, name, kind, amount, durationMonths, grantsLevel, active }`.
 **Offline payment record:** `{ studentId, planId, amount, method, reference,
 proofUrl, status: pending|approved|rejected, reviewedBy, createdAt }`.
+**Live class:** add `isFree: boolean` — a free class ignores the level and the
+cap (everyone can join).
+**Access settings (admin-editable caps):** `{ freeTests, freeMaterials,
+freeLiveClasses, portalTests, portalMaterials, portalLiveClasses }` — the L1/L2
+limits; L3 is unlimited.
 
 ---
 
@@ -131,8 +146,11 @@ proofUrl, status: pending|approved|rejected, reviewedBy, createdAt }`.
 - While `PAYWALL_ENABLED` is off → everything open (beta).
 - When on:
   - **Community** hidden/locked below L2; **Assignments** locked below L3.
-  - **Live classes / tests / materials** are **count-limited** (5/10/∞ etc.), not
-    just on/off — show "You've reached your free limit — unlock more" past the cap.
+  - **Live classes / tests / materials** are **count-limited** by the admin caps
+    (default 5/10/∞ etc.), not just on/off — show "You've reached your free limit
+    — unlock more" past the cap.
+  - **Free classes** (`isFree`) are always joinable by everyone and never count
+    toward the cap.
   - Locked items show a small lock + route to the **Unlock** (Plans) screen.
 - Enforced **server-side** too on the gated endpoints — the frontend lock is UX.
 
@@ -161,14 +179,18 @@ proofUrl, status: pending|approved|rejected, reviewedBy, createdAt }`.
 4. **"Classes" gate** — live classes are **count-limited** per level (5 / 10 /
    unlimited), not a simple on/off. Tests and materials are limited the same way.
 5. **Duration / expiry** — tutorial (L3) is time-bound by `tutorialExpiry`; at
-   expiry the student **reverts to Free (L1)** per the owner's note.
-   **Still to confirm:** should they revert to **L2** instead (since ₦2,000 is a
-   one-time registration fee), rather than all the way to Free?
+   expiry the student **reverts to Free (L1)** — confirmed.
+
+6. **Caps** — **admin-editable** (not fixed); see §1. Ship sensible defaults.
+
+7. **Free classes** — the admin can flag any live class `isFree`; it's open to
+   all students (any level, including unpaid) and doesn't count toward the cap.
 
 ---
 
-## 8. Remaining decision
+## 8. Status
 
-- Confirm question #5 (revert to **Free** vs **L2** at tutorial expiry), and the
-  concrete **caps** in §1 (how many free tests / materials at L1 and L2) — or
-  whether those caps should be **admin-editable** rather than fixed.
+All decisions resolved — ready to build **Phase 1** (offline payment + admin
+review, admin plans + caps management, student Unlock/Plans screen, the
+`accessLevel` data fields and the `isFree` class flag), with `PAYWALL_ENABLED`
+off during beta.
