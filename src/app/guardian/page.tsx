@@ -13,6 +13,7 @@ import {
   Receipt,
   GraduationCap,
   BookOpen,
+  Award,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -36,6 +37,7 @@ const naira = (n: number) => `₦${n.toLocaleString('en-NG')}`
 const NAV: NavItem[] = [
   { key: 'overview', label: 'Overview', icon: LayoutDashboard },
   { key: 'performance', label: 'Performance', icon: TrendingUp },
+  { key: 'quizzes', label: 'Quiz Results', icon: Award },
   { key: 'attendance', label: 'Attendance', icon: CalendarCheck },
   { key: 'countdown', label: 'Exam Countdown', icon: Timer },
   { key: 'fees', label: 'Fees', icon: Wallet },
@@ -92,6 +94,16 @@ export default function GuardianDashboard() {
   const [ward, setWard] = useState<Ward | null>(null)
   const [perf, setPerf] = useState<Perf | null>(null)
   const [fee, setFee] = useState<Fee | null>(null)
+  const [quizzes, setQuizzes] = useState<
+    {
+      id: string
+      title: string
+      score: number
+      total: number
+      percentage: number | null
+      date?: string
+    }[]
+  >([])
   const [dataLoading, setDataLoading] = useState(true)
 
   useEffect(() => {
@@ -119,11 +131,29 @@ export default function GuardianDashboard() {
           mode: w.learningMode ? String(w.learningMode) : undefined,
           isPaid: !!w.isPaid,
         })
-        const [p, f] = await Promise.allSettled([
+        const [p, f, q] = await Promise.allSettled([
           dsaApi.guardian.performance(id) as Promise<Record<string, unknown>>,
           dsaApi.guardian.fees(id) as Promise<Record<string, unknown>>,
+          dsaApi.guardian.quizResults(id) as Promise<Record<string, unknown>[]>,
         ])
         if (cancelled) return
+        if (q.status === 'fulfilled' && Array.isArray(q.value)) {
+          setQuizzes(
+            q.value.map((r) => ({
+              id: String(r.id ?? r._id ?? ''),
+              title: String(r.quizTitle ?? r.title ?? 'Quiz'),
+              score: Number(r.totalScore ?? r.score ?? 0),
+              total: Number(r.totalMarks ?? r.total ?? 0),
+              percentage:
+                typeof r.percentage === 'number'
+                  ? r.percentage <= 1
+                    ? Math.round(r.percentage * 100)
+                    : Math.round(r.percentage)
+                  : null,
+              date: r.submittedAt ? String(r.submittedAt) : undefined,
+            })),
+          )
+        }
         if (p.status === 'fulfilled' && p.value) {
           const d = p.value
           setPerf({
@@ -340,6 +370,64 @@ export default function GuardianDashboard() {
                 </Card>
               )}
             </>
+          )}
+        </div>
+      )}
+
+      {view === 'quizzes' && (
+        <div className='space-y-4'>
+          <h2 className='text-2xl font-black text-[#002EFF] italic uppercase'>
+            {ward ? `${ward.name.split(' ')[0]}'s Quiz Results` : 'Quiz Results'}
+          </h2>
+          {!ward ? (
+            NoWard
+          ) : quizzes.length === 0 ? (
+            <Card className='p-6 rounded-3xl border-none shadow-sm bg-white text-center'>
+              <Award size={28} className='text-slate-300 mx-auto mb-2' />
+              <p className='text-[12px] font-bold text-slate-500'>
+                No quiz results yet.
+              </p>
+              <p className='text-[10px] font-medium text-slate-400 mt-1'>
+                Scores will appear here once {ward.name.split(' ')[0]} takes a quiz.
+              </p>
+            </Card>
+          ) : (
+            <div className='space-y-2'>
+              {quizzes.map((q) => {
+                const pct =
+                  q.percentage != null
+                    ? q.percentage
+                    : q.total > 0
+                      ? Math.round((q.score / q.total) * 100)
+                      : 0
+                return (
+                  <Card
+                    key={q.id}
+                    className='p-4 rounded-2xl border-none shadow-sm bg-white flex items-center gap-3'
+                  >
+                    <div
+                      className={`h-11 w-11 rounded-xl flex items-center justify-center font-black text-sm shrink-0 ${
+                        pct >= 50
+                          ? 'bg-emerald-50 text-emerald-600'
+                          : 'bg-rose-50 text-rose-500'
+                      }`}
+                    >
+                      {pct}%
+                    </div>
+                    <div className='min-w-0 flex-1'>
+                      <p className='text-xs font-black text-gray-800 truncate'>
+                        {q.title}
+                      </p>
+                      <p className='text-[10px] font-bold text-slate-400'>
+                        {q.score} / {q.total} marks
+                        {q.date &&
+                          ` · ${new Date(q.date).toLocaleDateString()}`}
+                      </p>
+                    </div>
+                  </Card>
+                )
+              })}
+            </div>
           )}
         </div>
       )}

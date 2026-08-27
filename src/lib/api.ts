@@ -670,13 +670,21 @@ export const dsaApi = {
 
     // PUT /live-classes/course/:courseId/link (tutor / admin) — upload the Meet
     // link for a single course (the tutor drives link/status per course).
-    uploadLinkForCourse: (courseId: string, meetLink: string, token?: string) =>
+    // `isFree` marks the class open to everyone (any level, ignores caps).
+    uploadLinkForCourse: (
+      courseId: string,
+      meetLink: string,
+      isFree?: boolean,
+      token?: string,
+    ) =>
       fetch(
         `${BASE_URL}/live-classes/course/${encodeURIComponent(courseId)}/link`,
         {
           method: 'PUT',
           headers: getHeaders(token),
-          body: JSON.stringify({ meetLink }),
+          body: JSON.stringify(
+            isFree === undefined ? { meetLink } : { meetLink, isFree },
+          ),
         },
       )
         .then((r) => handleResponse<{ data?: unknown }>(r))
@@ -986,6 +994,19 @@ export const dsaApi = {
       })
         .then((r) => handleResponse<{ data?: unknown }>(r))
         .then((r) => (r as { data?: unknown }).data ?? r),
+
+    // GET /parents/me/wards/:id/quiz-results — the ward's quiz scores.
+    quizResults: (wardId: string, token?: string) =>
+      fetch(
+        `${BASE_URL}/parents/me/wards/${encodeURIComponent(wardId)}/quiz-results`,
+        { headers: getHeaders(token) },
+      )
+        .then((r) =>
+          handleResponse<
+            Record<string, unknown>[] | { data?: Record<string, unknown>[] }
+          >(r),
+        )
+        .then((res) => (Array.isArray(res) ? res : (res?.data ?? []))),
   },
 
   // Notifications — a per-user inbox with server-side read state. Populated by

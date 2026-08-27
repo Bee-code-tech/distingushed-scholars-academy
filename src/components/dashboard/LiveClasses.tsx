@@ -174,6 +174,7 @@ function TutorLive() {
   const [loadingCourses, setLoadingCourses] = useState(true)
   const [link, setLink] = useState('')
   const [status, setStatus] = useState<LiveStatus>('scheduled')
+  const [isFree, setIsFree] = useState(false)
   const [saved, setSaved] = useState(false)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
@@ -244,6 +245,7 @@ function TutorLive() {
         const rec = rows.find((r) => String(r.courseId ?? '') === courseId) ?? rows[0]
         setLink((rec?.meetLink as string) || '')
         setStatus(normStatus(rec?.status))
+        setIsFree(!!rec?.isFree)
         setSaved(false)
         return
       } catch {
@@ -269,7 +271,7 @@ function TutorLive() {
     if (!courseId) return
     setBusy(true)
     try {
-      await dsaApi.liveClasses.uploadLinkForCourse(courseId, link.trim())
+      await dsaApi.liveClasses.uploadLinkForCourse(courseId, link.trim(), isFree)
       setSaved(true)
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Failed to save the link')
@@ -374,6 +376,20 @@ function TutorLive() {
               <Save size={13} /> {saved ? 'Saved' : 'Save'}
             </button>
           </div>
+          <label className='flex items-center gap-2 mt-2 cursor-pointer'>
+            <input
+              type='checkbox'
+              checked={isFree}
+              onChange={(e) => {
+                setIsFree(e.target.checked)
+                setSaved(false)
+              }}
+              className='h-4 w-4 accent-[#002EFF]'
+            />
+            <span className='text-[11px] font-bold text-slate-600'>
+              Free class — open to all students (any plan, incl. unpaid)
+            </span>
+          </label>
         </div>
 
         <div className='flex items-center gap-2 pt-1 border-t border-slate-50 flex-wrap'>
