@@ -31,6 +31,8 @@ import {
   categoryLabel,
 } from '@/lib/coursesStore'
 import { getUser, getToken } from '@/lib/auth'
+import { capFor } from '@/lib/access'
+import { CapReachedCard } from '@/components/dashboard/LockedNotice'
 import { isDemoToken } from '@/lib/demoAccounts'
 import { dsaApi } from '@/lib/api'
 import { uploadToCloudinary, cloudinaryConfigured } from '@/lib/cloudinary'
@@ -599,6 +601,20 @@ function StudentMaterials({
     )
   }
 
+  // Free/portal students see a capped number of materials (unlimited for
+  // tutorial students, and while the paywall is off). Spend the budget across
+  // courses in order.
+  const matCap = capFor('materials', getUser())
+  let matBudget = matCap
+  const cappedGroups = groups.map((g) => {
+    if (matBudget === Infinity) return g
+    const take = g.materials.slice(0, Math.max(0, matBudget))
+    matBudget -= take.length
+    return { ...g, materials: take }
+  })
+  const totalMaterials = groups.reduce((n, g) => n + g.materials.length, 0)
+  const materialsCapped = matCap !== Infinity && totalMaterials > matCap
+
   return (
     <div className='space-y-5'>
       <div className='flex items-start justify-between gap-3'>
@@ -634,7 +650,8 @@ function StudentMaterials({
           No materials published for your courses yet.
         </p>
       ) : (
-        groups.map((g) => (
+        <>
+        {cappedGroups.map((g) => (
           <div key={g.course.id} className='space-y-2'>
             <h3 className='text-[11px] font-black uppercase tracking-widest text-slate-500'>
               {g.course.category
@@ -682,7 +699,11 @@ function StudentMaterials({
               )
             })}
           </div>
-        ))
+        ))}
+        {materialsCapped && (
+          <CapReachedCard what='learning materials' cap={matCap} />
+        )}
+        </>
       )}
 
       {groups.length > 0 && (

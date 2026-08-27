@@ -15,7 +15,9 @@ import {
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { dsaApi } from '@/lib/api'
-import { getToken } from '@/lib/auth'
+import { getToken, getUser } from '@/lib/auth'
+import { capFor } from '@/lib/access'
+import { CapReachedCard } from '@/components/dashboard/LockedNotice'
 
 const LETTERS = ['A', 'B', 'C', 'D', 'E'] as const
 const str = (v: unknown) => (v == null ? '' : String(v))
@@ -331,7 +333,8 @@ export default function QuizRunner() {
           No quizzes available right now. Check back soon.
         </p>
       ) : (
-        quizzes.map((q) => {
+        <>
+          {quizzes.slice(0, capFor('tests', getUser())).map((q) => {
           const subjects = Array.isArray(q.subjects) ? q.subjects : []
           const qCount = subjects.reduce(
             (n: number, s: Record<string, unknown>) =>
@@ -366,7 +369,11 @@ export default function QuizRunner() {
               </button>
             </Card>
           )
-        })
+          })}
+          {quizzes.length > capFor('tests', getUser()) && (
+            <CapReachedCard what='free tests' cap={capFor('tests', getUser())} />
+          )}
+        </>
       )}
     </div>
   )

@@ -370,6 +370,8 @@ import QuizRunner from '@/components/dashboard/QuizRunner'
 import UnlockPlans from '@/components/dashboard/UnlockPlans'
 import { useTabState } from '@/components/dashboard/useTabState'
 import { useCommunityUnread } from '@/components/dashboard/useCommunityUnread'
+import { LockedNotice } from '@/components/dashboard/LockedNotice'
+import { canAccess } from '@/lib/access'
 import { recordLogin } from '@/lib/loginStreak'
 
 type ViewState =
@@ -491,6 +493,13 @@ export default function AcademyDashboard() {
     window.addEventListener('dsa:user-updated', onUpdated)
     return () => window.removeEventListener('dsa:user-updated', onUpdated)
   }, [])
+
+  // A locked feature's "Unlock" button asks to open the Unlock/Plans tab.
+  useEffect(() => {
+    const go = () => setActiveView('unlock')
+    window.addEventListener('dsa:unlock', go)
+    return () => window.removeEventListener('dsa:unlock', go)
+  }, [setActiveView])
 
   const navigation = [
     { icon: LayoutDashboard, label: 'Overview', view: 'overview' as ViewState },
@@ -726,13 +735,23 @@ export default function AcademyDashboard() {
             {activeView === 'resources' && (
               <ResourcesView isDSAite={user.isDSAite} />
             )}
-            {activeView === 'assignments' && <Assignments mode='student' />}
+            {activeView === 'assignments' &&
+              (canAccess('assignments', getUser()) ? (
+                <Assignments mode='student' />
+              ) : (
+                <LockedNotice feature='Assignments' need='tutorial' />
+              ))}
             {activeView === 'announcements' && <Announcements mode='student' />}
             {activeView === 'live' && <LiveClasses mode='student' />}
             {activeView === 'courses' && <MyCourses />}
             {activeView === 'analytics' && <Analytics mode='student' />}
             {activeView === 'syllabus' && <SyllabusMastery />}
-            {activeView === 'community' && <CommunityView />}
+            {activeView === 'community' &&
+              (canAccess('community', getUser()) ? (
+                <CommunityView />
+              ) : (
+                <LockedNotice feature='Community' need='portal' />
+              ))}
             {activeView === 'quizzes' && <QuizRunner />}
             {activeView === 'unlock' && <UnlockPlans />}
             {activeView === 'schedule' && <ExamSchedule mode={student.mode} />}
