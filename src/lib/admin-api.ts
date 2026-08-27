@@ -1,4 +1,3 @@
-// // // src/lib/admin-api.ts
 // // src/lib/admin-api.ts
 // import { AdminUser, getAdminSession } from './admin-auth'
 
@@ -134,37 +133,94 @@
 // }
 
 // // ==========================================
-// // LIBRARY & MATERIAL TYPES
+// // COURSE & MATERIAL TYPES
 // // ==========================================
 
-// export interface LibraryMaterial {
+// export type CourseCategory = 'waec-sss' | 'jamb-putme' | 'higher'
+
+// export interface Course {
 //   id: string
 //   title: string
-//   category: string
-//   size: string | number
-//   uploadDate?: string
+//   subject: string
+//   category: CourseCategory | string
+//   tutorId?: string
+//   tutorName?: string
+//   tutor?: Record<string, any>
+//   description?: string
+//   department?: string
+//   thumbnailUrl?: string
+//   price?: number
+//   isPublished?: boolean
+//   progressPercent?: number
 //   createdAt?: string
-//   type?: string
-//   fileUrl?: string
-//   key?: string
+//   updatedAt?: string
 // }
 
-// export interface LibraryMaterialsResponse {
-//   success?: boolean
-//   count?: number
-//   data: LibraryMaterial[]
+// export interface CreateCoursePayload {
+//   title: string
+//   subject: string
+//   category: CourseCategory
+//   tutorId?: string
+//   description?: string
+//   department?: string
+//   thumbnailUrl?: string
+//   price?: number
+//   isPublished?: boolean
+// }
+
+// export interface UpdateCoursePayload extends Partial<CreateCoursePayload> {}
+
+// export interface CourseListParams {
+//   category?: CourseCategory
+//   tutorId?: string
+// }
+
+// export interface CoursesResponse {
+//   success: boolean
+//   count: number
+//   data: Course[]
+// }
+
+// export interface CourseDetailResponse {
+//   success: boolean
+//   data: Course
+// }
+
+// export interface CourseMaterial {
+//   id: string
+//   title: string
+//   type: 'pdf' | 'video' | 'link' | string
+//   url: string
+//   description?: string
+//   orderIndex?: number
+//   isDownloadable?: boolean
+//   fileSizeBytes?: number
+//   durationSeconds?: number
+//   completed?: boolean
+//   createdAt?: string
 // }
 
 // export interface CourseMaterialsResponse {
-//   success?: boolean
+//   success: boolean
 //   count?: number
-//   data: LibraryMaterial[]
+//   data: CourseMaterial[]
+// }
+
+// export interface CreateMaterialPayload {
+//   title: string
+//   type: 'pdf' | 'video' | 'link' | string
+//   url: string
+//   description?: string
+//   orderIndex?: number
+//   isDownloadable?: boolean
+//   fileSizeBytes?: number
+//   durationSeconds?: number
 // }
 
 // export interface MaterialResponse {
-//   success?: boolean
+//   success: boolean
 //   message?: string
-//   data?: LibraryMaterial
+//   data: CourseMaterial
 // }
 
 // export interface SignUploadUrlParams {
@@ -185,14 +241,20 @@
 //   key?: string
 // }
 
-// export interface CreateMaterialPayload {
-//   title: string
-//   category: string
-//   size: string
-//   type?: string
-//   fileUrl?: string
-//   key?: string
+// export interface MaterialProgressData {
+//   progressPercent: number
+//   completed: number
+//   total: number
 // }
+
+// export interface MaterialProgressResponse {
+//   success: boolean
+//   data: MaterialProgressData
+// }
+
+// // Legacy alias definitions for backward component compatibility
+// export type LibraryMaterial = CourseMaterial
+// export type LibraryMaterialsResponse = CourseMaterialsResponse
 
 // // ==========================================
 // // NOTIFICATION TYPES
@@ -231,13 +293,20 @@
 //     session?.token ||
 //     (typeof window !== 'undefined' ? localStorage.getItem('token') : null)
 
-//   const headers: HeadersInit = {
-//     'Content-Type': 'application/json',
-//     ...(token ? { Authorization: `Bearer ${token}` } : {}),
-//     ...options.headers,
+//   const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`
+//   const targetUrl = `${BASE_URL.replace(/\/+$/, '')}${cleanEndpoint}`
+
+//   const headers = new Headers(options.headers || {})
+
+//   if (options.body && !(options.body instanceof FormData) && !headers.has('Content-Type')) {
+//     headers.set('Content-Type', 'application/json')
 //   }
 
-//   const response = await fetch(`${BASE_URL}${endpoint}`, {
+//   if (token && !headers.has('Authorization')) {
+//     headers.set('Authorization', `Bearer ${token}`)
+//   }
+
+//   const response = await fetch(targetUrl, {
 //     ...options,
 //     headers,
 //   })
@@ -251,7 +320,10 @@
 //     )
 //   }
 
-//   // Return text for CSV downloads or raw data
+//   if (response.status === 204) {
+//     return {} as T
+//   }
+
 //   if (response.headers.get('content-type')?.includes('text/csv')) {
 //     return (await response.text()) as unknown as T
 //   }
@@ -404,29 +476,93 @@
 //   // COURSE MANAGEMENT
 //   // ==========================================
 
-//   /** Create a course */
-//   createCourse: <T = any>(courseData: Record<string, any>) =>
-//     adminFetch<T>('/api/courses', {
+//   /**
+//    * GET /api/courses/mine
+//    * Fetch published courses matching the logged-in student's category
+//    */
+//   getMyCourses: () => adminFetch<CoursesResponse>('/api/courses/mine'),
+
+//   /**
+//    * GET /api/courses
+//    * List courses with optional category (waec-sss, jamb-putme, higher) or tutorId filters
+//    */
+//   getCourses: (params?: CourseListParams) => {
+//     const queryParams = new URLSearchParams()
+//     if (params?.category) queryParams.append('category', params.category)
+//     if (params?.tutorId) queryParams.append('tutorId', params.tutorId)
+
+//     const queryString = queryParams.toString()
+//     return adminFetch<CoursesResponse>(
+//       `/api/courses${queryString ? `?${queryString}` : ''}`,
+//     )
+//   },
+
+//   /**
+//    * POST /api/courses
+//    * Admin creates a course and optionally assigns a tutor
+//    */
+//   createCourse: (payload: CreateCoursePayload) =>
+//     adminFetch<CourseDetailResponse>('/api/courses', {
 //       method: 'POST',
-//       body: JSON.stringify(courseData),
+//       body: JSON.stringify(payload),
 //     }),
 
-//   /** Update course / assign tutor */
-//   updateCourse: <T = any>(courseId: string, courseData: Record<string, any>) =>
-//     adminFetch<T>(`/api/courses/${encodeURIComponent(courseId)}`, {
-//       method: 'PUT',
-//       body: JSON.stringify(courseData),
-//     }),
+//   /**
+//    * GET /api/courses/{id}
+//    * Get course details by ID
+//    */
+//   getCourseById: (id: string) => {
+//     if (!id?.trim()) throw new Error('Course ID is required')
+//     return adminFetch<CourseDetailResponse>(
+//       `/api/courses/${encodeURIComponent(id.trim())}`,
+//     )
+//   },
 
-//   /** Delete course */
-//   deleteCourse: <T = any>(courseId: string) =>
-//     adminFetch<T>(`/api/courses/${encodeURIComponent(courseId)}`, {
-//       method: 'DELETE',
-//     }),
+//   /**
+//    * PUT /api/courses/{id}
+//    * Update course / assign tutor (Admin)
+//    */
+//   updateCourse: (id: string, payload: UpdateCoursePayload) => {
+//     if (!id?.trim()) throw new Error('Course ID is required for update')
+//     return adminFetch<CourseDetailResponse>(
+//       `/api/courses/${encodeURIComponent(id.trim())}`,
+//       {
+//         method: 'PUT',
+//         body: JSON.stringify(payload),
+//       },
+//     )
+//   },
+
+//   /**
+//    * DELETE /api/courses/{id}
+//    * Delete course (Admin)
+//    */
+//   deleteCourse: (id: string) => {
+//     if (!id?.trim()) throw new Error('Course ID is required for deletion')
+//     return adminFetch<ActionSuccessResponse>(
+//       `/api/courses/${encodeURIComponent(id.trim())}`,
+//       {
+//         method: 'DELETE',
+//       },
+//     )
+//   },
+
+//   /**
+//    * POST /api/courses/{id}/enroll
+//    * Enroll the logged-in student in a course
+//    */
+//   enrollCourse: (id: string) => {
+//     if (!id?.trim()) throw new Error('Course ID is required for enrollment')
+//     return adminFetch<ActionSuccessResponse>(
+//       `/api/courses/${encodeURIComponent(id.trim())}/enroll`,
+//       {
+//         method: 'POST',
+//       },
+//     )
+//   },
 
 //   // ==========================================
 //   // ADMIN QUIZ MANAGEMENT
-//   //src/lib/admin-api.ts
 //   // ==========================================
 
 //   /** Get all quizzes (Optionally filter by courseId) */
@@ -585,65 +721,49 @@
 //   },
 
 //   // ==========================================
-//   // LIBRARY & MATERIAL MANAGEMENT
+//   // COURSE MATERIALS & UPLOADS
 //   // ==========================================
 
-//   /** Get course materials for a specific course */
-//   getLibraryMaterials: (courseId: string) =>
-//     adminFetch<CourseMaterialsResponse>(
-//       `/api/courses/${encodeURIComponent(courseId)}/materials`,
-//     ),
+//   /**
+//    * GET /api/courses/{id}/materials
+//    * List course materials. Includes completed boolean for logged-in students.
+//    */
+//   getCourseMaterials: (courseId: string) => {
+//     const cleanId = courseId?.trim()
+//     if (!cleanId) {
+//       throw new Error('Course ID is required to fetch materials')
+//     }
 
-//   /** Request a presigned URL target for direct upload (stub) */
+//     return adminFetch<CourseMaterialsResponse>(
+//       `/api/courses/${encodeURIComponent(cleanId)}/materials`,
+//     )
+//   },
+
+//   /**
+//    * POST /api/courses/{id}/materials
+//    * Add course material (Owner tutor or Admin)
+//    */
+//   createCourseMaterial: (courseId: string, payload: CreateMaterialPayload) => {
+//     const cleanId = courseId?.trim()
+//     if (!cleanId) {
+//       throw new Error('Course ID is required to create material')
+//     }
+
+//     return adminFetch<MaterialResponse>(
+//       `/api/courses/${encodeURIComponent(cleanId)}/materials`,
+//       {
+//         method: 'POST',
+//         body: JSON.stringify(payload),
+//       },
+//     )
+//   },
+
+//   /** Request a presigned URL target for direct upload */
 //   signUploadUrl: (params: SignUploadUrlParams) =>
 //     adminFetch<SignUploadUrlResponse>('/api/uploads/sign', {
 //       method: 'POST',
 //       body: JSON.stringify(params),
 //     }),
-
-//   /** Create/Add a new course material record */
-//   createLibraryMaterial: (courseId: string, payload: CreateMaterialPayload) =>
-//     adminFetch<MaterialResponse>(
-//       `/api/courses/${encodeURIComponent(courseId)}/materials`,
-//       {
-//         method: 'POST',
-//         body: JSON.stringify(payload),
-//       },
-//     ),
-
-//   /** Update an existing course material by ID */
-//   updateLibraryMaterial: (id: string, payload: UpdateMaterialPayload) =>
-//     adminFetch<MaterialResponse>(`/api/materials/${encodeURIComponent(id)}`, {
-//       method: 'PUT',
-//       body: JSON.stringify(payload),
-//     }),
-
-//   /** Delete a course material by ID */
-//   deleteLibraryMaterial: (id: string) =>
-//     adminFetch<{ success: boolean; message?: string }>(
-//       `/api/materials/${encodeURIComponent(id)}`,
-//       {
-//         method: 'DELETE',
-//       },
-//     ),
-
-//   /** Mark material as completed for the active student */
-//   markMaterialComplete: (id: string) =>
-//     adminFetch<MaterialProgressResponse>(
-//       `/api/materials/${encodeURIComponent(id)}/complete`,
-//       {
-//         method: 'POST',
-//       },
-//     ),
-
-//   /** Un-mark material completion for the active student */
-//   unmarkMaterialComplete: (id: string) =>
-//     adminFetch<MaterialProgressResponse>(
-//       `/api/materials/${encodeURIComponent(id)}/complete`,
-//       {
-//         method: 'DELETE',
-//       },
-//     ),
 
 //   // ==========================================
 //   // NOTIFICATIONS MANAGEMENT
@@ -697,6 +817,27 @@
 //   upsertRole: adminApi.upsertRole,
 // }
 
+// // Named exports for Course Management
+// export const getMyCourses = adminApi.getMyCourses
+// export const getCourses = adminApi.getCourses
+// export const createCourse = adminApi.createCourse
+// export const getCourseById = adminApi.getCourseById
+// export const updateCourse = adminApi.updateCourse
+// export const deleteCourse = adminApi.deleteCourse
+// export const enrollCourse = adminApi.enrollCourse
+
+// export const courseApi = {
+//   getMyCourses: adminApi.getMyCourses,
+//   getCourses: adminApi.getCourses,
+//   createCourse: adminApi.createCourse,
+//   getCourseById: adminApi.getCourseById,
+//   updateCourse: adminApi.updateCourse,
+//   deleteCourse: adminApi.deleteCourse,
+//   enrollCourse: adminApi.enrollCourse,
+//   getCourseMaterials: adminApi.getCourseMaterials,
+//   createCourseMaterial: adminApi.createCourseMaterial,
+// }
+
 // // Named exports for Attendance Module
 // export const attendanceApi = {
 //   activateAttendanceSession: adminApi.activateAttendanceSession,
@@ -708,20 +849,22 @@
 //   getAttendanceReport: adminApi.getAttendanceReport,
 // }
 
-// // Direct Named Exports for Library Module
-// export const fetchLibraryMaterials = adminApi.getLibraryMaterials
+// // Direct Named Exports for Library & Material Module
+// export const fetchCourseMaterials = adminApi.getCourseMaterials
+// export const getLibraryMaterials = adminApi.getCourseMaterials
+// export const fetchLibraryMaterials = adminApi.getCourseMaterials
+// export const createCourseMaterial = adminApi.createCourseMaterial
+// export const createLibraryMaterial = adminApi.createCourseMaterial
 // export const signUploadUrl = adminApi.signUploadUrl
-// export const createLibraryMaterial = adminApi.createLibraryMaterial
-// export const deleteLibraryMaterial = adminApi.deleteLibraryMaterial
 
 // export const libraryApi = {
-//   getMaterials: adminApi.getLibraryMaterials,
-//   fetchLibraryMaterials: adminApi.getLibraryMaterials,
+//   getMaterials: adminApi.getCourseMaterials,
+//   getCourseMaterials: adminApi.getCourseMaterials,
+//   fetchLibraryMaterials: adminApi.getCourseMaterials,
+//   createMaterial: adminApi.createCourseMaterial,
+//   createCourseMaterial: adminApi.createCourseMaterial,
+//   createLibraryMaterial: adminApi.createCourseMaterial,
 //   signUploadUrl: adminApi.signUploadUrl,
-//   createMaterial: adminApi.createLibraryMaterial,
-//   createLibraryMaterial: adminApi.createLibraryMaterial,
-//   deleteMaterial: adminApi.deleteLibraryMaterial,
-//   deleteLibraryMaterial: adminApi.deleteLibraryMaterial,
 // }
 
 // // Direct Named Exports for Notifications Module
@@ -736,17 +879,19 @@
 //   markNotificationRead: adminApi.markNotificationRead,
 // }
 
-// // Master API aggregation (spread first to avoid overwriting warning)
+// // Master API aggregation
 // export const dsaApi = {
 //   ...adminApi,
 //   admin: adminApi,
 //   users: userManagementApi,
+//   courses: courseApi,
 //   attendance: attendanceApi,
 //   library: libraryApi,
 //   notifications: notificationsApi,
-//   fetchLibraryMaterials: adminApi.getLibraryMaterials,
+//   fetchLibraryMaterials: adminApi.getCourseMaterials,
 //   fetchNotifications: adminApi.getNotifications,
 // }
+
 
 
 
@@ -885,37 +1030,94 @@ export interface ActionSuccessResponse {
 }
 
 // ==========================================
-// LIBRARY & MATERIAL TYPES
+// COURSE & MATERIAL TYPES
 // ==========================================
 
-export interface LibraryMaterial {
+export type CourseCategory = 'waec-sss' | 'jamb-putme' | 'higher'
+
+export interface Course {
   id: string
   title: string
-  category: string
-  size: string | number
-  uploadDate?: string
+  subject: string
+  category: CourseCategory | string
+  tutorId?: string
+  tutorName?: string
+  tutor?: Record<string, any>
+  description?: string
+  department?: string
+  thumbnailUrl?: string
+  price?: number
+  isPublished?: boolean
+  progressPercent?: number
   createdAt?: string
-  type?: string
-  fileUrl?: string
-  key?: string
+  updatedAt?: string
 }
 
-export interface LibraryMaterialsResponse {
-  success?: boolean
-  count?: number
-  data: LibraryMaterial[]
+export interface CreateCoursePayload {
+  title: string
+  subject: string
+  category: CourseCategory
+  tutorId?: string
+  description?: string
+  department?: string
+  thumbnailUrl?: string
+  price?: number
+  isPublished?: boolean
+}
+
+export interface UpdateCoursePayload extends Partial<CreateCoursePayload> {}
+
+export interface CourseListParams {
+  category?: CourseCategory
+  tutorId?: string
+}
+
+export interface CoursesResponse {
+  success: boolean
+  count: number
+  data: Course[]
+}
+
+export interface CourseDetailResponse {
+  success: boolean
+  data: Course
+}
+
+export interface CourseMaterial {
+  id: string
+  title: string
+  type: 'pdf' | 'video' | 'link' | string
+  url: string
+  description?: string
+  orderIndex?: number
+  isDownloadable?: boolean
+  fileSizeBytes?: number
+  durationSeconds?: number
+  completed?: boolean
+  createdAt?: string
 }
 
 export interface CourseMaterialsResponse {
-  success?: boolean
+  success: boolean
   count?: number
-  data: LibraryMaterial[]
+  data: CourseMaterial[]
+}
+
+export interface CreateMaterialPayload {
+  title: string
+  type: 'pdf' | 'video' | 'link' | string
+  url: string
+  description?: string
+  orderIndex?: number
+  isDownloadable?: boolean
+  fileSizeBytes?: number
+  durationSeconds?: number
 }
 
 export interface MaterialResponse {
-  success?: boolean
+  success: boolean
   message?: string
-  data?: LibraryMaterial
+  data: CourseMaterial
 }
 
 export interface SignUploadUrlParams {
@@ -936,26 +1138,6 @@ export interface SignUploadUrlResponse {
   key?: string
 }
 
-export interface CreateMaterialPayload {
-  title: string
-  category: string
-  size: string
-  type?: string
-  fileUrl?: string
-  key?: string
-}
-
-export interface UpdateMaterialPayload {
-  title?: string
-  type?: 'pdf' | 'video' | 'link' | 'document' | string
-  url?: string
-  description?: string
-  orderIndex?: number
-  isDownloadable?: boolean
-  fileSizeBytes?: number
-  durationSeconds?: number
-}
-
 export interface MaterialProgressData {
   progressPercent: number
   completed: number
@@ -966,6 +1148,10 @@ export interface MaterialProgressResponse {
   success: boolean
   data: MaterialProgressData
 }
+
+// Legacy alias definitions for backward component compatibility
+export type LibraryMaterial = CourseMaterial
+export type LibraryMaterialsResponse = CourseMaterialsResponse
 
 // ==========================================
 // NOTIFICATION TYPES
@@ -1004,13 +1190,20 @@ async function adminFetch<T>(
     session?.token ||
     (typeof window !== 'undefined' ? localStorage.getItem('token') : null)
 
-  const headers: HeadersInit = {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    ...options.headers,
+  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`
+  const targetUrl = `${BASE_URL.replace(/\/+$/, '')}${cleanEndpoint}`
+
+  const headers = new Headers(options.headers || {})
+
+  if (options.body && !(options.body instanceof FormData) && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json')
   }
 
-  const response = await fetch(`${BASE_URL}${endpoint}`, {
+  if (token && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${token}`)
+  }
+
+  const response = await fetch(targetUrl, {
     ...options,
     headers,
   })
@@ -1024,7 +1217,10 @@ async function adminFetch<T>(
     )
   }
 
-  // Return text for CSV downloads or raw data
+  if (response.status === 204) {
+    return {} as T
+  }
+
   if (response.headers.get('content-type')?.includes('text/csv')) {
     return (await response.text()) as unknown as T
   }
@@ -1177,25 +1373,90 @@ export const adminApi = {
   // COURSE MANAGEMENT
   // ==========================================
 
-  /** Create a course */
-  createCourse: <T = any>(courseData: Record<string, any>) =>
-    adminFetch<T>('/api/courses', {
+  /**
+   * GET /api/courses/mine
+   * Fetch published courses matching the logged-in student's derived category
+   */
+  getMyCourses: () => adminFetch<CoursesResponse>('/api/courses/mine'),
+
+  /**
+   * GET /api/courses
+   * List courses with optional query filters (category: waec-sss, jamb-putme, higher; tutorId: "me" or ObjectId)
+   */
+  getCourses: (params?: CourseListParams) => {
+    const queryParams = new URLSearchParams()
+    if (params?.category) queryParams.append('category', params.category)
+    if (params?.tutorId) queryParams.append('tutorId', params.tutorId)
+
+    const queryString = queryParams.toString()
+    return adminFetch<CoursesResponse>(
+      `/api/courses${queryString ? `?${queryString}` : ''}`,
+    )
+  },
+
+  /**
+   * POST /api/courses
+   * Admin creates a course and optionally assigns a tutor
+   */
+  createCourse: (payload: CreateCoursePayload) =>
+    adminFetch<CourseDetailResponse>('/api/courses', {
       method: 'POST',
-      body: JSON.stringify(courseData),
+      body: JSON.stringify(payload),
     }),
 
-  /** Update course / assign tutor */
-  updateCourse: <T = any>(courseId: string, courseData: Record<string, any>) =>
-    adminFetch<T>(`/api/courses/${encodeURIComponent(courseId)}`, {
-      method: 'PUT',
-      body: JSON.stringify(courseData),
-    }),
+  /**
+   * GET /api/courses/{id}
+   * Get course details by ID
+   */
+  getCourseById: (id: string) => {
+    if (!id?.trim()) throw new Error('Course ID is required')
+    return adminFetch<CourseDetailResponse>(
+      `/api/courses/${encodeURIComponent(id.trim())}`,
+    )
+  },
 
-  /** Delete course */
-  deleteCourse: <T = any>(courseId: string) =>
-    adminFetch<T>(`/api/courses/${encodeURIComponent(courseId)}`, {
-      method: 'DELETE',
-    }),
+  /**
+   * PUT /api/courses/{id}
+   * Update course / assign tutor (Admin)
+   */
+  updateCourse: (id: string, payload: UpdateCoursePayload) => {
+    if (!id?.trim()) throw new Error('Course ID is required for update')
+    return adminFetch<CourseDetailResponse>(
+      `/api/courses/${encodeURIComponent(id.trim())}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      },
+    )
+  },
+
+  /**
+   * DELETE /api/courses/{id}
+   * Delete course (Admin)
+   */
+  deleteCourse: (id: string) => {
+    if (!id?.trim()) throw new Error('Course ID is required for deletion')
+    return adminFetch<ActionSuccessResponse>(
+      `/api/courses/${encodeURIComponent(id.trim())}`,
+      {
+        method: 'DELETE',
+      },
+    )
+  },
+
+  /**
+   * POST /api/courses/{id}/enroll
+   * Enroll the logged-in student in a course
+   */
+  enrollCourse: (id: string) => {
+    if (!id?.trim()) throw new Error('Course ID is required for enrollment')
+    return adminFetch<ActionSuccessResponse>(
+      `/api/courses/${encodeURIComponent(id.trim())}/enroll`,
+      {
+        method: 'POST',
+      },
+    )
+  },
 
   // ==========================================
   // ADMIN QUIZ MANAGEMENT
@@ -1357,65 +1618,49 @@ export const adminApi = {
   },
 
   // ==========================================
-  // LIBRARY & MATERIAL MANAGEMENT
+  // COURSE MATERIALS & UPLOADS
   // ==========================================
 
-  /** Get course materials for a specific course */
-  getLibraryMaterials: (courseId: string) =>
-    adminFetch<CourseMaterialsResponse>(
-      `/api/courses/${encodeURIComponent(courseId)}/materials`,
-    ),
+  /**
+   * GET /api/courses/{id}/materials
+   * List course materials. Includes completed boolean for logged-in students.
+   */
+  getCourseMaterials: (courseId: string) => {
+    const cleanId = courseId?.trim()
+    if (!cleanId) {
+      throw new Error('Course ID is required to fetch materials')
+    }
 
-  /** Request a presigned URL target for direct upload (stub) */
+    return adminFetch<CourseMaterialsResponse>(
+      `/api/courses/${encodeURIComponent(cleanId)}/materials`,
+    )
+  },
+
+  /**
+   * POST /api/courses/{id}/materials
+   * Add course material (Owner tutor or Admin)
+   */
+  createCourseMaterial: (courseId: string, payload: CreateMaterialPayload) => {
+    const cleanId = courseId?.trim()
+    if (!cleanId) {
+      throw new Error('Course ID is required to create material')
+    }
+
+    return adminFetch<MaterialResponse>(
+      `/api/courses/${encodeURIComponent(cleanId)}/materials`,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      },
+    )
+  },
+
+  /** Request a presigned URL target for direct upload */
   signUploadUrl: (params: SignUploadUrlParams) =>
     adminFetch<SignUploadUrlResponse>('/api/uploads/sign', {
       method: 'POST',
       body: JSON.stringify(params),
     }),
-
-  /** Create/Add a new course material record */
-  createLibraryMaterial: (courseId: string, payload: CreateMaterialPayload) =>
-    adminFetch<MaterialResponse>(
-      `/api/courses/${encodeURIComponent(courseId)}/materials`,
-      {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      },
-    ),
-
-  /** Update an existing course material by ID */
-  updateLibraryMaterial: (id: string, payload: UpdateMaterialPayload) =>
-    adminFetch<MaterialResponse>(`/api/materials/${encodeURIComponent(id)}`, {
-      method: 'PUT',
-      body: JSON.stringify(payload),
-    }),
-
-  /** Delete a course material by ID */
-  deleteLibraryMaterial: (id: string) =>
-    adminFetch<{ success: boolean; message?: string }>(
-      `/api/materials/${encodeURIComponent(id)}`,
-      {
-        method: 'DELETE',
-      },
-    ),
-
-  /** Mark material as completed for the active student */
-  markMaterialComplete: (id: string) =>
-    adminFetch<MaterialProgressResponse>(
-      `/api/materials/${encodeURIComponent(id)}/complete`,
-      {
-        method: 'POST',
-      },
-    ),
-
-  /** Un-mark material completion for the active student */
-  unmarkMaterialComplete: (id: string) =>
-    adminFetch<MaterialProgressResponse>(
-      `/api/materials/${encodeURIComponent(id)}/complete`,
-      {
-        method: 'DELETE',
-      },
-    ),
 
   // ==========================================
   // NOTIFICATIONS MANAGEMENT
@@ -1469,6 +1714,27 @@ export const userManagementApi = {
   upsertRole: adminApi.upsertRole,
 }
 
+// Named exports for Course Management
+export const getMyCourses = adminApi.getMyCourses
+export const getCourses = adminApi.getCourses
+export const createCourse = adminApi.createCourse
+export const getCourseById = adminApi.getCourseById
+export const updateCourse = adminApi.updateCourse
+export const deleteCourse = adminApi.deleteCourse
+export const enrollCourse = adminApi.enrollCourse
+
+export const courseApi = {
+  getMyCourses: adminApi.getMyCourses,
+  getCourses: adminApi.getCourses,
+  createCourse: adminApi.createCourse,
+  getCourseById: adminApi.getCourseById,
+  updateCourse: adminApi.updateCourse,
+  deleteCourse: adminApi.deleteCourse,
+  enrollCourse: adminApi.enrollCourse,
+  getCourseMaterials: adminApi.getCourseMaterials,
+  createCourseMaterial: adminApi.createCourseMaterial,
+}
+
 // Named exports for Attendance Module
 export const attendanceApi = {
   activateAttendanceSession: adminApi.activateAttendanceSession,
@@ -1480,27 +1746,22 @@ export const attendanceApi = {
   getAttendanceReport: adminApi.getAttendanceReport,
 }
 
-// Direct Named Exports for Library Module
-export const fetchLibraryMaterials = adminApi.getLibraryMaterials
+// Direct Named Exports for Library & Material Module
+export const fetchCourseMaterials = adminApi.getCourseMaterials
+export const getLibraryMaterials = adminApi.getCourseMaterials
+export const fetchLibraryMaterials = adminApi.getCourseMaterials
+export const createCourseMaterial = adminApi.createCourseMaterial
+export const createLibraryMaterial = adminApi.createCourseMaterial
 export const signUploadUrl = adminApi.signUploadUrl
-export const createLibraryMaterial = adminApi.createLibraryMaterial
-export const updateLibraryMaterial = adminApi.updateLibraryMaterial
-export const deleteLibraryMaterial = adminApi.deleteLibraryMaterial
-export const markMaterialComplete = adminApi.markMaterialComplete
-export const unmarkMaterialComplete = adminApi.unmarkMaterialComplete
 
 export const libraryApi = {
-  getMaterials: adminApi.getLibraryMaterials,
-  fetchLibraryMaterials: adminApi.getLibraryMaterials,
+  getMaterials: adminApi.getCourseMaterials,
+  getCourseMaterials: adminApi.getCourseMaterials,
+  fetchLibraryMaterials: adminApi.getCourseMaterials,
+  createMaterial: adminApi.createCourseMaterial,
+  createCourseMaterial: adminApi.createCourseMaterial,
+  createLibraryMaterial: adminApi.createCourseMaterial,
   signUploadUrl: adminApi.signUploadUrl,
-  createMaterial: adminApi.createLibraryMaterial,
-  createLibraryMaterial: adminApi.createLibraryMaterial,
-  updateMaterial: adminApi.updateLibraryMaterial,
-  updateLibraryMaterial: adminApi.updateLibraryMaterial,
-  deleteMaterial: adminApi.deleteLibraryMaterial,
-  deleteLibraryMaterial: adminApi.deleteLibraryMaterial,
-  markMaterialComplete: adminApi.markMaterialComplete,
-  unmarkMaterialComplete: adminApi.unmarkMaterialComplete,
 }
 
 // Direct Named Exports for Notifications Module
@@ -1515,14 +1776,15 @@ export const notificationsApi = {
   markNotificationRead: adminApi.markNotificationRead,
 }
 
-// Master API aggregation (spread first to avoid overwriting warning)
+// Master API aggregation
 export const dsaApi = {
   ...adminApi,
   admin: adminApi,
   users: userManagementApi,
+  courses: courseApi,
   attendance: attendanceApi,
   library: libraryApi,
   notifications: notificationsApi,
-  fetchLibraryMaterials: adminApi.getLibraryMaterials,
+  fetchLibraryMaterials: adminApi.getCourseMaterials,
   fetchNotifications: adminApi.getNotifications,
 }
