@@ -17,17 +17,43 @@ export interface Permission {
   sensitive?: boolean // shown with a lock; money / staff-level actions
 }
 
+// The full catalogue of what an admin can do — every capability is assignable to
+// a role here (Settings → Permissions), so the admin can delegate any subset to
+// a Secretary, Auditor, etc. Keep keys stable (roles reference them); add new
+// capabilities here as the admin panel grows.
 export const PERMISSIONS: Permission[] = [
-  { key: 'payments.verify', label: 'Verify manual payments', module: 'Finance', sensitive: true },
-  { key: 'payments.view', label: 'View payments & revenue', module: 'Finance' },
-  { key: 'timetable.edit', label: 'Create / edit timetable', module: 'Academics' },
-  { key: 'timetable.view', label: 'View timetable', module: 'Academics' },
-  { key: 'attendance.manage', label: 'Activate / close attendance', module: 'Academics' },
-  { key: 'students.manage', label: 'Manage student records', module: 'Students' },
+  // Students
   { key: 'students.view', label: 'View students', module: 'Students' },
+  { key: 'students.manage', label: 'Manage student records', module: 'Students' },
+
+  // People (tutors & guardians)
+  { key: 'tutors.view', label: 'View tutors', module: 'People' },
+  { key: 'tutors.create', label: 'Create tutors', module: 'People' },
+  { key: 'guardians.view', label: 'View guardians', module: 'People' },
+  { key: 'guardians.create', label: 'Create guardians', module: 'People' },
+
+  // Academics
+  { key: 'courses.manage', label: 'Manage courses & tutor assignments', module: 'Academics' },
+  { key: 'quizzes.manage', label: 'Build / manage quizzes', module: 'Academics' },
+  { key: 'library.manage', label: 'Manage learning library', module: 'Academics' },
+  { key: 'attendance.manage', label: 'Activate / close attendance', module: 'Academics' },
+  { key: 'timetable.view', label: 'View timetable', module: 'Academics' },
+  { key: 'timetable.edit', label: 'Create / edit timetable', module: 'Academics' },
+
+  // Engagement
   { key: 'announcements.send', label: 'Send announcements', module: 'Engagement' },
+  { key: 'community.moderate', label: 'Moderate community', module: 'Engagement' },
   { key: 'reports.view', label: 'View reports & analytics', module: 'Engagement' },
+
+  // Finance
+  { key: 'payments.history', label: 'View payment history', module: 'Finance' },
+  { key: 'payments.view', label: 'View payments & revenue', module: 'Finance' },
+  { key: 'payments.verify', label: 'Verify / approve manual payments', module: 'Finance', sensitive: true },
+  { key: 'payments.manage', label: 'Manage plans & access caps', module: 'Finance', sensitive: true },
+
+  // System
   { key: 'staff.manage', label: 'Create / manage staff', module: 'System', sensitive: true },
+  { key: 'roles.manage', label: 'Manage roles & permissions', module: 'System', sensitive: true },
 ]
 
 export const PERMISSION_MODULES = Array.from(
@@ -68,7 +94,13 @@ const SEED_ROLES: StaffRole[] = [
     id: 'auditor',
     name: 'Auditor',
     seeded: true,
-    permissions: ['payments.view', 'reports.view', 'students.view', 'timetable.view'],
+    permissions: [
+      'payments.history',
+      'payments.view',
+      'reports.view',
+      'students.view',
+      'timetable.view',
+    ],
   },
 ]
 
