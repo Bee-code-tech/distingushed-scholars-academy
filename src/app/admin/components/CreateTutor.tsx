@@ -275,7 +275,7 @@
 
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   UserPlus,
   User,
@@ -292,6 +292,7 @@ import {
 } from 'lucide-react'
 import { adminApi } from '@/lib/admin-api'
 import { addTutor } from '@/lib/directoryStore'
+import { fetchExistingEmails, adminToken } from '@/lib/existingUsers'
 
 interface FieldState {
   fullname: string
@@ -361,6 +362,21 @@ export default function CreateTutor() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  // Known emails across all roles → instant "already registered" warning.
+  const [existingEmails, setExistingEmails] = useState<Set<string>>(new Set())
+  useEffect(() => {
+    let cancelled = false
+    fetchExistingEmails(adminToken())
+      .then((s) => !cancelled && setExistingEmails(s))
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const emailTaken =
+    values.email.trim().length > 0 &&
+    existingEmails.has(values.email.trim().toLowerCase())
 
   const set = (k: keyof FieldState, v: string) =>
     setValues((prev) => ({ ...prev, [k]: v }))
@@ -371,6 +387,8 @@ export default function CreateTutor() {
       return 'Username: min 3 characters, letters/numbers/underscore only'
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(values.email))
       return 'Enter a valid email address'
+    if (emailTaken)
+      return 'That email is already registered to another user. Use a different email.'
     if (!/^\d{10,}$/.test(values.phone))
       return 'Enter a valid phone number (numbers only)'
     if (values.password.length < 6)
@@ -476,14 +494,21 @@ export default function CreateTutor() {
             onChange={(v) => set('username', v)}
             placeholder='hakeem_bello'
           />
-          <Field
-            icon={Mail}
-            label='Email'
-            type='email'
-            value={values.email}
-            onChange={(v) => set('email', v)}
-            placeholder='tutor@example.com'
-          />
+          <div>
+            <Field
+              icon={Mail}
+              label='Email'
+              type='email'
+              value={values.email}
+              onChange={(v) => set('email', v)}
+              placeholder='tutor@example.com'
+            />
+            {emailTaken && (
+              <p className='mt-1 flex items-center gap-1 text-[10px] font-bold text-rose-500'>
+                <AlertCircle size={11} /> Already registered to another account.
+              </p>
+            )}
+          </div>
           <Field
             icon={Phone}
             label='Phone'

@@ -326,6 +326,7 @@ import { adminApi } from '@/lib/admin-api'
 import type { StoredStudent } from '@/lib/studentsStore'
 import { dsaApi } from '@/lib/api'
 import { addGuardian } from '@/lib/directoryStore'
+import { fetchExistingEmails, adminToken } from '@/lib/existingUsers'
 
 interface FieldState {
   fullname: string
@@ -397,6 +398,20 @@ export default function CreateGuardian() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  // Known emails across all roles → instant "already registered" warning.
+  const [existingEmails, setExistingEmails] = useState<Set<string>>(new Set())
+  useEffect(() => {
+    let cancelled = false
+    fetchExistingEmails(adminToken())
+      .then((s) => !cancelled && setExistingEmails(s))
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
+  const emailTaken =
+    values.email.trim().length > 0 &&
+    existingEmails.has(values.email.trim().toLowerCase())
 
   // Real students from the backend so the ward link uses a valid studentId
   // (the backend rejects a wardId that isn't an active student).
@@ -446,6 +461,8 @@ export default function CreateGuardian() {
       return 'Username: min 3 characters, letters/numbers/underscore only'
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(values.email))
       return 'Enter a valid email address'
+    if (emailTaken)
+      return 'That email is already registered to another user. Use a different email.'
     if (!/^\d{10,}$/.test(values.phone))
       return 'Enter a valid phone number (numbers only)'
     if (!values.wardKey)
@@ -555,14 +572,21 @@ export default function CreateGuardian() {
             onChange={(v) => set('username', v)}
             placeholder='mrs_adeyemi'
           />
-          <Field
-            icon={Mail}
-            label='Email'
-            type='email'
-            value={values.email}
-            onChange={(v) => set('email', v)}
-            placeholder='guardian@example.com'
-          />
+          <div>
+            <Field
+              icon={Mail}
+              label='Email'
+              type='email'
+              value={values.email}
+              onChange={(v) => set('email', v)}
+              placeholder='guardian@example.com'
+            />
+            {emailTaken && (
+              <p className='mt-1 flex items-center gap-1 text-[10px] font-bold text-rose-500'>
+                <AlertCircle size={11} /> Already registered to another account.
+              </p>
+            )}
+          </div>
           <Field
             icon={Phone}
             label='Phone'
