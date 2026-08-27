@@ -17,6 +17,8 @@ export interface NavItem {
   key: string
   label: string
   icon: ComponentType<{ size?: number; className?: string }>
+  /** Optional unread count shown as a badge on the item. */
+  badge?: number
 }
 
 interface DashboardShellProps {
@@ -90,6 +92,11 @@ export default function DashboardShell({
               <span className='text-[11px] uppercase tracking-wider font-bold'>
                 {item.label}
               </span>
+              {item.badge ? (
+                <span className='ml-auto min-w-5 h-5 px-1.5 rounded-full bg-rose-500 text-white text-[10px] font-black flex items-center justify-center'>
+                  {item.badge > 99 ? '99+' : item.badge}
+                </span>
+              ) : null}
             </button>
           )
         })}

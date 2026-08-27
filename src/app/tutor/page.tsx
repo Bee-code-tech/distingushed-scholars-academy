@@ -24,6 +24,7 @@ import DashboardShell, {
 } from '@/components/dashboard/DashboardShell'
 import { useDashboardSession } from '@/components/dashboard/useDashboardSession'
 import { useTabState } from '@/components/dashboard/useTabState'
+import { useCommunityUnread } from '@/components/dashboard/useCommunityUnread'
 import TakeAttendance from '@/components/dashboard/TakeAttendance'
 import ReadOnlyTimetable from '@/components/dashboard/ReadOnlyTimetable'
 import LiveClasses from '@/components/dashboard/LiveClasses'
@@ -117,6 +118,10 @@ export default function TutorDashboard() {
   // Persist the active tab in the URL (?tab=) so a browser refresh keeps you on
   // the same screen instead of resetting to Overview.
   const [view, setView] = useTabState<string>('overview')
+  const communityUnread = useCommunityUnread(view === 'community')
+  const nav = NAV.map((n) =>
+    n.key === 'community' ? { ...n, badge: communityUnread } : n,
+  )
   // Live-first: a real JWT reads the tutor roster + overview (GET
   // /tutors/me/students, /tutors/me/analytics); demo/offline falls back to the
   // local stores keyed off the tutor's assigned courses.
@@ -210,7 +215,7 @@ export default function TutorDashboard() {
       roleLabel='Tutor'
       userName={name}
       userAvatar={user.avatarUrl}
-      nav={NAV}
+      nav={nav}
       activeKey={view}
       onNavigate={setView}
       onLogout={logout}

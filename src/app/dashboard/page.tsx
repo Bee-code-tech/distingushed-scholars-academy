@@ -369,6 +369,7 @@ import NotificationBell from '@/components/dashboard/NotificationBell'
 import QuizRunner from '@/components/dashboard/QuizRunner'
 import UnlockPlans from '@/components/dashboard/UnlockPlans'
 import { useTabState } from '@/components/dashboard/useTabState'
+import { useCommunityUnread } from '@/components/dashboard/useCommunityUnread'
 import { recordLogin } from '@/lib/loginStreak'
 
 type ViewState =
@@ -392,6 +393,7 @@ export default function AcademyDashboard() {
   const [mounted, setMounted] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [activeView, setActiveView] = useTabState<ViewState>('overview')
+  const communityUnread = useCommunityUnread(activeView === 'community')
   const [isSheetOpen, setIsSheetOpen] = useState(false)
   const router = useRouter()
 
@@ -510,6 +512,7 @@ export default function AcademyDashboard() {
       icon: Users,
       label: 'Community',
       view: 'community' as ViewState,
+      badge: communityUnread,
     },
     { icon: Sparkles, label: 'Unlock More', view: 'unlock' as ViewState },
     { icon: Calendar, label: 'Exam Schedule', view: 'schedule' as ViewState },
@@ -521,11 +524,13 @@ export default function AcademyDashboard() {
     label,
     view,
     premium,
+    badge,
   }: {
     icon: any
     label: string
     view: ViewState
     premium?: boolean
+    badge?: number
   }) => {
     const isLocked = premium && !user.isDSAite
 
@@ -557,7 +562,13 @@ export default function AcademyDashboard() {
             {label}
           </span>
         </div>
-        {isLocked && <Lock size={12} className='text-white/40' />}
+        {isLocked ? (
+          <Lock size={12} className='text-white/40' />
+        ) : badge ? (
+          <span className='min-w-5 h-5 px-1.5 rounded-full bg-rose-500 text-white text-[10px] font-black flex items-center justify-center'>
+            {badge > 99 ? '99+' : badge}
+          </span>
+        ) : null}
       </button>
     )
   }
