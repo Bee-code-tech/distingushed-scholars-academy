@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
@@ -20,6 +20,9 @@ import {
   CheckCircle2,
   Lock,
   ShieldCheck,
+  CreditCard,
+  Upload,
+  Check,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { dsaApi, isBackendUnreachable } from '@/lib/api'
@@ -108,6 +111,12 @@ export default function StudentWizard() {
   const [status, setStatus] = useState('')
   const [error, setError] = useState('')
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
+  // Offline-payment path on the final step (two buttons: online vs offline proof).
+  const [payMode, setPayMode] = useState<'choose' | 'offline'>('choose')
+  const [proofUrl, setProofUrl] = useState('')
+  const [uploadingProof, setUploadingProof] = useState(false)
+  const [payRef, setPayRef] = useState('')
+  const proofInput = useRef<HTMLInputElement | null>(null)
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -185,11 +194,15 @@ export default function StudentWizard() {
   // initializes the Paystack transaction), then resume that transaction to
   // collect payment, then move to OTP verification. The backend's webhook is
   // what actually marks the student paid — the client never decides that.
-  const completeRegistration = async () => {
+  const completeRegistration = async (offline = false) => {
     setError('')
     const ok = await trigger()
     if (!ok) {
       setError('Please review the form — some fields need attention.')
+      return
+    }
+    if (offline && !proofUrl) {
+      setError('Please upload your proof of payment first.')
       return
     }
     const v = getValues()
@@ -262,6 +275,16 @@ export default function StudentWizard() {
       profilePic: v.passport || undefined,
       username,
       role: 'student',
+      // Offline path: the student uploaded a receipt instead of paying online.
+      // The backend records a pending-offline payment and grants provisional
+      // access; the admin confirms/disables it (see docs/backend-request-payments.md).
+      ...(offline
+        ? {
+            paymentMethod: 'offline',
+            paymentProofUrl: proofUrl,
+            paymentReference: payRef || undefined,
+          }
+        : {}),
     }
 
     // 1) Register first — server creates a pending student and initializes the
@@ -288,6 +311,13 @@ export default function StudentWizard() {
           ? err.message
           : 'Registration failed. Please check your details and try again.',
       )
+      return
+    }
+
+    // Offline path: no gateway — the proof rode along in the register payload.
+    // Go straight to OTP; the admin confirms the payment afterwards.
+    if (offline) {
+      proceedToOtp()
       return
     }
 
@@ -323,6 +353,20 @@ export default function StudentWizard() {
     // Registered, but the backend returned no payment details (payment not
     // wired yet). Continue to OTP so registration isn't blocked.
     proceedToOtp()
+  }
+
+  const onProof = async (file: File | null) => {
+    if (!file) return
+    setError('')
+    setUploadingProof(true)
+    try {
+      const { url } = await uploadToCloudinary(file, 'dsa/payments')
+      setProofUrl(url)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not upload the proof.')
+    } finally {
+      setUploadingProof(false)
+    }
   }
 
   // --- small field helpers ---
@@ -598,9 +642,101 @@ export default function StudentWizard() {
                 <ShieldCheck className='text-[#002EFF] shrink-0' size={20} />
                 <div>
                   <p className='text-[11px] font-black text-[#002EFF] uppercase'>Portal Access Fee — ₦{PORTAL_ACCESS_FEE.toLocaleString()}</p>
-                  <p className='text-[10px] font-bold text-slate-500'>You&apos;ll pay this securely to activate your portal, then verify your account.</p>
+                  <p className='text-[10px] font-bold text-slate-500'>Pay online, or upload proof if you&apos;ve already paid offline.</p>
                 </div>
               </div>
+
+              {/* Two ways to pay */}
+              {payMode === 'choose' ? (
+                <div className='grid grid-cols-1 gap-2'>
+                  <button
+                    type='button'
+                    onClick={() => completeRegistration(false)}
+                    disabled={busy}
+                    className='flex items-center justify-center gap-2 h-12 rounded-xl bg-[#FCB900] text-[#002EFF] font-black text-[11px] uppercase shadow-lg shadow-yellow-100 hover:brightness-105 active:scale-[0.98] transition-all disabled:opacity-60'
+                  >
+                    {busy ? (
+                      <>
+                        <Loader2 size={16} className='animate-spin' /> {status || 'Processing…'}
+                      </>
+                    ) : (
+                      <>
+                        <CreditCard size={15} /> Pay Online — ₦{PORTAL_ACCESS_FEE.toLocaleString()}
+                      </>
+                    )}
+                  </button>
+                  <button
+                    type='button'
+                    onClick={() => {
+                      setError('')
+                      setPayMode('offline')
+                    }}
+                    disabled={busy}
+                    className='flex items-center justify-center gap-2 h-12 rounded-xl border-2 border-slate-200 text-slate-700 font-black text-[11px] uppercase hover:border-[#002EFF]/40 active:scale-[0.98] transition-all disabled:opacity-60'
+                  >
+                    <Upload size={15} /> I&apos;ve Paid Offline
+                  </button>
+                </div>
+              ) : (
+                <div className='space-y-2 p-4 rounded-xl bg-slate-50 border border-slate-100'>
+                  <p className='text-[11px] font-black uppercase text-slate-500'>Upload proof of payment</p>
+                  <p className='text-[10px] font-medium text-slate-400'>
+                    Bank teller, transfer receipt or screenshot. The admin will confirm it — you get access straight away.
+                  </p>
+                  <button
+                    type='button'
+                    onClick={() => proofInput.current?.click()}
+                    disabled={uploadingProof}
+                    className={`w-full flex items-center justify-center gap-2 h-11 rounded-lg text-[11px] font-black uppercase ${proofUrl ? 'bg-emerald-50 text-emerald-700' : 'bg-white border border-slate-200 text-slate-600'} disabled:opacity-50`}
+                  >
+                    {uploadingProof ? (
+                      <Loader2 size={15} className='animate-spin' />
+                    ) : proofUrl ? (
+                      <Check size={15} />
+                    ) : (
+                      <Upload size={15} />
+                    )}
+                    {proofUrl ? 'Proof uploaded' : 'Upload receipt / teller'}
+                  </button>
+                  <input
+                    ref={proofInput}
+                    type='file'
+                    accept='image/*,.pdf'
+                    hidden
+                    onChange={(e) => onProof(e.target.files?.[0] ?? null)}
+                  />
+                  <input
+                    value={payRef}
+                    onChange={(e) => setPayRef(e.target.value)}
+                    placeholder='Transfer / teller reference (optional)'
+                    className='w-full h-11 px-3 rounded-lg bg-white border border-slate-200 outline-none text-sm'
+                  />
+                  <div className='flex items-center gap-2'>
+                    <button
+                      type='button'
+                      onClick={() => setPayMode('choose')}
+                      disabled={busy}
+                      className='px-4 h-11 rounded-lg text-[11px] font-black uppercase text-slate-500 hover:bg-white disabled:opacity-50'
+                    >
+                      Back
+                    </button>
+                    <button
+                      type='button'
+                      onClick={() => completeRegistration(true)}
+                      disabled={busy}
+                      className='flex-1 flex items-center justify-center gap-2 h-11 rounded-lg bg-[#002EFF] text-white font-black text-[11px] uppercase hover:bg-blue-700 active:scale-[0.98] transition-all disabled:opacity-60'
+                    >
+                      {busy ? (
+                        <>
+                          <Loader2 size={16} className='animate-spin' /> {status || 'Submitting…'}
+                        </>
+                      ) : (
+                        'Complete Registration'
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </motion.div>
@@ -613,13 +749,9 @@ export default function StudentWizard() {
             <ArrowLeft size={15} /> Back
           </button>
         )}
-        {step < 5 ? (
+        {step < 5 && (
           <button type='button' onClick={next} className='flex-1 flex items-center justify-center gap-2 h-12 rounded-xl bg-[#002EFF] text-white font-black text-[11px] uppercase shadow-lg shadow-blue-100 hover:bg-blue-700 active:scale-[0.98] transition-all'>
             {step === 1 ? 'Create Account' : 'Continue'} <ArrowRight size={15} />
-          </button>
-        ) : (
-          <button type='button' onClick={completeRegistration} disabled={busy} className='flex-1 flex items-center justify-center gap-2 h-12 rounded-xl bg-[#FCB900] text-[#002EFF] font-black text-[11px] uppercase shadow-lg shadow-yellow-100 hover:brightness-105 active:scale-[0.98] transition-all disabled:opacity-60'>
-            {busy ? (<><Loader2 size={16} className='animate-spin' /> {status || 'Processing…'}</>) : (<>Complete Registration — Pay ₦{PORTAL_ACCESS_FEE.toLocaleString()}</>)}
           </button>
         )}
       </div>
