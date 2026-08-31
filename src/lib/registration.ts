@@ -56,8 +56,11 @@ export const PORTAL_ACCESS_FEE = 2000
  */
 export function deriveTrackFromProgrammes(programmes: string[]): string {
   const has = (s: string) => programmes.some((p) => p.toLowerCase().includes(s))
-  if (has('post-utme') || has('post utme')) return 'postutme'
+  // JAMB is checked BEFORE Post-UTME: a JAMB candidate commonly enrols for both
+  // (JAMB now, Post-UTME after results), and JAMB is their current focus. A
+  // Post-UTME-only student (already sat JAMB) selects just Post-UTME.
   if (has('jamb')) return 'jamb'
+  if (has('post-utme') || has('post utme')) return 'postutme'
   if (has('waec')) return 'waec'
   if (has('preclinic')) return 'preclinical'
   if (has('100') || has('200') || has('level tutorial') || has('undergrad'))
