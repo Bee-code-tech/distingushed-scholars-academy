@@ -3,7 +3,7 @@
 // Admin control to override a student's exam track (e.g. a JAMB candidate whose
 // programmes resolved to Post-UTME). Sets `examTrackOverride` on the user, which
 // the student portal prefers over the programme-derived track. Frontend-first:
-// it calls PATCH /admin/users/:id — see docs/backend-request-student-track.md.
+// it calls PATCH /admin/users/:id — see docs/backend-requests-2026-09-01.md (§5).
 
 import { useState } from 'react'
 import { Loader2, Check } from 'lucide-react'

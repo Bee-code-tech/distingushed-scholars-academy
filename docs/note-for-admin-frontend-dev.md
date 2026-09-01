@@ -40,3 +40,26 @@ below so the app builds — please review / take ownership:
   for now). Please finish that when you can.
 
 Nothing else in the admin panel was touched.
+
+## 3. Backend checklist — features built frontend-first (2026-09-01)
+
+Six features shipped on the portal side that need backend support to go fully
+live. Each is **already built and safe** (live where the endpoint exists, else a
+browser-local fallback) — the backend work just switches them on. Full request
+details, payloads and access rules are in
+**`docs/backend-requests-2026-09-01.md`**. Summary checklist:
+
+- [ ] **Guardian assignment grades** — `GET /parents/me/wards/:id/assignment-grades`
+  (read-only, parent-scoped, like `quiz-results`). *(§1)*
+- [ ] **Course-scoped announcements** — accept `scope: "course"` (+ `courseId`) on
+  `POST /announcements`; deliver only to students enrolled in that course. *(§2)*
+- [ ] **Quiz audience** — persist + return `track` / `department` on quizzes;
+  filter `GET /quizzes` to the student's programme. *(§3)*
+- [ ] **Community channels** — `GET/POST/DELETE /community/channels`,
+  `GET/DELETE /community/channels/:id/members/:userId`, and honour `channelId` on
+  messages/settings (lock is per channel). *(§4)*
+- [ ] **Admin exam-track override** — `PATCH /admin/users/:id` accepting
+  `examTrack`; return `examTrack` on `GET /auth/me`; derive JAMB-first. *(§5)*
+- [ ] **Timetable by programme** — accept the `jamb-*` / `postutme-*` (+ existing
+  dept-split) keys on `GET`/`PUT /timetable/:key`; store cells as arrays of up to
+  three subjects. *(§6)*

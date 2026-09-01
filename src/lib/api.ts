@@ -387,7 +387,7 @@ export const dsaApi = {
         .then((res) => (Array.isArray(res) ? res : (res?.data ?? []))),
 
     // PATCH /admin/users/:id — update a user's editable fields (e.g. the exam
-    // track override). See docs/backend-request-student-track.md.
+    // track override). See docs/backend-requests-2026-09-01.md (§5).
     updateUser: (id: string, data: Record<string, unknown>, token?: string) =>
       fetch(`${BASE_URL}/admin/users/${encodeURIComponent(id)}`, {
         method: 'PATCH',
@@ -936,7 +936,7 @@ export const dsaApi = {
     // POST /announcements (tutor / admin). scope 'global' | 'track' (+ track) |
     // 'course' (+ courseId) — course targets only students enrolled in that
     // course (a tutor messaging just their subject). See
-    // docs/backend-request-course-announcements.md.
+    // docs/backend-requests-2026-09-01.md (§2).
     create: (body: Record<string, unknown>, token?: string) =>
       fetch(`${BASE_URL}/announcements`, {
         method: 'POST',
@@ -1096,7 +1096,7 @@ export const dsaApi = {
     // GET /community/messages?limit=&before=&channelId= — a page of the channel,
     // oldest to newest. `before` (a message id or ISO timestamp) loads older
     // history. `channelId` scopes to one channel (omit / 'general' = the main
-    // channel). See docs/backend-request-community-channels.md.
+    // channel). See docs/backend-requests-2026-09-01.md (§4).
     list: (
       params: { limit?: number; before?: string; channelId?: string } = {},
       token?: string,
@@ -1200,7 +1200,7 @@ export const dsaApi = {
         .then((r) => handleResponse<{ data?: unknown }>(r))
         .then((r) => (r as { data?: unknown }).data ?? r),
 
-    // ---- Channels (docs/backend-request-community-channels.md) ----
+    // ---- Channels (docs/backend-requests-2026-09-01.md §4) ----
     // GET /community/channels — channels the caller can see (admin sees all).
     channels: (token?: string) =>
       fetch(`${BASE_URL}/community/channels`, { headers: getHeaders(token) })
