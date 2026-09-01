@@ -19,6 +19,8 @@ import { dsaApi } from '@/lib/api'
 import { getToken, getUser } from '@/lib/auth'
 import { capFor } from '@/lib/access'
 import { CapReachedCard } from '@/components/dashboard/LockedNotice'
+import { resolveStudentProfile } from '@/lib/studentProfile'
+import { quizMatchesProfile } from '@/lib/quizAudience'
 
 const LETTERS = ['A', 'B', 'C', 'D', 'E'] as const
 const str = (v: unknown) => (v == null ? '' : String(v))
@@ -78,7 +80,13 @@ export default function QuizRunner() {
         string,
         unknown
       >[]
-      setQuizzes(rows.filter((q) => q.isActive))
+      // Only show quizzes for this student's programme (+ department). Untargeted
+      // quizzes remain visible to everyone. The backend may already scope this;
+      // filtering here keeps it correct even when it returns the full set.
+      const profile = resolveStudentProfile(getUser() ?? undefined)
+      setQuizzes(
+        rows.filter((q) => q.isActive && quizMatchesProfile(q, profile)),
+      )
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load quizzes.')
     } finally {

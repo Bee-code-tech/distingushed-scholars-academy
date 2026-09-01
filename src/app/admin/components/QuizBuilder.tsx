@@ -19,6 +19,18 @@ import {
 import { Card } from '@/components/ui/card'
 import { dsaApi } from '@/lib/api'
 import { JAMB_SUBJECTS } from '../constants/quiz'
+import {
+  EXAM_TRACKS,
+  DEPARTMENT_LABELS,
+  type ExamTrack,
+  type Department,
+} from '@/lib/studentProfile'
+import {
+  QUIZ_TRACKS,
+  QUIZ_DEPARTMENTS,
+  isDeptSplitTrack,
+  audienceLabel,
+} from '@/lib/quizAudience'
 
 function adminToken(): string | undefined {
   if (typeof window === 'undefined') return undefined
@@ -86,6 +98,9 @@ export default function QuizBuilder() {
 
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
+  // Audience: which programme (+ department) the quiz targets. 'all' = everyone.
+  const [track, setTrack] = useState<ExamTrack | 'all'>('all')
+  const [department, setDepartment] = useState<Department>('science')
   const [blocks, setBlocks] = useState<SubjectBlock[]>([])
   const [publishing, setPublishing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -133,12 +148,18 @@ export default function QuizBuilder() {
     if (title.trim().length < 3) return setError('Enter a quiz title.')
     if (totalQuestions === 0) return setError('Add at least one question.')
     setPublishing(true)
+    const dept =
+      track !== 'all' && isDeptSplitTrack(track) ? department : undefined
     try {
       await dsaApi.quizzes.create(
         {
           title: title.trim(),
           description: description.trim() || title.trim(),
           type: 'general',
+          // Audience targeting — students only see quizzes for their programme.
+          track: track === 'all' ? 'all' : track,
+          department: dept,
+          audience: audienceLabel(track === 'all' ? null : track, dept),
           subjects: blocks
             .filter((b) => b.picked.length)
             .map((b) => ({
@@ -151,6 +172,8 @@ export default function QuizBuilder() {
       )
       setTitle('')
       setDescription('')
+      setTrack('all')
+      setDepartment('science')
       setBlocks([])
       flash('Quiz published')
       loadList()
@@ -216,6 +239,47 @@ export default function QuizBuilder() {
           placeholder='Description (optional)'
           className='w-full h-10 px-3 rounded-lg bg-slate-50 outline-none text-sm font-medium'
         />
+
+        {/* Audience: which programme (+ department) sees this quiz */}
+        <div className='rounded-2xl bg-slate-50/70 p-3 space-y-2'>
+          <p className='text-[9px] font-black uppercase text-slate-400'>
+            Who sees this quiz
+          </p>
+          <div className='flex flex-wrap items-center gap-2'>
+            <select
+              value={track}
+              onChange={(e) => setTrack(e.target.value as ExamTrack | 'all')}
+              className='h-9 px-2 rounded-lg bg-white border border-slate-200 outline-none text-[12px] font-black'
+            >
+              <option value='all'>All students</option>
+              {QUIZ_TRACKS.map((t) => (
+                <option key={t} value={t}>
+                  {EXAM_TRACKS[t].label}
+                </option>
+              ))}
+            </select>
+            {track !== 'all' && isDeptSplitTrack(track) && (
+              <select
+                value={department}
+                onChange={(e) => setDepartment(e.target.value as Department)}
+                className='h-9 px-2 rounded-lg bg-white border border-slate-200 outline-none text-[12px] font-black'
+              >
+                {QUIZ_DEPARTMENTS.map((d) => (
+                  <option key={d} value={d}>
+                    {DEPARTMENT_LABELS[d]}
+                  </option>
+                ))}
+              </select>
+            )}
+            <span className='text-[10px] font-bold text-slate-400'>
+              →{' '}
+              {audienceLabel(
+                track === 'all' ? null : track,
+                track !== 'all' && isDeptSplitTrack(track) ? department : null,
+              )}
+            </span>
+          </div>
+        </div>
 
         {blocks.map((b, i) => (
           <SubjectBlockEditor
@@ -288,7 +352,13 @@ export default function QuizBuilder() {
                     {str(q.title)}
                   </p>
                   <p className='text-[10px] font-bold text-slate-400'>
-                    {subjects} subject{subjects === 1 ? '' : 's'} ·{' '}
+                    <span className='text-[#002EFF]'>
+                      {audienceLabel(
+                        (q.track as string) ?? null,
+                        (q.department as string) ?? null,
+                      )}
+                    </span>{' '}
+                    · {subjects} subject{subjects === 1 ? '' : 's'} ·{' '}
                     {str(q.totalMarks) || 0} marks
                     {code && (
                       <button
