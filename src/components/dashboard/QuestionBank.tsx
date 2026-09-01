@@ -10,15 +10,66 @@ import {
   Loader2,
   Image as ImageIcon,
   FileSpreadsheet,
+  Download,
   Check,
   X,
 } from 'lucide-react'
+import * as XLSX from 'xlsx'
 import { Card } from '@/components/ui/card'
 import { dsaApi } from '@/lib/api'
 import { getToken } from '@/lib/auth'
 import { uploadToCloudinary } from '@/lib/cloudinary'
 import { JAMB_SUBJECTS } from '@/app/admin/constants/quiz'
 import { parseExcelQuestions } from '@/app/admin/utils/excelParser'
+
+// A ready-to-fill Excel template so tutors get the columns right.
+function downloadTemplate() {
+  const header = [
+    'Subject',
+    'Topic',
+    'Question',
+    'A',
+    'B',
+    'C',
+    'D',
+    'E',
+    'Answer',
+    'Explanation',
+    'Mark',
+  ]
+  const examples = [
+    [
+      'Physics',
+      'Motion',
+      'What is the SI unit of force?',
+      'Newton',
+      'Joule',
+      'Watt',
+      'Pascal',
+      '',
+      'A',
+      'Force = mass × acceleration.',
+      1,
+    ],
+    [
+      'Chemistry',
+      'Atoms',
+      'What is the chemical symbol for Sodium?',
+      'S',
+      'Na',
+      'So',
+      'N',
+      '',
+      'B',
+      '',
+      1,
+    ],
+  ]
+  const ws = XLSX.utils.aoa_to_sheet([header, ...examples])
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Questions')
+  XLSX.writeFile(wb, 'DSA-Question-Bank-Template.xlsx')
+}
 
 const LETTERS = ['A', 'B', 'C', 'D', 'E'] as const
 type Letter = (typeof LETTERS)[number]
@@ -208,13 +259,21 @@ export default function QuestionBank({ token }: { token?: string }) {
             Add questions for your subjects — the admin builds quizzes from these
           </p>
         </div>
-        <button
-          onClick={() => excelInput.current?.click()}
-          disabled={busy}
-          className='flex items-center gap-2 h-10 px-4 rounded-xl bg-emerald-50 text-emerald-700 font-black text-[11px] uppercase tracking-wide hover:bg-emerald-100 disabled:opacity-50'
-        >
-          <FileSpreadsheet size={15} /> Import Excel
-        </button>
+        <div className='flex items-center gap-2'>
+          <button
+            onClick={downloadTemplate}
+            className='flex items-center gap-2 h-10 px-4 rounded-xl bg-slate-50 text-slate-600 font-black text-[11px] uppercase tracking-wide hover:bg-slate-100'
+          >
+            <Download size={15} /> Template
+          </button>
+          <button
+            onClick={() => excelInput.current?.click()}
+            disabled={busy}
+            className='flex items-center gap-2 h-10 px-4 rounded-xl bg-emerald-50 text-emerald-700 font-black text-[11px] uppercase tracking-wide hover:bg-emerald-100 disabled:opacity-50'
+          >
+            <FileSpreadsheet size={15} /> Import Excel
+          </button>
+        </div>
         <input
           ref={excelInput}
           type='file'
