@@ -5,10 +5,11 @@
 // a FALLBACK after the real API login fails (see the sign-in page + memory
 // "everything-live").
 //
-// NOTE: student demo logins were removed — students are LIVE now (real
-// register/login/verify-otp against the backend), so there's no fake student
-// account. Delete this file entirely once tutor & guardian have real backend
-// auth too.
+// NOTE: student, tutor AND guardian demo logins were all removed — those roles
+// are LIVE now (real backend register/login/verify-otp; guardians authenticate
+// and read their ward via /parents/me/wards). No seeded accounts remain here.
+// The demo-token plumbing (isDemoToken) is kept only so any lingering demo
+// session degrades safely; this file can be deleted once nothing imports it.
 
 import type { User } from './types'
 
@@ -25,23 +26,9 @@ export interface DemoAccount {
   profile: User
 }
 
-// One shared password keeps it easy to demo. Change here if needed.
-const PASSWORD = 'demo1234'
-
-export const DEMO_ACCOUNTS: DemoAccount[] = [
-  // Tutors are real now (admin-created, real backend login), so the demo tutor
-  // login is removed. Guardian has no backend flow yet, so its demo login stays.
-  {
-    email: 'guardian@dsa.demo',
-    password: PASSWORD,
-    profile: {
-      email: 'guardian@dsa.demo',
-      username: 'guardian_demo',
-      fullName: 'Mrs. Adeyemi (Guardian)',
-      role: 'parent',
-    },
-  },
-]
+// Tutors and guardians are real now (admin-created tutors; guardians linked to
+// their ward on the backend), so there are no seeded demo logins.
+export const DEMO_ACCOUNTS: DemoAccount[] = []
 
 /** Match typed credentials against the demo list (case-insensitive email). */
 export function findDemoAccount(

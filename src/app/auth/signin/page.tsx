@@ -876,27 +876,32 @@ function LoginContent() {
             </div>
 
             {/* --- DEMO LOGINS (client-side preview, remove for production) --- */}
+            {(DEMO_ACCOUNTS.length > 0 || getDemoStaff().length > 0) && (
             <div className='mt-8 pt-6 border-t border-dashed border-gray-200'>
-              <p className='text-center text-[9px] font-black uppercase tracking-[0.25em] text-gray-400 mb-3'>
-                Demo logins · one-click preview
-              </p>
-              <div className='grid grid-cols-2 gap-2'>
-                {DEMO_ACCOUNTS.map((acc) => (
-                  <button
-                    key={acc.email}
-                    type='button'
-                    disabled={loading}
-                    onClick={() => {
-                      form.setValue('email', acc.email)
-                      form.setValue('password', acc.password)
-                      form.handleSubmit(onSubmit)()
-                    }}
-                    className='px-3 py-2.5 rounded-xl bg-blue-50/60 hover:bg-[#002EFF] hover:text-white text-[#002EFF] text-[9px] font-black uppercase tracking-wide transition-all active:scale-95 disabled:opacity-50'
-                  >
-                    {acc.profile.fullName?.replace(/^\w+\s/, '')}
-                  </button>
-                ))}
-              </div>
+              {DEMO_ACCOUNTS.length > 0 && (
+                <>
+                  <p className='text-center text-[9px] font-black uppercase tracking-[0.25em] text-gray-400 mb-3'>
+                    Demo logins · one-click preview
+                  </p>
+                  <div className='grid grid-cols-2 gap-2'>
+                    {DEMO_ACCOUNTS.map((acc) => (
+                      <button
+                        key={acc.email}
+                        type='button'
+                        disabled={loading}
+                        onClick={() => {
+                          form.setValue('email', acc.email)
+                          form.setValue('password', acc.password)
+                          form.handleSubmit(onSubmit)()
+                        }}
+                        className='px-3 py-2.5 rounded-xl bg-blue-50/60 hover:bg-[#002EFF] hover:text-white text-[#002EFF] text-[9px] font-black uppercase tracking-wide transition-all active:scale-95 disabled:opacity-50'
+                      >
+                        {acc.profile.fullName?.replace(/^\w+\s/, '')}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
               {getDemoStaff().length > 0 && (
                 <>
                   <p className='text-center text-[9px] font-black uppercase tracking-[0.25em] text-gray-400 mb-3 mt-6'>
@@ -926,6 +931,7 @@ function LoginContent() {
                 Demo passwords: demo1234
               </p>
             </div>
+            )}
           </CardContent>
         </Card>
       </motion.div>
