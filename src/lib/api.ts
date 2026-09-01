@@ -1018,6 +1018,20 @@ export const dsaApi = {
           >(r),
         )
         .then((res) => (Array.isArray(res) ? res : (res?.data ?? []))),
+
+    // GET /parents/me/wards/:id/assignment-grades — the ward's assignment
+    // grades (each with course, score, maxScore, feedback, status).
+    assignmentGrades: (wardId: string, token?: string) =>
+      fetch(
+        `${BASE_URL}/parents/me/wards/${encodeURIComponent(wardId)}/assignment-grades`,
+        { headers: getHeaders(token) },
+      )
+        .then((r) =>
+          handleResponse<
+            Record<string, unknown>[] | { data?: Record<string, unknown>[] }
+          >(r),
+        )
+        .then((res) => (Array.isArray(res) ? res : (res?.data ?? []))),
   },
 
   // Notifications — a per-user inbox with server-side read state. Populated by

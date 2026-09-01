@@ -14,6 +14,7 @@ import {
   GraduationCap,
   BookOpen,
   Award,
+  ClipboardList,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -38,6 +39,7 @@ const NAV: NavItem[] = [
   { key: 'overview', label: 'Overview', icon: LayoutDashboard },
   { key: 'performance', label: 'Performance', icon: TrendingUp },
   { key: 'quizzes', label: 'Quiz Results', icon: Award },
+  { key: 'assignments', label: 'Assignment Grades', icon: ClipboardList },
   { key: 'attendance', label: 'Attendance', icon: CalendarCheck },
   { key: 'countdown', label: 'Exam Countdown', icon: Timer },
   { key: 'fees', label: 'Fees', icon: Wallet },
@@ -104,6 +106,18 @@ export default function GuardianDashboard() {
       date?: string
     }[]
   >([])
+  const [grades, setGrades] = useState<
+    {
+      id: string
+      title: string
+      course?: string
+      score: number | null
+      total: number
+      feedback?: string
+      status: string
+      date?: string
+    }[]
+  >([])
   const [dataLoading, setDataLoading] = useState(true)
 
   useEffect(() => {
@@ -131,12 +145,42 @@ export default function GuardianDashboard() {
           mode: w.learningMode ? String(w.learningMode) : undefined,
           isPaid: !!w.isPaid,
         })
-        const [p, f, q] = await Promise.allSettled([
+        const [p, f, q, g] = await Promise.allSettled([
           dsaApi.guardian.performance(id) as Promise<Record<string, unknown>>,
           dsaApi.guardian.fees(id) as Promise<Record<string, unknown>>,
           dsaApi.guardian.quizResults(id) as Promise<Record<string, unknown>[]>,
+          dsaApi.guardian.assignmentGrades(id) as Promise<
+            Record<string, unknown>[]
+          >,
         ])
         if (cancelled) return
+        if (g.status === 'fulfilled' && Array.isArray(g.value)) {
+          setGrades(
+            g.value.map((r) => ({
+              id: String(r.id ?? r._id ?? ''),
+              title: String(r.assignmentTitle ?? r.title ?? 'Assignment'),
+              course: r.courseTitle
+                ? String(r.courseTitle)
+                : r.course
+                  ? String(r.course)
+                  : undefined,
+              score:
+                typeof r.score === 'number'
+                  ? r.score
+                  : r.score != null && !isNaN(Number(r.score))
+                    ? Number(r.score)
+                    : null,
+              total: Number(r.maxScore ?? r.total ?? 0),
+              feedback: r.feedback ? String(r.feedback) : undefined,
+              status: String(r.status ?? (r.score != null ? 'graded' : 'submitted')),
+              date: r.gradedAt
+                ? String(r.gradedAt)
+                : r.submittedAt
+                  ? String(r.submittedAt)
+                  : undefined,
+            })),
+          )
+        }
         if (q.status === 'fulfilled' && Array.isArray(q.value)) {
           setQuizzes(
             q.value.map((r) => ({
@@ -424,6 +468,83 @@ export default function GuardianDashboard() {
                           ` · ${new Date(q.date).toLocaleDateString()}`}
                       </p>
                     </div>
+                  </Card>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {view === 'assignments' && (
+        <div className='space-y-4'>
+          <h2 className='text-2xl font-black text-[#002EFF] italic uppercase'>
+            {ward
+              ? `${ward.name.split(' ')[0]}'s Assignment Grades`
+              : 'Assignment Grades'}
+          </h2>
+          {!ward ? (
+            NoWard
+          ) : grades.length === 0 ? (
+            <Card className='p-6 rounded-3xl border-none shadow-sm bg-white text-center'>
+              <ClipboardList size={28} className='text-slate-300 mx-auto mb-2' />
+              <p className='text-[12px] font-bold text-slate-500'>
+                No assignment grades yet.
+              </p>
+              <p className='text-[10px] font-medium text-slate-400 mt-1'>
+                Grades appear here once {ward.name.split(' ')[0]}&apos;s tutor
+                marks their submissions.
+              </p>
+            </Card>
+          ) : (
+            <div className='space-y-2'>
+              {grades.map((a) => {
+                const graded = a.status === 'graded' && a.score != null
+                const pct =
+                  graded && a.total > 0
+                    ? Math.round((a.score! / a.total) * 100)
+                    : null
+                return (
+                  <Card
+                    key={a.id}
+                    className='p-4 rounded-2xl border-none shadow-sm bg-white'
+                  >
+                    <div className='flex items-center gap-3'>
+                      <div
+                        className={`h-11 w-11 rounded-xl flex items-center justify-center font-black text-sm shrink-0 ${
+                          pct == null
+                            ? 'bg-slate-100 text-slate-400'
+                            : pct >= 50
+                              ? 'bg-emerald-50 text-emerald-600'
+                              : 'bg-rose-50 text-rose-500'
+                        }`}
+                      >
+                        {pct == null ? '—' : `${pct}%`}
+                      </div>
+                      <div className='min-w-0 flex-1'>
+                        <p className='text-xs font-black text-gray-800 truncate'>
+                          {a.title}
+                        </p>
+                        <p className='text-[10px] font-bold text-slate-400'>
+                          {a.course ? `${a.course} · ` : ''}
+                          {graded
+                            ? `${a.score} / ${a.total} marks`
+                            : 'Submitted — awaiting grade'}
+                          {a.date &&
+                            ` · ${new Date(a.date).toLocaleDateString()}`}
+                        </p>
+                      </div>
+                      {!graded && (
+                        <Badge className='bg-blue-50 text-[#002EFF] text-[8px] font-black shrink-0'>
+                          Pending
+                        </Badge>
+                      )}
+                    </div>
+                    {a.feedback && (
+                      <p className='text-[11px] text-slate-600 mt-2 pl-14'>
+                        “{a.feedback}”
+                      </p>
+                    )}
                   </Card>
                 )
               })}
