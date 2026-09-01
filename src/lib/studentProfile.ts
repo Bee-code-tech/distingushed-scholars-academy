@@ -303,12 +303,16 @@ export function resolveStudentProfile(
       ? remembered.programmes
       : undefined)
 
-  // An admin override, when set, beats everything (used to correct a student
-  // whose programmes resolve to the wrong track — e.g. a JAMB candidate who also
-  // picked Post-UTME). Otherwise resolve from programmes, then the exam field.
-  const override = (user?.examTrackOverride ?? '').toString().trim()
-  const track: ExamTrack = override
-    ? normaliseTrack(override)
+  // `examTrack` is the backend's stored track (derived at registration, and
+  // editable by the admin from the roster). It's the source of truth, so it
+  // wins — this is how an admin corrects a student on the wrong track. Only when
+  // it's absent do we derive from programmes, then the other exam fields.
+  // (`examTrackOverride` is still honoured first if the backend ever sends it.)
+  const explicit = (user?.examTrackOverride ?? user?.examTrack ?? '')
+    .toString()
+    .trim()
+  const track: ExamTrack = explicit
+    ? normaliseTrack(explicit)
     : programmes && programmes.length
       ? normaliseTrack(deriveTrackFromProgrammes(programmes))
       : normaliseTrack(

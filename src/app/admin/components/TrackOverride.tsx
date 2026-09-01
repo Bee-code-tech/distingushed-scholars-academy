@@ -64,7 +64,7 @@ export default function TrackOverride({
     try {
       await dsaApi.admin.updateUser(
         studentId,
-        { examTrackOverride: next },
+        { examTrack: next },
         adminToken(),
       )
       setSaved(true)

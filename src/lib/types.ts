@@ -29,8 +29,10 @@ export interface User {
   // whatever comes back onto a known ExamTrack.
   level?: string
   examType?: string
-  // Admin-set exam-track override — wins over the programme-derived track.
-  // Set from the admin student roster; empty for normal students.
+  // Backend's stored exam track (derived at registration, editable by the admin
+  // from the roster). The portal treats it as the source of truth.
+  examTrack?: string
+  // Optional distinct override field (only if the backend chooses to add one).
   examTrackOverride?: string
   // Class/level at registration, e.g. "100 Level", "SS3" (sent as `currentLevel`).
   currentLevel?: string
