@@ -23,7 +23,6 @@ import {
   gridToApi,
   emptyGrid,
   timetableKey,
-  cellLabel,
   tintForSubject,
   type TimetableGrid,
 } from '@/lib/timetable'
@@ -38,7 +37,8 @@ const PROGRAMMES: ExamTrack[] = [
   'preclinical',
   'afterschool',
 ]
-const DEPT_SPLIT: ExamTrack[] = ['waec', 'afterschool']
+// JAMB & Post-UTME are now department-split too (science / art / commercial).
+const DEPT_SPLIT: ExamTrack[] = ['waec', 'afterschool', 'jamb', 'postutme']
 const DEPARTMENTS: Department[] = ['science', 'art', 'commercial']
 
 function adminToken(): string | undefined {
@@ -83,17 +83,19 @@ export default function TimetableEditor() {
     load()
   }, [load])
 
-  // A cell can hold up to two subjects, typed "Physics / Biology".
-  const setCell = (period: number, day: number, value: string) => {
-    const cell = value
-      .split('/')
-      .map((s) => s.trim())
-      .filter(Boolean)
-      .slice(0, 2)
+  // A cell holds up to two subjects, each typed freely in its own box (so names
+  // with spaces or slashes like "Use of English" or "CRK/IRK" work fine).
+  const setCell = (
+    period: number,
+    day: number,
+    slot: 0 | 1 | 2,
+    value: string,
+  ) => {
     setGrid((prev) => {
-      const next = prev.map((row) => row.slice())
+      const next = prev.map((row) => row.map((c) => c.slice()))
       if (!next[period]) next[period] = []
-      next[period][day] = cell
+      if (!next[period][day]) next[period][day] = []
+      next[period][day][slot] = value
       setSaved(false)
       return next
     })
@@ -185,9 +187,11 @@ export default function TimetableEditor() {
           </div>
         )}
         <p className='text-[10px] font-medium text-slate-400'>
-          Editing <span className='font-black text-slate-600'>{key}</span>. Tip:
-          put two courses in one period by separating them with a slash — e.g.
-          <span className='font-bold text-slate-600'> Physics / Biology</span>.
+          Editing <span className='font-black text-slate-600'>{key}</span>. Type
+          the subject in each box (spaces and slashes are fine, e.g.
+          <span className='font-bold text-slate-600'> Use of English</span>). Use
+          the extra boxes only when two or three courses run in the same period
+          (e.g. JAMB Physics / Biology / Agric).
         </p>
       </Card>
 
@@ -238,15 +242,38 @@ export default function TimetableEditor() {
                   {DAYS.map((d, day) => {
                     const cell = grid[period]?.[day] ?? []
                     return (
-                      <div key={d} className='p-1'>
+                      <div key={d} className='p-1 space-y-1'>
                         <input
-                          value={cellLabel(cell)}
-                          onChange={(e) => setCell(period, day, e.target.value)}
+                          value={cell[0] ?? ''}
+                          onChange={(e) => setCell(period, day, 0, e.target.value)}
                           placeholder='—'
-                          className={`w-full h-11 px-2 rounded-lg text-[11px] font-bold text-center outline-none border border-transparent focus:border-[#002EFF]/40 focus:bg-white ${
-                            cell.length
+                          title='Subject'
+                          className={`w-full h-9 px-2 rounded-lg text-[11px] font-bold text-center outline-none border border-transparent focus:border-[#002EFF]/40 focus:bg-white ${
+                            cell[0]?.trim()
                               ? tintForSubject(cell[0])
                               : 'bg-slate-50 text-slate-500'
+                          }`}
+                        />
+                        <input
+                          value={cell[1] ?? ''}
+                          onChange={(e) => setCell(period, day, 1, e.target.value)}
+                          placeholder='+ 2nd (optional)'
+                          title='Second subject for this period (optional)'
+                          className={`w-full h-8 px-2 rounded-lg text-[10px] font-bold text-center outline-none border border-transparent focus:border-[#002EFF]/40 focus:bg-white ${
+                            cell[1]?.trim()
+                              ? tintForSubject(cell[1])
+                              : 'bg-slate-50/60 text-slate-400'
+                          }`}
+                        />
+                        <input
+                          value={cell[2] ?? ''}
+                          onChange={(e) => setCell(period, day, 2, e.target.value)}
+                          placeholder='+ 3rd (optional)'
+                          title='Third subject for this period (optional)'
+                          className={`w-full h-8 px-2 rounded-lg text-[10px] font-bold text-center outline-none border border-transparent focus:border-[#002EFF]/40 focus:bg-white ${
+                            cell[2]?.trim()
+                              ? tintForSubject(cell[2])
+                              : 'bg-slate-50/60 text-slate-400'
                           }`}
                         />
                       </div>

@@ -31,7 +31,8 @@ const SLOT_START = [8 * 60, 9 * 60 + 45, 11 * 60 + 30, 14 * 60]
 const CLASS_MINUTES = 90
 
 // Programmes whose timetable is split by department (Science / Art / Commercial).
-const DEPT_SPLIT: ExamTrack[] = ['waec', 'afterschool']
+// JAMB & Post-UTME are included so each department gets its own timetable.
+const DEPT_SPLIT: ExamTrack[] = ['waec', 'afterschool', 'jamb', 'postutme']
 
 /**
  * The backend timetable key for a student's programme (+ department). Secondary
@@ -60,7 +61,7 @@ function subjectsFor(track: ExamTrack, department: Department | null): string[] 
   return SUBJECTS.jamb
 }
 
-/** A period holds up to two subjects. */
+/** A period holds up to three subjects (parallel courses). */
 export type Cell = string[]
 /** A grid is rows (periods) × columns (days); each cell is a `Cell`. */
 export type TimetableGrid = Cell[][]
@@ -71,7 +72,7 @@ function toCell(raw: unknown): Cell {
     return raw
       .map((s) => (typeof s === 'string' ? s.trim() : ''))
       .filter(Boolean)
-      .slice(0, 2)
+      .slice(0, 3)
   }
   if (typeof raw === 'string' && raw.trim()) return [raw.trim()]
   return []
@@ -97,7 +98,9 @@ export function gridFromApi(apiGrid: unknown): TimetableGrid {
  */
 export function gridToApi(uiGrid: TimetableGrid): string[][][] {
   return DAYS.map((_, day) =>
-    SLOTS.map((_, period) => (uiGrid[period]?.[day] ?? []).filter(Boolean)),
+    SLOTS.map((_, period) =>
+      (uiGrid[period]?.[day] ?? []).map((s) => s.trim()).filter(Boolean),
+    ),
   )
 }
 

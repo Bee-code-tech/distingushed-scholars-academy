@@ -24,19 +24,25 @@ A timetable is identified by a **key** = programme (+ department where it applie
 |-----------|-------------------|----------------|
 | WAEC / Secondary (SS) | **Yes** | `waec-science`, `waec-art`, `waec-commercial` |
 | After-School / Summer (SS) | **Yes** | `afterschool-science`, `afterschool-art`, `afterschool-commercial` |
-| JAMB | No (but dual-course periods) | `jamb` |
-| Post-UTME | No | `postutme` |
+| **JAMB** | **Yes** | `jamb-science`, `jamb-art`, `jamb-commercial` |
+| **Post-UTME** | **Yes** | `postutme-science`, `postutme-art`, `postutme-commercial` |
 | 100-Level / Undergrad | No | `undergrad` |
 | Preclinical | No | `preclinical` |
 
-- A **period cell** holds **one or two** course/subject entries. Two entries mean
-  "either of these runs this slot" — e.g. `["Physics", "Biology"]` for JAMB, so a
-  student sees the one that matches their subject choice (or both, labelled).
+> **⚠️ Backend action needed:** the API currently **whitelists** timetable keys and
+> **400s** the new `jamb-*` / `postutme-*` keys. Please accept `jamb-science`,
+> `jamb-art`, `jamb-commercial`, `postutme-science`, `postutme-art`,
+> `postutme-commercial` on `GET`/`PUT /api/timetable/:key`. The frontend already
+> sends them.
+
+- A **period cell** holds **up to three** course/subject entries (parallel
+  courses), e.g. `["Physics", "Biology", "Agric"]` for JAMB. A student sees the
+  one(s) matching their choice (or all, labelled).
 - Grid stays 6 days (Mon–Sat) × 4 periods, as now.
 
 ### Cell shape
 ```ts
-type Cell = string[]          // 0, 1, or 2 subject names
+type Cell = string[]          // 0, 1, 2, or 3 subject names
 type TimetableGrid = Cell[][] // [period][day]
 ```
 (Today a cell is a single `string`; migrate to `string[]` — a plain string can be

@@ -52,6 +52,9 @@ export interface User {
   // JAMB/Post-UTME students send their chosen subjects here; WAEC students
   // send their department (a single 'science' | 'art' | 'commercial' value).
   subjectsOfInterest?: string[]
+  // Optional explicit department (science | art | commercial) for routing to the
+  // right department timetable.
+  department?: string
 }
 
 /** Response returned by the login / register-verify endpoints. */
