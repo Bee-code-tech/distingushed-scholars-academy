@@ -811,7 +811,7 @@ export default function AdminAdmin() {
     router.replace('/auth/signin')
   }, [router])
 
-  // Security: auto sign-out after 10 minutes idle, and trap the Back button so
+  // Security: auto sign-out after 30 minutes idle, and trap the Back button so
   // the admin can't leave the admin area without signing out.
   useSecureSession({
     onIdleTimeout: () => {
@@ -820,7 +820,7 @@ export default function AdminAdmin() {
         window.location.replace('/auth/signin?expired=true')
       }
     },
-    idleMinutes: 10,
+    idleMinutes: 30,
     lockArea: true,
   })
 
