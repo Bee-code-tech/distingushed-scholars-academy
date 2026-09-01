@@ -12,6 +12,7 @@ import {
   XCircle,
   Trophy,
   ArrowLeft,
+  AlertTriangle,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { dsaApi } from '@/lib/api'
@@ -64,6 +65,11 @@ export default function QuizRunner() {
   const [result, setResult] = useState<ResultData | null>(null)
   const startedAt = useRef(0)
   const totalTime = useRef(0)
+  // Anti-cheating: count times the student leaves the quiz (tab switch, minimise,
+  // split-screen). Auto-submit after more than two.
+  const [breaches, setBreaches] = useState(0)
+  const breachRef = useRef(0)
+  const MAX_BREACHES = 2
 
   const loadList = useCallback(async () => {
     setLoading(true)
@@ -133,6 +139,37 @@ export default function QuizRunner() {
     return () => clearInterval(id)
   }, [view, submit])
 
+  // Register a "left the quiz" breach; the 3rd one auto-submits.
+  const registerBreach = useCallback(() => {
+    breachRef.current += 1
+    setBreaches(breachRef.current)
+    if (breachRef.current > MAX_BREACHES) submit(true)
+  }, [submit])
+
+  // Anti-cheating: detect tab switches, minimising and split-screen (focus loss)
+  // while taking. Dedupe leave/return so one exit counts once.
+  useEffect(() => {
+    if (view !== 'take') return
+    let away = false
+    const leave = () => {
+      if (away) return
+      away = true
+      registerBreach()
+    }
+    const back = () => {
+      away = false
+    }
+    const onVis = () => (document.hidden ? leave() : back())
+    window.addEventListener('blur', leave)
+    window.addEventListener('focus', back)
+    document.addEventListener('visibilitychange', onVis)
+    return () => {
+      window.removeEventListener('blur', leave)
+      window.removeEventListener('focus', back)
+      document.removeEventListener('visibilitychange', onVis)
+    }
+  }, [view, registerBreach])
+
   const start = async (q: Record<string, unknown>) => {
     setError(null)
     setLoading(true)
@@ -169,6 +206,8 @@ export default function QuizRunner() {
       setQuestions(flat)
       setAnswers({})
       setResult(null)
+      breachRef.current = 0
+      setBreaches(0)
       const secs = (minutes || Number(full.timeLimit) || 0) * 60
       totalTime.current = secs
       setRemaining(secs)
@@ -253,6 +292,27 @@ export default function QuizRunner() {
               <Clock size={15} /> {mm(remaining)}
             </span>
           )}
+        </div>
+
+        {/* Anti-cheating notice */}
+        <div
+          className={`flex items-center gap-2 rounded-2xl px-4 py-2.5 ${
+            breaches > 0
+              ? 'bg-rose-50 border border-rose-200'
+              : 'bg-amber-50 border border-amber-100'
+          }`}
+        >
+          <AlertTriangle
+            size={15}
+            className={breaches > 0 ? 'text-rose-500 shrink-0' : 'text-amber-600 shrink-0'}
+          />
+          <p
+            className={`text-[11px] font-bold ${breaches > 0 ? 'text-rose-600' : 'text-amber-700'}`}
+          >
+            {breaches > 0
+              ? `Warning ${breaches}/${MAX_BREACHES} — leaving the quiz again will auto-submit it.`
+              : 'Stay on this screen — no tab-switching, minimising or split-screen. The quiz auto-submits after 2 warnings.'}
+          </p>
         </div>
 
         {error && <p className='text-[11px] font-bold text-rose-600 px-1'>{error}</p>}

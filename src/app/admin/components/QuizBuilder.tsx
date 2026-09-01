@@ -14,6 +14,7 @@ import {
   Power,
   Copy,
   ListPlus,
+  Clock,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { dsaApi } from '@/lib/api'
@@ -125,6 +126,7 @@ export default function QuizBuilder() {
     setBlocks((b) => b.map((blk, idx) => (idx === i ? { ...blk, ...patch } : blk)))
 
   const totalQuestions = blocks.reduce((n, b) => n + b.picked.length, 0)
+  const totalMinutes = blocks.reduce((n, b) => n + (Number(b.timeLimit) || 0), 0)
 
   const publish = async () => {
     setError(null)
@@ -233,9 +235,15 @@ export default function QuizBuilder() {
         </button>
 
         <div className='flex items-center justify-between pt-1'>
-          <span className='text-[11px] font-black text-slate-400'>
-            {totalQuestions} question{totalQuestions === 1 ? '' : 's'} across{' '}
+          <span className='text-[11px] font-black text-slate-400 flex items-center gap-1'>
+            {totalQuestions} question{totalQuestions === 1 ? '' : 's'} ·{' '}
             {blocks.length} subject{blocks.length === 1 ? '' : 's'}
+            {totalMinutes > 0 && (
+              <>
+                {' '}
+                · <Clock size={11} /> {totalMinutes} min total
+              </>
+            )}
           </span>
           <button
             onClick={publish}
@@ -379,14 +387,14 @@ function SubjectBlockEditor({
             </option>
           ))}
         </select>
-        <div className='flex items-center gap-1'>
+        <div className='flex items-center gap-1' title='Time limit (minutes)'>
+          <Clock size={13} className='text-[#002EFF]' />
           <input
             type='number'
             min={0}
             value={block.timeLimit}
             onChange={(e) => onChange({ timeLimit: Number(e.target.value) })}
-            title='Time limit (minutes)'
-            className='w-16 h-9 px-2 rounded-lg bg-slate-50 outline-none text-[12px] font-bold text-center'
+            className='w-14 h-9 px-2 rounded-lg bg-slate-50 outline-none text-[12px] font-bold text-center'
           />
           <span className='text-[9px] font-black text-slate-400'>MIN</span>
         </div>
