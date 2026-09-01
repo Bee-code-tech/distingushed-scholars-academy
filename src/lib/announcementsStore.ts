@@ -56,14 +56,28 @@ export function getAnnouncements(): Announcement[] {
   return all()
 }
 
-/** Announcements a student on `track` should see (global + their track). */
-export function getForStudent(track: string): Announcement[] {
-  return all().filter((a) => a.scope === 'global' || a.track === track)
+/**
+ * Announcements a student should see: global + their track + any course they're
+ * enrolled in (`courseIds`). Course-scoped ones only show to enrolled students.
+ */
+export function getForStudent(
+  track: string,
+  courseIds: string[] = [],
+): Announcement[] {
+  const mine = new Set(courseIds)
+  return all().filter(
+    (a) =>
+      a.scope === 'global' ||
+      (a.scope === 'track' && a.track === track) ||
+      (a.scope === 'course' && !!a.courseId && mine.has(a.courseId)),
+  )
 }
 
 export function addAnnouncement(input: {
   scope: Announcement['scope']
   track?: string
+  courseId?: string
+  courseTitle?: string
   authorName: string
   title: string
   body: string
@@ -73,6 +87,8 @@ export function addAnnouncement(input: {
     id: `an-${input.now.toString(36)}`,
     scope: input.scope,
     track: input.scope === 'track' ? input.track : undefined,
+    courseId: input.scope === 'course' ? input.courseId : undefined,
+    courseTitle: input.scope === 'course' ? input.courseTitle : undefined,
     authorName: input.authorName,
     title: input.title.trim(),
     body: input.body.trim(),

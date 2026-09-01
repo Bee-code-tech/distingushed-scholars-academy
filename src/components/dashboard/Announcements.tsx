@@ -10,6 +10,7 @@ import {
   X,
   Globe,
   GraduationCap,
+  BookOpen,
   CheckCheck,
   Loader2,
 } from 'lucide-react'
@@ -29,6 +30,7 @@ import {
   markAllRead as markAllReadLocal,
 } from '@/lib/announcementsStore'
 import { normaliseTrack, EXAM_TRACKS } from '@/lib/studentProfile'
+import { getCourses } from '@/lib/coursesStore'
 import type { Announcement } from '@/lib/types'
 
 const TRACKS: { id: string; label: string }[] = [
@@ -45,10 +47,26 @@ function isLive(): boolean {
 // The API returns { id, scope, examTrack?, authorId?, title, body, createdAt }
 // (no authorName), so default the author label.
 function mapAnnouncement(a: Record<string, unknown>): Announcement {
+  const scope: Announcement['scope'] =
+    a.scope === 'track' ? 'track' : a.scope === 'course' ? 'course' : 'global'
+  const courseRef = a.courseId as unknown
+  const courseObj =
+    courseRef && typeof courseRef === 'object'
+      ? (courseRef as Record<string, unknown>)
+      : null
   return {
     id: String(a.id ?? a._id ?? ''),
-    scope: a.scope === 'track' ? 'track' : 'global',
+    scope,
     track: (a.track as string) || (a.examTrack as string) || undefined,
+    courseId: courseObj
+      ? String(courseObj._id ?? courseObj.id ?? '')
+      : a.courseId
+        ? String(a.courseId)
+        : undefined,
+    courseTitle:
+      (courseObj?.title as string) ||
+      (a.courseTitle as string) ||
+      undefined,
     authorId: a.authorId ? String(a.authorId) : undefined,
     authorName: (a.authorName as string) || 'DSA Team',
     title: String(a.title ?? ''),
@@ -68,6 +86,14 @@ function timeAgo(iso: string): string {
 }
 
 function ScopeBadge({ a }: { a: Announcement }) {
+  if (a.scope === 'course') {
+    return (
+      <Badge className='bg-violet-50 text-violet-600 text-[8px] font-black'>
+        <BookOpen size={9} className='mr-1' />
+        {a.courseTitle || 'My subject'}
+      </Badge>
+    )
+  }
   return a.scope === 'global' ? (
     <Badge className='bg-slate-100 text-slate-500 text-[8px] font-black'>
       <Globe size={9} className='mr-1' /> All students
@@ -125,10 +151,12 @@ function TutorAnnouncements() {
   const [live, setLive] = useState(false)
   const [loading, setLoading] = useState(true)
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
+  const [courses, setCourses] = useState<{ id: string; title: string }[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
-  const [target, setTarget] = useState('global') // 'global' | track id
+  // 'global' | track id | 'course:<courseId>'
+  const [target, setTarget] = useState('global')
   const [error, setError] = useState('')
   const [sent, setSent] = useState(false)
 
@@ -143,11 +171,19 @@ function TutorAnnouncements() {
     setLoading(true)
     if (isLive()) {
       try {
-        const rows = (await dsaApi.announcements.list()) as Record<
-          string,
-          unknown
-        >[]
+        const [rows, cs] = await Promise.all([
+          dsaApi.announcements.list() as Promise<Record<string, unknown>[]>,
+          dsaApi.courses.list({ tutorId: 'me' }) as Promise<
+            Record<string, unknown>[]
+          >,
+        ])
         setAnnouncements(rows.map(mapAnnouncement))
+        setCourses(
+          cs.map((c) => ({
+            id: String(c.id ?? c._id ?? ''),
+            title: String(c.title ?? 'Course'),
+          })),
+        )
         setLive(true)
         setLoading(false)
         return
@@ -156,6 +192,7 @@ function TutorAnnouncements() {
       }
     }
     setAnnouncements(getLocalAnnouncements())
+    setCourses(getCourses().map((c) => ({ id: c.id, title: c.title })))
     setLive(false)
     setLoading(false)
   }, [])
@@ -170,7 +207,16 @@ function TutorAnnouncements() {
     setSent(false)
     if (title.trim().length < 2) return setError('Enter a title')
     if (body.trim().length < 3) return setError('Write a message')
-    const scope = target === 'global' ? 'global' : 'track'
+    const isCourse = target.startsWith('course:')
+    const courseId = isCourse ? target.slice('course:'.length) : undefined
+    const courseTitle = isCourse
+      ? courses.find((c) => c.id === courseId)?.title
+      : undefined
+    const scope: Announcement['scope'] = isCourse
+      ? 'course'
+      : target === 'global'
+        ? 'global'
+        : 'track'
     setSubmitting(true)
     try {
       if (live) {
@@ -178,6 +224,8 @@ function TutorAnnouncements() {
           scope,
           track: scope === 'track' ? target : undefined,
           examTrack: scope === 'track' ? target : undefined,
+          courseId: scope === 'course' ? courseId : undefined,
+          courseTitle: scope === 'course' ? courseTitle : undefined,
           authorName,
           title: title.trim(),
           body: body.trim(),
@@ -186,6 +234,8 @@ function TutorAnnouncements() {
         addLocalAnnouncement({
           scope,
           track: scope === 'track' ? target : undefined,
+          courseId: scope === 'course' ? courseId : undefined,
+          courseTitle: scope === 'course' ? courseTitle : undefined,
           authorName,
           title: title.trim(),
           body: body.trim(),
@@ -255,7 +305,8 @@ function TutorAnnouncements() {
             Announcements
           </h2>
           <p className='text-[11px] font-bold text-slate-400'>
-            Broadcast a message to all students or a single track.
+            Broadcast to all students, an exam track, or only the students taking
+            one of your subjects.
           </p>
         </div>
         <LiveBadge live={live} />
@@ -293,11 +344,22 @@ function TutorAnnouncements() {
               className='h-10 px-3 rounded-lg bg-slate-50 border border-transparent focus:border-[#002EFF]/30 focus:bg-white outline-none text-sm font-bold'
             >
               <option value='global'>All students</option>
-              {TRACKS.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.label}
-                </option>
-              ))}
+              <optgroup label='By exam track'>
+                {TRACKS.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.label}
+                  </option>
+                ))}
+              </optgroup>
+              {courses.length > 0 && (
+                <optgroup label='My subjects (only enrolled students)'>
+                  {courses.map((c) => (
+                    <option key={c.id} value={`course:${c.id}`}>
+                      {c.title}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
             <button
               type='submit'

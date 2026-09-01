@@ -933,7 +933,10 @@ export const dsaApi = {
         .then((res) => (Array.isArray(res) ? res : (res?.data ?? [])))
     },
 
-    // POST /announcements (tutor / admin). scope 'global' | 'track' (+ track).
+    // POST /announcements (tutor / admin). scope 'global' | 'track' (+ track) |
+    // 'course' (+ courseId) — course targets only students enrolled in that
+    // course (a tutor messaging just their subject). See
+    // docs/backend-request-course-announcements.md.
     create: (body: Record<string, unknown>, token?: string) =>
       fetch(`${BASE_URL}/announcements`, {
         method: 'POST',

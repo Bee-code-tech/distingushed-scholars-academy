@@ -144,12 +144,16 @@ export interface CourseMaterial {
 
 // --- Announcements & notifications (LMS §2.17–§2.18) ---
 
-export type AnnouncementScope = 'global' | 'track'
+export type AnnouncementScope = 'global' | 'track' | 'course'
 
 export interface Announcement {
   id: string
   scope: AnnouncementScope
   track?: string // when scope === 'track' (jamb | waec | postutme)
+  // when scope === 'course' — a tutor messaging only the students taking that
+  // course/subject. courseTitle is carried for display.
+  courseId?: string
+  courseTitle?: string
   authorId?: string
   authorName: string
   title: string
