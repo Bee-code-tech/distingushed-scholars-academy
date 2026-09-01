@@ -28,10 +28,33 @@ import {
   Pencil,
   Check,
   X,
+  Hash,
+  Users,
+  UserMinus,
 } from 'lucide-react'
 import { dsaApi } from '@/lib/api'
 import { getUser } from '@/lib/auth'
 import { uploadToCloudinary } from '@/lib/cloudinary'
+import { resolveStudentProfile } from '@/lib/studentProfile'
+import {
+  type CommunityChannel,
+  toChannel,
+  getLocalChannels,
+  addLocalChannel,
+  removeLocalChannel,
+  channelsForProfile,
+} from '@/lib/communityChannels'
+import {
+  EXAM_TRACKS,
+  DEPARTMENT_LABELS,
+  type ExamTrack,
+  type Department,
+} from '@/lib/studentProfile'
+import {
+  QUIZ_TRACKS,
+  QUIZ_DEPARTMENTS,
+  isDeptSplitTrack,
+} from '@/lib/quizAudience'
 
 type Mode = 'tutor' | 'student' | 'admin'
 type MsgType = 'text' | 'image' | 'video' | 'audio' | 'file'
@@ -109,6 +132,19 @@ export default function Community({
   const [error, setError] = useState<string | null>(null)
   const [notReady, setNotReady] = useState(false)
   const [attachOpen, setAttachOpen] = useState(false)
+
+  // Channels — General + one per programme (JAMB/Post-UTME/WAEC by department,
+  // etc.). Students see General + their programme's; tutors/admin see them all.
+  const [channels, setChannels] = useState<CommunityChannel[]>([])
+  const [activeChannel, setActiveChannel] = useState('general')
+  const [membersOpen, setMembersOpen] = useState(false)
+  const [members, setMembers] = useState<
+    { id: string; name: string; role: string }[]
+  >([])
+  const [newOpen, setNewOpen] = useState(false)
+  const [newName, setNewName] = useState('')
+  const [newTrack, setNewTrack] = useState<ExamTrack | ''>('')
+  const [newDept, setNewDept] = useState<Department>('science')
 
   // Voice-note recording (tutors only).
   const [recording, setRecording] = useState(false)
@@ -199,7 +235,7 @@ export default function Community({
     async (initial = false) => {
       try {
         const rows = (await dsaApi.community.list(
-          { limit: 100 },
+          { limit: 100, channelId: activeChannel },
           token,
         )) as Record<string, unknown>[]
         const mapped = rows.map(normalize).sort((a, b) => a.createdAt - b.createdAt)
@@ -213,19 +249,19 @@ export default function Community({
         if (initial) setLoading(false)
       }
     },
-    [normalize, token],
+    [normalize, token, activeChannel],
   )
 
   // Keep the channel lock state in sync (best-effort: if the settings endpoint
   // isn't live yet, treat the channel as unlocked so posting still works).
   const loadSettings = useCallback(async () => {
     try {
-      const s = await dsaApi.community.getSettings(token)
+      const s = await dsaApi.community.getSettings(token, activeChannel)
       setLockedState(!!s?.locked)
     } catch {
       /* settings endpoint not available yet — stay unlocked */
     }
-  }, [token])
+  }, [token, activeChannel])
 
   // Initial load + light polling + refresh when the tab regains focus.
   useEffect(() => {
@@ -257,7 +293,7 @@ export default function Community({
       setError(null)
       setSending(true)
       try {
-        await dsaApi.community.send(body, token)
+        await dsaApi.community.send({ ...body, channelId: activeChannel }, token)
         await load(false)
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Could not send message.')
@@ -265,7 +301,7 @@ export default function Community({
         setSending(false)
       }
     },
-    [load, token],
+    [load, token, activeChannel],
   )
 
   const sendText = useCallback(() => {
@@ -424,25 +460,154 @@ export default function Community({
     setLockedState(next)
     setError(null)
     try {
-      await dsaApi.community.setLocked(next, token)
+      await dsaApi.community.setLocked(next, token, activeChannel)
     } catch (e) {
       setLockedState(!next)
       setError(
         e instanceof Error ? e.message : 'Could not change the lock state.',
       )
     }
-  }, [locked, token])
+  }, [locked, token, activeChannel])
+
+  // ---- Channels ----
+  const loadChannels = useCallback(async () => {
+    const profile = resolveStudentProfile(getUser() ?? undefined)
+    let list: CommunityChannel[]
+    try {
+      const rows = (await dsaApi.community.channels(token)) as Record<
+        string,
+        unknown
+      >[]
+      list = rows.length ? rows.map(toChannel) : getLocalChannels()
+    } catch {
+      // Channels endpoint not live yet — fall back to the seeded local list so
+      // the switcher still works.
+      list = getLocalChannels()
+    }
+    // Students only see General + their programme's channel(s).
+    const visible = mode === 'student' ? channelsForProfile(list, profile) : list
+    setChannels(visible)
+    setActiveChannel((cur) =>
+      visible.some((c) => c.id === cur) ? cur : 'general',
+    )
+  }, [mode, token])
+
+  useEffect(() => {
+    loadChannels()
+  }, [loadChannels])
+
+  const createChannel = useCallback(async () => {
+    const name = newName.trim()
+    if (!name) return
+    const track = newTrack || undefined
+    const department =
+      track && isDeptSplitTrack(track) ? newDept : undefined
+    try {
+      await dsaApi.community.createChannel({ name, track, department }, token)
+    } catch {
+      addLocalChannel({
+        name,
+        track: track ?? null,
+        department: department ?? null,
+      })
+    }
+    setNewName('')
+    setNewTrack('')
+    setNewOpen(false)
+    await loadChannels()
+  }, [newName, newTrack, newDept, token, loadChannels])
+
+  const deleteChannel = useCallback(
+    async (id: string) => {
+      if (id === 'general') return
+      try {
+        await dsaApi.community.removeChannel(id, token)
+      } catch {
+        removeLocalChannel(id)
+      }
+      if (activeChannel === id) setActiveChannel('general')
+      await loadChannels()
+    },
+    [token, activeChannel, loadChannels],
+  )
+
+  // ---- Members (tutor / admin) ----
+  const loadMembers = useCallback(async () => {
+    if (!(mode === 'tutor' || mode === 'admin')) return
+    try {
+      const rows = (await dsaApi.community.members(
+        activeChannel,
+        token,
+      )) as Record<string, unknown>[]
+      if (rows.length) {
+        setMembers(
+          rows.map((r) => ({
+            id: str(r.id ?? r._id ?? r.userId),
+            name:
+              str(r.fullname ?? r.fullName ?? r.name ?? r.username) || 'Member',
+            role: str(r.role ?? 'student'),
+          })),
+        )
+        return
+      }
+    } catch {
+      /* members endpoint not live — derive from who has posted */
+    }
+    const seen = new Map<string, { id: string; name: string; role: string }>()
+    messages.forEach((m) => {
+      if (m.senderId && !seen.has(m.senderId))
+        seen.set(m.senderId, {
+          id: m.senderId,
+          name: m.senderName,
+          role: m.senderRole,
+        })
+    })
+    setMembers([...seen.values()])
+  }, [mode, activeChannel, token, messages])
+
+  useEffect(() => {
+    if (membersOpen) loadMembers()
+  }, [membersOpen, loadMembers])
+
+  const removeMember = useCallback(
+    async (userId: string) => {
+      setError(null)
+      const prev = members
+      setMembers((ms) => ms.filter((x) => x.id !== userId))
+      try {
+        await dsaApi.community.removeMember(activeChannel, userId, token)
+      } catch (e) {
+        setMembers(prev)
+        setError(
+          e instanceof Error
+            ? e.message
+            : 'Could not remove the member (needs the backend endpoint).',
+        )
+      }
+    },
+    [activeChannel, token, members],
+  )
 
   const busy = sending || uploading
   const pinned = messages.filter((m) => m.pinned)
+  const active =
+    channels.find((c) => c.id === activeChannel) ??
+    ({ id: 'general', name: 'General', kind: 'general' } as CommunityChannel)
+  const canManageMembers = mode === 'tutor' || mode === 'admin'
+  const isAdmin = mode === 'admin'
 
   return (
     <div className='max-w-3xl mx-auto flex flex-col h-[calc(100vh-9rem)] min-h-[520px]'>
       {/* Header */}
       <div className='flex items-center justify-between px-1 pb-3'>
         <div>
-          <h2 className='text-xl md:text-2xl font-black text-zinc-900 tracking-tight'>
+          <h2 className='text-xl md:text-2xl font-black text-zinc-900 tracking-tight flex items-center gap-2'>
             DSA <span className='text-[#002EFF]'>Community</span>
+            {active.id !== 'general' && (
+              <span className='text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-violet-50 text-violet-600'>
+                {active.name}
+              </span>
+            )}
           </h2>
           <p className='text-[11px] font-medium text-zinc-500'>
             {isModerator
@@ -451,6 +616,19 @@ export default function Community({
           </p>
         </div>
         <div className='flex items-center gap-2'>
+          {canManageMembers && (
+            <button
+              onClick={() => setMembersOpen((o) => !o)}
+              title='Members'
+              className={`flex items-center gap-1.5 text-[9px] font-black uppercase tracking-wider px-2.5 py-1.5 rounded-full transition-colors ${
+                membersOpen
+                  ? 'bg-[#002EFF] text-white'
+                  : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+              }`}
+            >
+              <Users size={11} /> Members
+            </button>
+          )}
           {canManage && (
             <button
               onClick={toggleLock}
@@ -470,6 +648,153 @@ export default function Community({
           </span>
         </div>
       </div>
+
+      {/* Channel switcher */}
+      {channels.length > 1 && (
+        <div className='mb-3 flex items-center gap-1.5 overflow-x-auto pb-1 custom-scrollbar'>
+          {channels.map((c) => {
+            const on = c.id === activeChannel
+            return (
+              <button
+                key={c.id}
+                onClick={() => setActiveChannel(c.id)}
+                className={`group inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-[11px] font-black transition-colors ${
+                  on
+                    ? 'bg-[#002EFF] text-white'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                <Hash size={11} className={on ? 'text-white/80' : 'text-slate-400'} />
+                {c.name}
+                {isAdmin && c.id !== 'general' && (
+                  <span
+                    role='button'
+                    tabIndex={0}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      if (
+                        window.confirm(`Delete the "${c.name}" community? Its messages will be removed.`)
+                      )
+                        deleteChannel(c.id)
+                    }}
+                    className={`ml-0.5 rounded-full p-0.5 ${on ? 'hover:bg-white/20' : 'hover:bg-rose-100 hover:text-rose-500'}`}
+                    title='Delete community'
+                  >
+                    <X size={11} />
+                  </span>
+                )}
+              </button>
+            )
+          })}
+          {isAdmin && (
+            <button
+              onClick={() => setNewOpen((o) => !o)}
+              className='inline-flex items-center gap-1 shrink-0 rounded-full px-3 py-1.5 text-[11px] font-black bg-emerald-50 text-emerald-600 hover:bg-emerald-100'
+              title='Create a community'
+            >
+              <Plus size={12} /> New
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* New-channel form (admin) */}
+      {isAdmin && newOpen && (
+        <div className='mb-3 rounded-2xl border border-slate-200 bg-white p-3 space-y-2'>
+          <p className='text-[10px] font-black uppercase text-slate-400'>
+            New community
+          </p>
+          <div className='flex flex-wrap items-center gap-2'>
+            <input
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder='Name (e.g. JAMB · Science)'
+              className='h-9 px-3 rounded-lg bg-slate-50 border border-transparent focus:border-[#002EFF]/30 focus:bg-white outline-none text-[12px] font-bold flex-1 min-w-[160px]'
+            />
+            <select
+              value={newTrack}
+              onChange={(e) => setNewTrack(e.target.value as ExamTrack | '')}
+              className='h-9 px-2 rounded-lg bg-slate-50 border border-slate-200 outline-none text-[12px] font-black'
+            >
+              <option value=''>No programme (everyone)</option>
+              {QUIZ_TRACKS.map((t) => (
+                <option key={t} value={t}>
+                  {EXAM_TRACKS[t].label}
+                </option>
+              ))}
+            </select>
+            {newTrack && isDeptSplitTrack(newTrack) && (
+              <select
+                value={newDept}
+                onChange={(e) => setNewDept(e.target.value as Department)}
+                className='h-9 px-2 rounded-lg bg-slate-50 border border-slate-200 outline-none text-[12px] font-black'
+              >
+                {QUIZ_DEPARTMENTS.map((d) => (
+                  <option key={d} value={d}>
+                    {DEPARTMENT_LABELS[d]}
+                  </option>
+                ))}
+              </select>
+            )}
+            <button
+              onClick={createChannel}
+              disabled={!newName.trim()}
+              className='h-9 px-4 rounded-lg bg-[#002EFF] text-white text-[10px] font-black uppercase hover:bg-blue-700 disabled:opacity-50'
+            >
+              Create
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Members panel (tutor / admin) */}
+      {canManageMembers && membersOpen && (
+        <div className='mb-3 rounded-2xl border border-slate-200 bg-white p-3'>
+          <div className='flex items-center justify-between mb-2'>
+            <p className='text-[10px] font-black uppercase text-slate-400 flex items-center gap-1'>
+              <Users size={12} /> Members of {active.name}
+            </p>
+            <button
+              onClick={() => setMembersOpen(false)}
+              className='text-slate-400 hover:text-slate-600'
+            >
+              <X size={14} />
+            </button>
+          </div>
+          {members.length === 0 ? (
+            <p className='text-[11px] font-medium text-slate-400 py-2'>
+              No members to show yet.
+            </p>
+          ) : (
+            <div className='space-y-1 max-h-52 overflow-y-auto custom-scrollbar'>
+              {members.map((mem) => (
+                <div
+                  key={mem.id}
+                  className='flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-50'
+                >
+                  <span className='text-[11px] font-bold text-zinc-700 flex-1 truncate'>
+                    {mem.name}
+                  </span>
+                  <span
+                    className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded ${roleTint(mem.role)}`}
+                  >
+                    {roleLabel(mem.role)}
+                  </span>
+                  {mem.role.toLowerCase() === 'student' && (
+                    <button
+                      onClick={() => removeMember(mem.id)}
+                      className='p-1 text-slate-300 hover:text-rose-500'
+                      title='Remove from this community'
+                    >
+                      <UserMinus size={13} />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {notReady && (
         <div className='mb-3 flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3'>

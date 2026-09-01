@@ -1093,15 +1093,19 @@ export const dsaApi = {
   // not post audio notes) are enforced server-side from the JWT.
   // See docs/backend-request-community.md for the endpoint contract.
   community: {
-    // GET /community/messages?limit=&before= — a page of the channel, oldest to
-    // newest. `before` (a message id or ISO timestamp) loads older history.
+    // GET /community/messages?limit=&before=&channelId= — a page of the channel,
+    // oldest to newest. `before` (a message id or ISO timestamp) loads older
+    // history. `channelId` scopes to one channel (omit / 'general' = the main
+    // channel). See docs/backend-request-community-channels.md.
     list: (
-      params: { limit?: number; before?: string } = {},
+      params: { limit?: number; before?: string; channelId?: string } = {},
       token?: string,
     ) => {
       const qs = new URLSearchParams()
       if (params.limit) qs.set('limit', String(params.limit))
       if (params.before) qs.set('before', params.before)
+      if (params.channelId && params.channelId !== 'general')
+        qs.set('channelId', params.channelId)
       const q = qs.toString()
       return fetch(`${BASE_URL}/community/messages${q ? `?${q}` : ''}`, {
         headers: getHeaders(token),
@@ -1115,7 +1119,8 @@ export const dsaApi = {
     },
 
     // POST /community/messages (tutor / student). The server stamps the sender
-    // from the JWT; the client only says what kind of message it is.
+    // from the JWT; the client only says what kind of message it is. `channelId`
+    // routes it to a channel (omit for the main/General channel).
     send: (
       body: {
         type: 'text' | 'image' | 'video' | 'audio' | 'file'
@@ -1125,13 +1130,16 @@ export const dsaApi = {
         fileType?: string
         fileSize?: number
         durationSec?: number
+        channelId?: string
       },
       token?: string,
     ) =>
       fetch(`${BASE_URL}/community/messages`, {
         method: 'POST',
         headers: getHeaders(token),
-        body: JSON.stringify(body),
+        body: JSON.stringify(
+          body.channelId === 'general' ? { ...body, channelId: undefined } : body,
+        ),
       })
         .then((r) => handleResponse<{ data?: unknown }>(r))
         .then((r) => (r as { data?: unknown }).data ?? r),
@@ -1161,23 +1169,88 @@ export const dsaApi = {
         .then((r) => handleResponse<{ data?: unknown }>(r))
         .then((r) => (r as { data?: unknown }).data ?? r),
 
-    // GET /community/settings — channel state, e.g. { locked: boolean }. When
+    // GET /community/settings?channelId= — channel state, e.g. { locked }. When
     // locked, students cannot post (tutors/admin still can).
-    getSettings: (token?: string) =>
-      fetch(`${BASE_URL}/community/settings`, { headers: getHeaders(token) })
+    getSettings: (token?: string, channelId?: string) => {
+      const q =
+        channelId && channelId !== 'general'
+          ? `?channelId=${encodeURIComponent(channelId)}`
+          : ''
+      return fetch(`${BASE_URL}/community/settings${q}`, {
+        headers: getHeaders(token),
+      })
         .then((r) => handleResponse<{ data?: unknown } | { locked?: boolean }>(r))
         .then((r) => {
           const obj = r as Record<string, unknown>
           return (obj.data ?? obj) as { locked?: boolean }
-        }),
+        })
+    },
 
-    // PATCH /community/settings — lock / unlock the channel (tutor / admin).
-    setLocked: (locked: boolean, token?: string) =>
+    // PATCH /community/settings — lock / unlock a channel (tutor / admin).
+    setLocked: (locked: boolean, token?: string, channelId?: string) =>
       fetch(`${BASE_URL}/community/settings`, {
         method: 'PATCH',
         headers: getHeaders(token),
-        body: JSON.stringify({ locked }),
+        body: JSON.stringify(
+          channelId && channelId !== 'general'
+            ? { locked, channelId }
+            : { locked },
+        ),
       })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+
+    // ---- Channels (docs/backend-request-community-channels.md) ----
+    // GET /community/channels — channels the caller can see (admin sees all).
+    channels: (token?: string) =>
+      fetch(`${BASE_URL}/community/channels`, { headers: getHeaders(token) })
+        .then((r) =>
+          handleResponse<
+            Record<string, unknown>[] | { data?: Record<string, unknown>[] }
+          >(r),
+        )
+        .then((res) => (Array.isArray(res) ? res : (res?.data ?? []))),
+
+    // POST /community/channels (admin) — create a channel
+    // { name, track?, department? }.
+    createChannel: (body: Record<string, unknown>, token?: string) =>
+      fetch(`${BASE_URL}/community/channels`, {
+        method: 'POST',
+        headers: getHeaders(token),
+        body: JSON.stringify(body),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+
+    // DELETE /community/channels/:id (admin) — delete a channel + its messages.
+    removeChannel: (id: string, token?: string) =>
+      fetch(`${BASE_URL}/community/channels/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: getHeaders(token),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+
+    // GET /community/channels/:id/members (tutor / admin) — who is in a channel.
+    members: (channelId: string, token?: string) =>
+      fetch(
+        `${BASE_URL}/community/channels/${encodeURIComponent(channelId)}/members`,
+        { headers: getHeaders(token) },
+      )
+        .then((r) =>
+          handleResponse<
+            Record<string, unknown>[] | { data?: Record<string, unknown>[] }
+          >(r),
+        )
+        .then((res) => (Array.isArray(res) ? res : (res?.data ?? []))),
+
+    // DELETE /community/channels/:id/members/:userId (tutor / admin) — remove
+    // someone from a channel.
+    removeMember: (channelId: string, userId: string, token?: string) =>
+      fetch(
+        `${BASE_URL}/community/channels/${encodeURIComponent(channelId)}/members/${encodeURIComponent(userId)}`,
+        { method: 'DELETE', headers: getHeaders(token) },
+      )
         .then((r) => handleResponse<{ data?: unknown }>(r))
         .then((r) => (r as { data?: unknown }).data ?? r),
   },
