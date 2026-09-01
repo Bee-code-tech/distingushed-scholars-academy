@@ -303,8 +303,13 @@ export function resolveStudentProfile(
       ? remembered.programmes
       : undefined)
 
-  const track: ExamTrack =
-    programmes && programmes.length
+  // An admin override, when set, beats everything (used to correct a student
+  // whose programmes resolve to the wrong track — e.g. a JAMB candidate who also
+  // picked Post-UTME). Otherwise resolve from programmes, then the exam field.
+  const override = (user?.examTrackOverride ?? '').toString().trim()
+  const track: ExamTrack = override
+    ? normaliseTrack(override)
+    : programmes && programmes.length
       ? normaliseTrack(deriveTrackFromProgrammes(programmes))
       : normaliseTrack(
           user?.level ??

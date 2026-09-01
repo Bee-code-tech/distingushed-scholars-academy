@@ -554,6 +554,7 @@ import {
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { adminApi, type AdminUserListItem } from '@/lib/admin-api'
+import TrackOverride from './TrackOverride'
 
 export interface ExtendedStudentPerson {
   id?: string
@@ -903,14 +904,15 @@ export default function StudentRoster() {
                         <Mail size={11} className='text-slate-400 shrink-0' />
                         <span className='truncate'>{p.email}</span>
                       </div>
-                      <div className='flex items-center gap-1.5 truncate'>
+                      <div className='flex items-center gap-1.5'>
                         <BookOpen
                           size={11}
                           className='text-slate-400 shrink-0'
                         />
-                        <span>
-                          {p.examTrack || p.learningMode || p.extra || '—'}
-                        </span>
+                        <TrackOverride
+                          studentId={p.id || p.key}
+                          current={p.examTrack || p.extra}
+                        />
                       </div>
                     </div>
                   </div>
@@ -1002,9 +1004,12 @@ export default function StudentRoster() {
                     <Mail size={10} /> {p.email}
                   </span>
 
-                  <span className='col-span-2 text-[10px] font-bold text-slate-500 truncate flex items-center gap-1'>
+                  <span className='col-span-2 text-[10px] font-bold text-slate-500 flex items-center gap-1'>
                     <BookOpen size={10} className='text-slate-400' />
-                    {p.examTrack || p.learningMode || p.extra || '—'}
+                    <TrackOverride
+                      studentId={p.id || p.key}
+                      current={p.examTrack || p.extra}
+                    />
                   </span>
 
                   <span className='col-span-1 flex justify-center'>

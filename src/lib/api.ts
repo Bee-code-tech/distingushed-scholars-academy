@@ -385,6 +385,17 @@ export const dsaApi = {
       })
         .then((r) => handleResponse<Record<string, unknown>[] | { data?: Record<string, unknown>[] }>(r))
         .then((res) => (Array.isArray(res) ? res : (res?.data ?? []))),
+
+    // PATCH /admin/users/:id — update a user's editable fields (e.g. the exam
+    // track override). See docs/backend-request-student-track.md.
+    updateUser: (id: string, data: Record<string, unknown>, token?: string) =>
+      fetch(`${BASE_URL}/admin/users/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers: getHeaders(token),
+        body: JSON.stringify(data),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
   },
 
   // Attendance — per-COURSE self check-in (docs/attendance.md). A tutor opens

@@ -29,6 +29,9 @@ export interface User {
   // whatever comes back onto a known ExamTrack.
   level?: string
   examType?: string
+  // Admin-set exam-track override — wins over the programme-derived track.
+  // Set from the admin student roster; empty for normal students.
+  examTrackOverride?: string
   // Class/level at registration, e.g. "100 Level", "SS3" (sent as `currentLevel`).
   currentLevel?: string
   // Programmes the student enrolled in (e.g. "JAMB Tutorials", "Preclinical
