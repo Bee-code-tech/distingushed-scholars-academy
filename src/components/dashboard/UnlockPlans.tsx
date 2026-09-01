@@ -101,6 +101,7 @@ export default function UnlockPlans() {
   // Offline form
   const [proofUrl, setProofUrl] = useState('')
   const [reference, setReference] = useState('')
+  const [amountPaid, setAmountPaid] = useState<number>(0)
   const proofInput = useRef<HTMLInputElement | null>(null)
 
   const load = useCallback(async () => {
@@ -126,6 +127,7 @@ export default function UnlockPlans() {
     setDone(null)
     setProofUrl('')
     setReference('')
+    setAmountPaid(p.amount)
   }
 
   const payOnline = async () => {
@@ -183,7 +185,7 @@ export default function UnlockPlans() {
         {
           planId: selected.id,
           months: selected.durationMonths || undefined,
-          amount: selected.amount,
+          amount: amountPaid || selected.amount,
           method: 'offline',
           reference: reference || undefined,
           proofUrl,
@@ -296,6 +298,19 @@ export default function UnlockPlans() {
               hidden
               onChange={(e) => onProof(e.target.files?.[0] ?? null)}
             />
+            <label className='block'>
+              <span className='text-[10px] font-black uppercase text-slate-400'>
+                Amount paid (₦)
+              </span>
+              <input
+                type='number'
+                min={0}
+                value={amountPaid || ''}
+                onChange={(e) => setAmountPaid(Number(e.target.value))}
+                placeholder={String(selected.amount)}
+                className='w-full h-11 px-3 rounded-lg bg-slate-50 outline-none text-sm font-bold mt-1'
+              />
+            </label>
             <input
               value={reference}
               onChange={(e) => setReference(e.target.value)}

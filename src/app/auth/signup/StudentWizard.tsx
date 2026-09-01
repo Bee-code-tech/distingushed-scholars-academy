@@ -116,6 +116,7 @@ export default function StudentWizard() {
   const [proofUrl, setProofUrl] = useState('')
   const [uploadingProof, setUploadingProof] = useState(false)
   const [payRef, setPayRef] = useState('')
+  const [payAmount, setPayAmount] = useState<number>(PORTAL_ACCESS_FEE)
   const proofInput = useRef<HTMLInputElement | null>(null)
 
   const form = useForm<FormValues>({
@@ -283,6 +284,7 @@ export default function StudentWizard() {
             paymentMethod: 'offline',
             paymentProofUrl: proofUrl,
             paymentReference: payRef || undefined,
+            paymentAmount: payAmount || PORTAL_ACCESS_FEE,
           }
         : {}),
     }
@@ -705,6 +707,19 @@ export default function StudentWizard() {
                     hidden
                     onChange={(e) => onProof(e.target.files?.[0] ?? null)}
                   />
+                  <label className='block'>
+                    <span className='text-[9px] font-black uppercase tracking-widest text-slate-400'>
+                      Amount paid (₦)
+                    </span>
+                    <input
+                      type='number'
+                      min={0}
+                      value={payAmount || ''}
+                      onChange={(e) => setPayAmount(Number(e.target.value))}
+                      placeholder={String(PORTAL_ACCESS_FEE)}
+                      className='w-full h-11 px-3 rounded-lg bg-white border border-slate-200 outline-none text-sm font-bold mt-1'
+                    />
+                  </label>
                   <input
                     value={payRef}
                     onChange={(e) => setPayRef(e.target.value)}
