@@ -501,31 +501,52 @@ export default function AcademyDashboard() {
     return () => window.removeEventListener('dsa:unlock', go)
   }, [setActiveView])
 
-  const navigation = [
-    { icon: LayoutDashboard, label: 'Overview', view: 'overview' as ViewState },
+  const navGroups = [
     {
-      icon: CalendarCheck,
-      label: 'Attendance',
-      view: 'attendance' as ViewState,
+      group: 'Overview',
+      items: [
+        { icon: LayoutDashboard, label: 'Overview', view: 'overview' as ViewState },
+        { icon: BarChart3, label: 'My Performance', view: 'analytics' as ViewState },
+      ],
     },
-    { icon: Calendar, label: 'Timetable', view: 'timetable' as ViewState },
-    { icon: BookOpen, label: 'My Courses', view: 'courses' as ViewState },
-    { icon: Video, label: 'Live Class', view: 'live' as ViewState },
-    { icon: Library, label: 'E-Learning', view: 'resources' as ViewState },
-    { icon: ClipboardList, label: 'Assignments', view: 'assignments' as ViewState },
-    { icon: HelpCircle, label: 'Quizzes', view: 'quizzes' as ViewState },
-    { icon: BarChart3, label: 'My Performance', view: 'analytics' as ViewState },
-    { icon: Megaphone, label: 'Announcements', view: 'announcements' as ViewState },
-    { icon: Zap, label: 'Syllabus Mastery', view: 'syllabus' as ViewState },
     {
-      icon: Users,
-      label: 'Community',
-      view: 'community' as ViewState,
-      badge: communityUnread,
+      group: 'Classes',
+      items: [
+        { icon: BookOpen, label: 'My Courses', view: 'courses' as ViewState },
+        { icon: Video, label: 'Live Class', view: 'live' as ViewState },
+        { icon: CalendarCheck, label: 'Attendance', view: 'attendance' as ViewState },
+        { icon: Calendar, label: 'Timetable', view: 'timetable' as ViewState },
+        { icon: Calendar, label: 'Exam Schedule', view: 'schedule' as ViewState },
+      ],
     },
-    { icon: Sparkles, label: 'Unlock More', view: 'unlock' as ViewState },
-    { icon: Calendar, label: 'Exam Schedule', view: 'schedule' as ViewState },
-    { icon: Settings, label: 'Settings', view: 'settings' as ViewState },
+    {
+      group: 'Learning',
+      items: [
+        { icon: Library, label: 'E-Learning', view: 'resources' as ViewState },
+        { icon: ClipboardList, label: 'Assignments', view: 'assignments' as ViewState },
+        { icon: HelpCircle, label: 'Quizzes', view: 'quizzes' as ViewState },
+        { icon: Zap, label: 'Syllabus Mastery', view: 'syllabus' as ViewState },
+      ],
+    },
+    {
+      group: 'Engagement',
+      items: [
+        { icon: Megaphone, label: 'Announcements', view: 'announcements' as ViewState },
+        {
+          icon: Users,
+          label: 'Community',
+          view: 'community' as ViewState,
+          badge: communityUnread,
+        },
+      ],
+    },
+    {
+      group: 'Account',
+      items: [
+        { icon: Sparkles, label: 'Unlock More', view: 'unlock' as ViewState },
+        { icon: Settings, label: 'Settings', view: 'settings' as ViewState },
+      ],
+    },
   ]
 
   const NavItem = ({
@@ -603,9 +624,16 @@ export default function AcademyDashboard() {
         </div>
       </div>
 
-      <nav className='flex-1 space-y-1 overflow-y-auto pr-2 nav-custom-scrollbar'>
-        {navigation.map((item) => (
-          <NavItem key={item.view} {...item} />
+      <nav className='flex-1 space-y-6 overflow-y-auto pr-2 nav-custom-scrollbar'>
+        {navGroups.map((group) => (
+          <div key={group.group} className='space-y-1.5'>
+            <h3 className='px-4 text-[9px] font-black uppercase tracking-[0.2em] text-blue-200/40'>
+              {group.group}
+            </h3>
+            {group.items.map((item) => (
+              <NavItem key={item.view} {...item} />
+            ))}
+          </div>
         ))}
       </nav>
 

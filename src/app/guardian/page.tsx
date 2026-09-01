@@ -19,7 +19,7 @@ import {
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import DashboardShell, {
-  type NavItem,
+  type NavGroup,
 } from '@/components/dashboard/DashboardShell'
 import { useDashboardSession } from '@/components/dashboard/useDashboardSession'
 import { useTabState } from '@/components/dashboard/useTabState'
@@ -35,14 +35,29 @@ import { dsaApi } from '@/lib/api'
 
 const naira = (n: number) => `₦${n.toLocaleString('en-NG')}`
 
-const NAV: NavItem[] = [
-  { key: 'overview', label: 'Overview', icon: LayoutDashboard },
-  { key: 'performance', label: 'Performance', icon: TrendingUp },
-  { key: 'quizzes', label: 'Quiz Results', icon: Award },
-  { key: 'assignments', label: 'Assignment Grades', icon: ClipboardList },
-  { key: 'attendance', label: 'Attendance', icon: CalendarCheck },
-  { key: 'countdown', label: 'Exam Countdown', icon: Timer },
-  { key: 'fees', label: 'Fees', icon: Wallet },
+const NAV: NavGroup[] = [
+  {
+    group: 'Overview',
+    items: [
+      { key: 'overview', label: 'Overview', icon: LayoutDashboard },
+      { key: 'performance', label: 'Performance', icon: TrendingUp },
+    ],
+  },
+  {
+    group: 'Progress',
+    items: [
+      { key: 'quizzes', label: 'Quiz Results', icon: Award },
+      { key: 'assignments', label: 'Assignment Grades', icon: ClipboardList },
+      { key: 'attendance', label: 'Attendance', icon: CalendarCheck },
+    ],
+  },
+  {
+    group: 'Exam & Fees',
+    items: [
+      { key: 'countdown', label: 'Exam Countdown', icon: Timer },
+      { key: 'fees', label: 'Fees', icon: Wallet },
+    ],
+  },
 ]
 
 function isLive(): boolean {

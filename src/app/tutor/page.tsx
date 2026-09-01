@@ -20,7 +20,7 @@ import {
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import DashboardShell, {
-  type NavItem,
+  type NavGroup,
 } from '@/components/dashboard/DashboardShell'
 import { useDashboardSession } from '@/components/dashboard/useDashboardSession'
 import { useTabState } from '@/components/dashboard/useTabState'
@@ -78,19 +78,39 @@ type TutorStats = {
   toGrade: number
 }
 
-const NAV: NavItem[] = [
-  { key: 'overview', label: 'Overview', icon: LayoutDashboard },
-  { key: 'students', label: 'My Students', icon: Users },
-  { key: 'materials', label: 'Course Materials', icon: BookOpen },
-  { key: 'assignments', label: 'Assignments', icon: ClipboardList },
-  { key: 'gradebook', label: 'Gradebook', icon: Award },
-  { key: 'questions', label: 'Question Bank', icon: HelpCircle },
-  { key: 'announcements', label: 'Announcements', icon: Megaphone },
-  { key: 'community', label: 'Community', icon: MessagesSquare },
-  { key: 'attendance', label: 'Take Attendance', icon: CalendarCheck },
-  { key: 'live', label: 'Live Classes', icon: Video },
-  { key: 'timetable', label: 'Timetable', icon: CalendarDays },
-  { key: 'analytics', label: 'Analytics', icon: BarChart3 },
+const NAV: NavGroup[] = [
+  {
+    group: 'Overview',
+    items: [
+      { key: 'overview', label: 'Overview', icon: LayoutDashboard },
+      { key: 'students', label: 'My Students', icon: Users },
+      { key: 'analytics', label: 'Analytics', icon: BarChart3 },
+    ],
+  },
+  {
+    group: 'Academics',
+    items: [
+      { key: 'materials', label: 'Course Materials', icon: BookOpen },
+      { key: 'assignments', label: 'Assignments', icon: ClipboardList },
+      { key: 'gradebook', label: 'Gradebook', icon: Award },
+      { key: 'questions', label: 'Question Bank', icon: HelpCircle },
+    ],
+  },
+  {
+    group: 'Engagement',
+    items: [
+      { key: 'announcements', label: 'Announcements', icon: Megaphone },
+      { key: 'community', label: 'Community', icon: MessagesSquare },
+    ],
+  },
+  {
+    group: 'Schedule',
+    items: [
+      { key: 'attendance', label: 'Take Attendance', icon: CalendarCheck },
+      { key: 'live', label: 'Live Classes', icon: Video },
+      { key: 'timetable', label: 'Timetable', icon: CalendarDays },
+    ],
+  },
 ]
 
 function StatTile({ label, value, icon: Icon, tint }: any) {
@@ -119,9 +139,12 @@ export default function TutorDashboard() {
   // the same screen instead of resetting to Overview.
   const [view, setView] = useTabState<string>('overview')
   const communityUnread = useCommunityUnread(view === 'community')
-  const nav = NAV.map((n) =>
-    n.key === 'community' ? { ...n, badge: communityUnread } : n,
-  )
+  const nav = NAV.map((group) => ({
+    ...group,
+    items: group.items.map((n) =>
+      n.key === 'community' ? { ...n, badge: communityUnread } : n,
+    ),
+  }))
   // Live-first: a real JWT reads the tutor roster + overview (GET
   // /tutors/me/students, /tutors/me/analytics); demo/offline falls back to the
   // local stores keyed off the tutor's assigned courses.

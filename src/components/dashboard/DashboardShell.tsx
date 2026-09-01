@@ -21,12 +21,23 @@ export interface NavItem {
   badge?: number
 }
 
+/** A titled section of nav items, e.g. "People" / "Engagement". */
+export interface NavGroup {
+  group: string
+  items: NavItem[]
+}
+
+function isGrouped(nav: NavItem[] | NavGroup[]): nav is NavGroup[] {
+  return nav.length > 0 && 'items' in nav[0]
+}
+
 interface DashboardShellProps {
   /** Small badge under the DSA.Portal wordmark, e.g. "Tutor" or "Guardian". */
   roleLabel: string
   userName: string
   userAvatar?: string
-  nav: NavItem[]
+  /** A flat list of items, or titled groups (rendered with section headers). */
+  nav: NavItem[] | NavGroup[]
   activeKey: string
   onNavigate: (key: string) => void
   onLogout: () => void
@@ -50,6 +61,41 @@ export default function DashboardShell({
 }: DashboardShellProps) {
   const [sheetOpen, setSheetOpen] = useState(false)
 
+  const groups: NavGroup[] = isGrouped(nav)
+    ? nav
+    : [{ group: '', items: nav }]
+
+  const NavButton = ({ item }: { item: NavItem }) => {
+    const Icon = item.icon
+    const active = item.key === activeKey
+    return (
+      <button
+        onClick={() => {
+          onNavigate(item.key)
+          setSheetOpen(false)
+        }}
+        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group ${
+          active
+            ? 'bg-[#FCB900] text-[#002EFF] font-black shadow-lg shadow-[#FCB900]/20'
+            : 'text-white/60 hover:bg-white/10 hover:text-white'
+        }`}
+      >
+        <Icon
+          size={18}
+          className={active ? '' : 'group-hover:scale-110 transition-transform'}
+        />
+        <span className='text-[11px] uppercase tracking-wider font-bold'>
+          {item.label}
+        </span>
+        {item.badge ? (
+          <span className='ml-auto min-w-5 h-5 px-1.5 rounded-full bg-rose-500 text-white text-[10px] font-black flex items-center justify-center'>
+            {item.badge > 99 ? '99+' : item.badge}
+          </span>
+        ) : null}
+      </button>
+    )
+  }
+
   const Sidebar = () => (
     <div className='flex flex-col h-full py-6 px-4'>
       <div className='flex items-center gap-3 mb-10 px-2'>
@@ -66,40 +112,19 @@ export default function DashboardShell({
         </div>
       </div>
 
-      <nav className='flex-1 space-y-1 overflow-y-auto pr-2'>
-        {nav.map((item) => {
-          const Icon = item.icon
-          const active = item.key === activeKey
-          return (
-            <button
-              key={item.key}
-              onClick={() => {
-                onNavigate(item.key)
-                setSheetOpen(false)
-              }}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group ${
-                active
-                  ? 'bg-[#FCB900] text-[#002EFF] font-black shadow-lg shadow-[#FCB900]/20'
-                  : 'text-white/60 hover:bg-white/10 hover:text-white'
-              }`}
-            >
-              <Icon
-                size={18}
-                className={
-                  active ? '' : 'group-hover:scale-110 transition-transform'
-                }
-              />
-              <span className='text-[11px] uppercase tracking-wider font-bold'>
-                {item.label}
-              </span>
-              {item.badge ? (
-                <span className='ml-auto min-w-5 h-5 px-1.5 rounded-full bg-rose-500 text-white text-[10px] font-black flex items-center justify-center'>
-                  {item.badge > 99 ? '99+' : item.badge}
-                </span>
-              ) : null}
-            </button>
-          )
-        })}
+      <nav className='flex-1 space-y-6 overflow-y-auto pr-2'>
+        {groups.map((group, idx) => (
+          <div key={group.group || idx} className='space-y-1.5'>
+            {group.group && (
+              <h3 className='px-4 text-[9px] font-black uppercase tracking-[0.2em] text-blue-200/40'>
+                {group.group}
+              </h3>
+            )}
+            {group.items.map((item) => (
+              <NavButton key={item.key} item={item} />
+            ))}
+          </div>
+        ))}
       </nav>
 
       <div className='mt-auto pt-6 border-t border-white/10'>
