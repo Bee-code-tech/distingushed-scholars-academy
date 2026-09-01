@@ -20,13 +20,13 @@ import { dsaApi } from '@/lib/api'
 import { getToken } from '@/lib/auth'
 import { uploadToCloudinary } from '@/lib/cloudinary'
 import { JAMB_SUBJECTS } from '@/app/admin/constants/quiz'
-import { parseExcelQuestions } from '@/app/admin/utils/excelParser'
 
 // A ready-to-fill Excel template so tutors get the columns right.
 function downloadTemplate() {
   const header = [
     'Subject',
     'Topic',
+    'Passage',
     'Question',
     'A',
     'B',
@@ -41,6 +41,7 @@ function downloadTemplate() {
     [
       'Physics',
       'Motion',
+      '',
       'What is the SI unit of force?',
       'Newton',
       'Joule',
@@ -52,16 +53,17 @@ function downloadTemplate() {
       1,
     ],
     [
-      'Chemistry',
-      'Atoms',
-      'What is the chemical symbol for Sodium?',
-      'S',
-      'Na',
-      'So',
-      'N',
+      'Use of English',
+      'Comprehension',
+      'The sun rose over the hills as the farmers set out for the fields at dawn.',
+      'When did the farmers set out?',
+      'Dawn',
+      'Noon',
+      'Dusk',
+      'Midnight',
       '',
-      'B',
-      '',
+      'A',
+      'The passage says "at dawn".',
       1,
     ],
   ]
@@ -107,12 +109,21 @@ function normalize(raw: Record<string, unknown>): BankQuestion {
 const emptyForm = {
   subject: JAMB_SUBJECTS[0] as string,
   topic: '',
+  passage: '',
   body: '',
   options: { A: '', B: '', C: '', D: '', E: '' } as Record<Letter, string>,
   Answer: 'A' as Letter,
   explanation: '',
   mark: 1,
   imageUrl: '',
+}
+
+// English comprehension etc.: the backend has no separate passage field, so we
+// prepend the passage to the question text (shown above the question). Repeat the
+// same passage on each question that belongs to it.
+function withPassage(passage: string, body: string): string {
+  const p = passage.trim()
+  return p ? `PASSAGE:\n${p}\n\n${body}` : body
 }
 
 export default function QuestionBank({ token }: { token?: string }) {
@@ -164,7 +175,7 @@ export default function QuestionBank({ token }: { token?: string }) {
         {
           subject: form.subject,
           topic: form.topic || undefined,
-          body: form.body.trim(),
+          body: withPassage(form.passage, form.body.trim()),
           A: form.options.A,
           B: form.options.B,
           C: form.options.C,
@@ -177,7 +188,8 @@ export default function QuestionBank({ token }: { token?: string }) {
         },
         authToken,
       )
-      setForm({ ...emptyForm, subject: form.subject })
+      // Keep subject + passage so the next question in a comprehension set is quick.
+      setForm({ ...emptyForm, subject: form.subject, passage: form.passage })
       flash('Question added')
       if (form.subject === subject) load()
       else setSubject(form.subject)
@@ -208,24 +220,35 @@ export default function QuestionBank({ token }: { token?: string }) {
     setBusy(true)
     try {
       const buf = await file.arrayBuffer()
-      const parsed = parseExcelQuestions(buf, 0)
-      if (!parsed.length) {
-        setError('No rows found. Use columns: Subject, Topic, Question, A, B, C, D, E, Answer, Explanation, Mark.')
+      const wb = XLSX.read(buf, { type: 'array' })
+      const rows = XLSX.utils.sheet_to_json(
+        wb.Sheets[wb.SheetNames[0]],
+      ) as Record<string, unknown>[]
+      const cell = (v: unknown) => (v == null ? '' : String(v))
+      const payload = rows
+        .filter((r) => cell(r.Question ?? r.Body ?? r.body).trim().length > 0)
+        .map((r) => ({
+          subject: cell(r.Subject ?? r.subject) || 'General',
+          topic: cell(r.Topic ?? r.topic) || undefined,
+          body: withPassage(
+            cell(r.Passage ?? r.passage),
+            cell(r.Question ?? r.Body ?? r.body).trim(),
+          ),
+          A: cell(r.A),
+          B: cell(r.B),
+          C: cell(r.C),
+          D: cell(r.D),
+          E: cell(r.E) || undefined,
+          Answer: (cell(r.Answer) || 'A').toUpperCase(),
+          explanation: cell(r.Explanation ?? r.explanation) || undefined,
+          mark: Number(r.Mark) || 1,
+        }))
+      if (!payload.length) {
+        setError(
+          'No questions found. Use columns: Subject, Topic, Passage, Question, A, B, C, D, E, Answer, Explanation, Mark.',
+        )
         return
       }
-      const payload = parsed.map((q) => ({
-        subject: q.subject,
-        topic: q.topic,
-        body: q.body,
-        A: q.options.A,
-        B: q.options.B,
-        C: q.options.C,
-        D: q.options.D,
-        E: q.options.E || undefined,
-        Answer: q.correctOption,
-        explanation: q.explanation,
-        mark: q.mark,
-      }))
       await dsaApi.questions.createMany(payload, authToken)
       flash(`Imported ${payload.length} question${payload.length === 1 ? '' : 's'}`)
       load()
@@ -317,6 +340,13 @@ export default function QuestionBank({ token }: { token?: string }) {
             className='h-10 px-3 rounded-lg bg-slate-50 outline-none text-sm font-medium'
           />
         </div>
+        <textarea
+          value={form.passage}
+          onChange={(e) => setForm((f) => ({ ...f, passage: e.target.value }))}
+          placeholder='Passage (optional) — for comprehension. It shows above the question; reuse the same passage for each question about it.'
+          rows={2}
+          className='w-full px-3 py-2 rounded-lg bg-slate-50 outline-none text-sm font-medium resize-none'
+        />
         <textarea
           value={form.body}
           onChange={(e) => setForm((f) => ({ ...f, body: e.target.value }))}
@@ -459,7 +489,9 @@ export default function QuestionBank({ token }: { token?: string }) {
                 {i + 1}
               </span>
               <div className='min-w-0 flex-1'>
-                <p className='text-[13px] font-bold text-slate-800'>{q.body}</p>
+                <p className='text-[13px] font-bold text-slate-800 whitespace-pre-wrap'>
+                  {q.body}
+                </p>
                 {q.imageUrl && (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img

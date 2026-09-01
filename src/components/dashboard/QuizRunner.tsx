@@ -322,7 +322,7 @@ export default function QuizRunner() {
             <div className='flex items-start gap-2 mb-3'>
               <span className='text-[11px] font-black text-[#002EFF]'>{i + 1}.</span>
               <div className='flex-1'>
-                <p className='text-[13px] font-bold text-slate-800'>
+                <p className='text-[13px] font-bold text-slate-800 whitespace-pre-wrap'>
                   {q.questionText}
                 </p>
                 {q.imageUrl && (
