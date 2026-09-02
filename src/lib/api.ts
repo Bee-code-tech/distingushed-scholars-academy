@@ -234,7 +234,10 @@ export const dsaApi = {
     getPublic: (link: string) =>
       fetch(`${BASE_URL}/public/quizzes/${encodeURIComponent(link)}`, {
         headers: { 'Content-Type': 'application/json' },
-      }).then((r) => handleResponse<Quiz>(r)),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        // Tolerate both an enveloped `{ data }` and a bare quiz object.
+        .then((r) => ((r as { data?: unknown }).data ?? r) as Quiz),
 
     // POST /public/quizzes/:link/submit — anonymous submission (name + age).
     submitPublic: (
@@ -250,7 +253,9 @@ export const dsaApi = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
-      }).then((r) => handleResponse<PublicQuizResult>(r)),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => ((r as { data?: unknown }).data ?? r) as PublicQuizResult),
 
     verifyCode: (
       payload: { link: string; accessCode: string },
