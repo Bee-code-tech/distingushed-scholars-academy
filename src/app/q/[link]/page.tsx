@@ -11,10 +11,12 @@ import {
   Loader2,
   Clock,
   ArrowRight,
-  Trophy,
   Sparkles,
   AlertCircle,
   Calculator as CalculatorIcon,
+  Target,
+  BarChart3,
+  Download,
 } from 'lucide-react'
 import { dsaApi } from '@/lib/api'
 import RichText from '@/components/ui/RichText'
@@ -205,6 +207,59 @@ export default function PublicQuizPage() {
         ? Math.round((result.totalScore / result.totalMarks) * 100)
         : 0
     : 0
+
+  const band =
+    pct >= 75
+      ? 'Excellent!'
+      : pct >= 50
+        ? 'Well done'
+        : pct >= 40
+          ? 'Keep going'
+          : 'Practice required'
+
+  // Per-subject scores from the breakdown (when the backend returns per-question
+  // rows with questionId + marksEarned).
+  const breakdown = Array.isArray(result?.breakdown)
+    ? (result!.breakdown as Record<string, unknown>[])
+    : []
+  const byId = new Map(
+    breakdown
+      .filter((b) => b && typeof b === 'object')
+      .map((b) => [String(b.questionId), b] as const),
+  )
+  const subjMap = new Map<string, { earned: number; total: number }>()
+  questions.forEach((q) => {
+    const subj = q.subject || 'General'
+    const row = subjMap.get(subj) ?? { earned: 0, total: 0 }
+    row.total += q.marks || 1
+    const b = byId.get(q.questionId)
+    if (b) row.earned += Number(b.marksEarned) || 0
+    subjMap.set(subj, row)
+  })
+  const perSubject = breakdown.length ? [...subjMap.entries()] : []
+
+  const downloadResult = () => {
+    const rows = perSubject
+      .map(([s, v]) => {
+        const p = v.total ? Math.round((v.earned / v.total) * 100) : 0
+        return `<tr><td>${s}</td><td>${v.earned}/${v.total}</td><td>${p}%</td></tr>`
+      })
+      .join('')
+    const html = `<!doctype html><meta charset="utf-8"><title>Quiz Result</title>
+<body style="font-family:system-ui,Arial;max-width:640px;margin:2rem auto;color:#0f172a">
+<h1 style="color:#002EFF">${title} — Result</h1>
+<p><b>${name || 'Student'}${age ? `, age ${age}` : ''}</b></p>
+<p style="font-size:2rem;font-weight:800">${pct}% <span style="font-size:1rem;color:#64748b">(${result?.totalScore}/${result?.totalMarks} marks)</span></p>
+${rows ? `<table border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse;width:100%"><thead><tr style="background:#f1f5f9"><th align="left">Subject</th><th align="left">Score</th><th align="left">%</th></tr></thead><tbody>${rows}</tbody></table>` : ''}
+<p style="color:#94a3b8;font-size:.8rem;margin-top:1rem">Distinguished Scholars Academy</p>
+</body>`
+    const url = URL.createObjectURL(new Blob([html], { type: 'text/html' }))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${(title || 'quiz').replace(/[^\w]+/g, '-')}-result.html`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
 
   return (
     <div className='min-h-screen bg-[#F8FAFF] flex flex-col'>
@@ -422,26 +477,66 @@ export default function PublicQuizPage() {
         )}
 
         {step === 'result' && result && (
-          <div className='mt-10 bg-white rounded-3xl shadow-sm p-8 text-center'>
-            <div
-              className={`h-20 w-20 mx-auto rounded-3xl flex items-center justify-center font-black text-2xl ${
-                pct >= 50
-                  ? 'bg-emerald-50 text-emerald-600'
-                  : 'bg-rose-50 text-rose-500'
-              }`}
-            >
-              {pct}%
+          <div className='mt-8 space-y-4'>
+            {/* Score + performance analysis */}
+            <div className='bg-white rounded-3xl shadow-sm overflow-hidden'>
+              <div className='p-7 text-center'>
+                <div className='h-14 w-14 mx-auto rounded-2xl bg-slate-50 text-slate-700 flex items-center justify-center mb-3'>
+                  <Target size={26} />
+                </div>
+                <p className='text-5xl font-black text-slate-900 leading-none'>
+                  {pct}
+                  <span className='text-2xl text-slate-400'>%</span>
+                </p>
+                <p className='text-[11px] font-black uppercase tracking-widest text-slate-400 mt-2'>
+                  {band}
+                </p>
+                <p className='text-[11px] font-bold text-slate-400 mt-1'>
+                  {name.split(' ')[0]}, you scored {result.totalScore}/
+                  {result.totalMarks}
+                </p>
+              </div>
+              {perSubject.length > 0 && (
+                <div className='border-t border-slate-100 p-6 space-y-3'>
+                  <p className='text-[9px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5'>
+                    <BarChart3 size={12} /> Performance analysis
+                  </p>
+                  {perSubject.map(([subj, v]) => {
+                    const sp = v.total ? Math.round((v.earned / v.total) * 100) : 0
+                    return (
+                      <div key={subj}>
+                        <div className='flex items-center justify-between mb-1'>
+                          <span className='text-[12px] font-black text-slate-700 uppercase'>
+                            {subj}
+                          </span>
+                          <span
+                            className={`text-[12px] font-black ${sp >= 50 ? 'text-emerald-600' : 'text-rose-500'}`}
+                          >
+                            {sp}%
+                          </span>
+                        </div>
+                        <div className='h-1.5 bg-slate-100 rounded-full overflow-hidden'>
+                          <div
+                            className={`h-full rounded-full ${sp >= 50 ? 'bg-emerald-500' : 'bg-rose-400'}`}
+                            style={{ width: `${sp}%` }}
+                          />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
-            <p className='text-sm font-black text-slate-800 uppercase mt-4 flex items-center justify-center gap-1.5'>
-              <Trophy size={16} className='text-[#FCB900]' />
-              {name.split(' ')[0]}, you scored {result.totalScore}/
-              {result.totalMarks}
-            </p>
-            <p className='text-[12px] font-bold text-slate-400 mt-1'>
-              Well done for completing “{title}”.
-            </p>
 
-            <div className='mt-6 rounded-2xl bg-[#002EFF] p-5 text-white'>
+            <button
+              onClick={downloadResult}
+              className='w-full flex items-center justify-center gap-2 h-12 rounded-2xl bg-slate-100 text-slate-700 font-black text-[11px] uppercase tracking-wide hover:bg-slate-200'
+            >
+              <Download size={15} /> Download report
+            </button>
+
+            {/* Join DSA → homepage */}
+            <div className='rounded-3xl bg-[#002EFF] p-6 text-white text-center'>
               <Sparkles size={22} className='mx-auto text-[#FCB900] mb-2' />
               <p className='text-[13px] font-black'>Want more?</p>
               <p className='text-[11px] font-bold text-blue-100 mt-1'>
