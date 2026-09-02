@@ -275,6 +275,33 @@ export const dsaApi = {
         headers: getHeaders(token),
       }).then((r) => handleResponse<LeaderboardEntry[]>(r)),
 
+    // ---- Admin attempt analytics — docs/backend-requests-2026-09-02.md §6 ----
+    // GET /quizzes/:id/attempts — every attempt (admin), for the quiz roster.
+    attempts: (id: string, token?: string) =>
+      fetch(`${BASE_URL}/quizzes/${encodeURIComponent(id)}/attempts`, {
+        headers: getHeaders(token),
+      })
+        .then((r) =>
+          handleResponse<
+            Record<string, unknown>[] | { data?: Record<string, unknown>[] }
+          >(r),
+        )
+        .then((res) => (Array.isArray(res) ? res : (res?.data ?? []))),
+
+    // DELETE /quizzes/:id/attempts/:attemptId — remove one attempt (admin).
+    deleteAttempt: (id: string, attemptId: string, token?: string) =>
+      fetch(
+        `${BASE_URL}/quizzes/${encodeURIComponent(id)}/attempts/${encodeURIComponent(attemptId)}`,
+        { method: 'DELETE', headers: getHeaders(token) },
+      ).then((r) => handleResponse<{ success?: boolean }>(r)),
+
+    // POST /quizzes/:id/attempts/:attemptId/withdraw — void a result (admin).
+    withdrawAttempt: (id: string, attemptId: string, token?: string) =>
+      fetch(
+        `${BASE_URL}/quizzes/${encodeURIComponent(id)}/attempts/${encodeURIComponent(attemptId)}/withdraw`,
+        { method: 'POST', headers: getHeaders(token) },
+      ).then((r) => handleResponse<{ success?: boolean }>(r)),
+
     // GET /quizzes — list (admin/tutor see theirs; students see published).
     list: (token?: string) =>
       fetch(`${BASE_URL}/quizzes`, { headers: getHeaders(token) })

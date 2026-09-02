@@ -97,6 +97,7 @@ export default function QuizBuilder() {
   const token = adminToken()
   const [quizzes, setQuizzes] = useState<Record<string, unknown>[]>([])
   const [loadingList, setLoadingList] = useState(true)
+  const [openAttempts, setOpenAttempts] = useState<string | null>(null)
 
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -519,8 +520,8 @@ export default function QuizBuilder() {
             const code = str(q.accessCode)
             const subjects = Array.isArray(q.subjects) ? q.subjects.length : 0
             return (
+              <div key={id} className='space-y-2'>
               <Card
-                key={id}
                 className='p-3 rounded-2xl border-none shadow-sm bg-white flex items-center gap-3'
               >
                 <div className='min-w-0 flex-1'>
@@ -548,6 +549,19 @@ export default function QuizBuilder() {
                   </p>
                 </div>
                 <button
+                  onClick={() =>
+                    setOpenAttempts((cur) => (cur === id ? null : id))
+                  }
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase ${
+                    openAttempts === id
+                      ? 'bg-[#002EFF] text-white'
+                      : 'bg-blue-50 text-[#002EFF]'
+                  }`}
+                  title='View attempts, leaderboard & manage results'
+                >
+                  <Users size={11} /> Attempts
+                </button>
+                <button
                   onClick={() => toggleStatus(q)}
                   className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase ${
                     q.isActive
@@ -566,11 +580,171 @@ export default function QuizBuilder() {
                   <Trash2 size={14} />
                 </button>
               </Card>
+              {openAttempts === id && (
+                <AttemptsPanel quizId={id} token={token} />
+              )}
+              </div>
             )
           })
         )}
       </div>
     </div>
+  )
+}
+
+/** Admin panel: who took a quiz, the leaderboard, and per-attempt controls.
+ *  Live-first — degrades to an empty/"not available" state until the backend
+ *  ships the attempts routes (docs/backend-requests-2026-09-02.md §6). */
+function AttemptsPanel({ quizId, token }: { quizId: string; token?: string }) {
+  const [attempts, setAttempts] = useState<Record<string, unknown>[]>([])
+  const [board, setBoard] = useState<Record<string, unknown>[]>([])
+  const [loading, setLoading] = useState(true)
+  const [ready, setReady] = useState(true)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    const [a, b] = await Promise.allSettled([
+      dsaApi.quizzes.attempts(quizId, token) as Promise<Record<string, unknown>[]>,
+      dsaApi.quizzes.getLeaderboard(quizId, token) as unknown as Promise<
+        Record<string, unknown>[]
+      >,
+    ])
+    setAttempts(a.status === 'fulfilled' && Array.isArray(a.value) ? a.value : [])
+    setBoard(b.status === 'fulfilled' && Array.isArray(b.value) ? b.value : [])
+    // If the attempts route isn't live yet, flag it so we show a hint.
+    setReady(a.status === 'fulfilled')
+    setLoading(false)
+  }, [quizId, token])
+
+  useEffect(() => {
+    load()
+  }, [load])
+
+  const rowId = (r: Record<string, unknown>) =>
+    str(r.attemptId ?? r.id ?? r._id)
+
+  const del = async (aid: string) => {
+    try {
+      await dsaApi.quizzes.deleteAttempt(quizId, aid, token)
+      setAttempts((prev) => prev.filter((r) => rowId(r) !== aid))
+    } catch {
+      /* ignore — a reload reflects the true state */
+    }
+  }
+  const withdraw = async (aid: string) => {
+    try {
+      await dsaApi.quizzes.withdrawAttempt(quizId, aid, token)
+      setAttempts((prev) =>
+        prev.map((r) => (rowId(r) === aid ? { ...r, withdrawn: true } : r)),
+      )
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const pctOf = (r: Record<string, unknown>) => {
+    const p = Number(r.percentage)
+    if (!isNaN(p) && r.percentage != null) return p <= 1 ? Math.round(p * 100) : Math.round(p)
+    const s = Number(r.score ?? r.totalScore)
+    const t = Number(r.totalMarks ?? r.total)
+    return t > 0 ? Math.round((s / t) * 100) : 0
+  }
+
+  return (
+    <Card className='p-4 rounded-2xl border-none shadow-sm bg-slate-50/70 space-y-3'>
+      {loading ? (
+        <div className='py-4 flex justify-center'>
+          <Loader2 className='animate-spin text-[#002EFF]' size={16} />
+        </div>
+      ) : (
+        <>
+          <p className='text-[9px] font-black uppercase tracking-widest text-slate-400'>
+            {attempts.length} student{attempts.length === 1 ? '' : 's'} took this quiz
+          </p>
+
+          {board.length > 0 && (
+            <div>
+              <p className='text-[9px] font-black uppercase text-slate-400 mb-1'>
+                Leaderboard
+              </p>
+              <div className='space-y-1'>
+                {board.slice(0, 5).map((r, i) => (
+                  <div
+                    key={str(r.userId ?? r.username ?? i)}
+                    className='flex items-center gap-2 text-[11px] font-bold text-slate-600'
+                  >
+                    <span className='w-5 text-[#FCB900] font-black'>
+                      #{Number(r.rank) || i + 1}
+                    </span>
+                    <span className='flex-1 truncate'>
+                      {str(r.username ?? r.studentName ?? 'Student')}
+                    </span>
+                    <span className='font-black text-[#002EFF]'>
+                      {str(r.score)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {attempts.length === 0 ? (
+            <p className='text-[11px] font-bold text-slate-400'>
+              {ready
+                ? 'No attempts yet.'
+                : 'Attempt list will appear here once the backend endpoint is live.'}
+            </p>
+          ) : (
+            <div className='space-y-1.5'>
+              {attempts.map((r) => {
+                const aid = rowId(r)
+                const withdrawn = !!r.withdrawn
+                return (
+                  <div
+                    key={aid}
+                    className={`flex items-center gap-2 rounded-xl bg-white px-3 py-2 ${withdrawn ? 'opacity-50' : ''}`}
+                  >
+                    <div className='min-w-0 flex-1'>
+                      <p className='text-[11px] font-black text-slate-700 truncate'>
+                        {str(r.studentName ?? r.fullname ?? r.username ?? 'Student')}
+                        {withdrawn && (
+                          <span className='ml-1 text-[9px] font-black uppercase text-rose-500'>
+                            · withdrawn
+                          </span>
+                        )}
+                      </p>
+                      <p className='text-[9px] font-bold text-slate-400'>
+                        {pctOf(r)}% · {str(r.score ?? r.totalScore)}/
+                        {str(r.totalMarks ?? r.total)}
+                        {r.submittedAt
+                          ? ` · ${new Date(str(r.submittedAt)).toLocaleDateString()}`
+                          : ''}
+                      </p>
+                    </div>
+                    {!withdrawn && (
+                      <button
+                        onClick={() => withdraw(aid)}
+                        className='px-2 py-1 rounded-lg bg-amber-50 text-amber-600 text-[9px] font-black uppercase'
+                        title='Withdraw result (keeps the record, voids the score)'
+                      >
+                        Withdraw
+                      </button>
+                    )}
+                    <button
+                      onClick={() => del(aid)}
+                      className='p-1 text-slate-300 hover:text-rose-500'
+                      title='Delete attempt'
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </>
+      )}
+    </Card>
   )
 }
 
