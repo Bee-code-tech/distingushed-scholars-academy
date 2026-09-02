@@ -77,6 +77,9 @@ export default function QuizRunner() {
   const breachRef = useRef(0)
   const [showWarning, setShowWarning] = useState(false)
   const [showCorrections, setShowCorrections] = useState(false)
+  // Pagination while taking: how many questions to show per page (0 = all).
+  const [perPage, setPerPage] = useState(0)
+  const [page, setPage] = useState(0)
   const MAX_BREACHES = 5
 
   const loadList = useCallback(async () => {
@@ -231,6 +234,7 @@ export default function QuizRunner() {
       setBreaches(0)
       setShowWarning(false)
       setShowCorrections(false)
+      setPage(0)
       const secs = (minutes || Number(full.timeLimit) || 0) * 60
       totalTime.current = secs
       setRemaining(secs)
@@ -441,6 +445,16 @@ export default function QuizRunner() {
   // ---------- TAKING ----------
   if (view === 'take') {
     const answered = Object.keys(answers).length
+    // Pagination: show `perPage` questions at a time (0 = all on one page).
+    const pp = perPage > 0 ? perPage : questions.length || 1
+    const pageCount = Math.max(1, Math.ceil(questions.length / pp))
+    const curPage = Math.min(page, pageCount - 1)
+    const startIdx = curPage * pp
+    const visible = questions
+      .map((q, i) => ({ q, i }))
+      .slice(startIdx, startIdx + pp)
+    const paginated = perPage > 0 && pageCount > 1
+    const onLastPage = curPage >= pageCount - 1
     return (
       <div className='max-w-2xl mx-auto space-y-4'>
         <div className='sticky top-0 z-10 flex items-center justify-between bg-white/90 backdrop-blur rounded-2xl px-4 py-3 shadow-sm'>
@@ -450,8 +464,25 @@ export default function QuizRunner() {
             </p>
             <p className='text-[10px] font-bold text-slate-400'>
               {answered}/{questions.length} answered
+              {paginated ? ` · page ${curPage + 1}/${pageCount}` : ''}
             </p>
           </div>
+          <label className='flex items-center gap-1 text-[9px] font-black uppercase text-slate-400'>
+            Per page
+            <select
+              value={perPage}
+              onChange={(e) => {
+                setPerPage(Number(e.target.value))
+                setPage(0)
+              }}
+              className='h-7 px-1 rounded-lg bg-slate-50 border border-slate-200 text-[11px] font-black text-slate-600 outline-none'
+            >
+              <option value={0}>All</option>
+              <option value={5}>5</option>
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+            </select>
+          </label>
           {totalTime.current > 0 && (
             <span
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-black tabular-nums text-sm ${
@@ -520,7 +551,7 @@ export default function QuizRunner() {
 
         {error && <p className='text-[11px] font-bold text-rose-600 px-1'>{error}</p>}
 
-        {questions.map((q, i) => (
+        {visible.map(({ q, i }) => (
           <Card key={q.questionId} className='p-4 rounded-2xl border-none shadow-sm bg-white'>
             <div className='flex items-start gap-2 mb-3'>
               <span className='text-[11px] font-black text-[#002EFF]'>{i + 1}.</span>
@@ -559,18 +590,44 @@ export default function QuizRunner() {
           </Card>
         ))}
 
-        <button
-          onClick={() => submit(false)}
-          disabled={submitting}
-          className='w-full flex items-center justify-center gap-2 h-12 bg-[#002EFF] text-white rounded-2xl font-black text-[11px] uppercase tracking-wide hover:bg-blue-700 disabled:opacity-50'
-        >
-          {submitting ? (
-            <Loader2 size={16} className='animate-spin' />
-          ) : (
-            <CheckCircle2 size={16} />
-          )}
-          Submit quiz
-        </button>
+        {/* Page navigation (only when paginated) */}
+        {paginated && (
+          <div className='flex items-center justify-between gap-2'>
+            <button
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              disabled={curPage === 0}
+              className='h-10 px-4 rounded-xl bg-slate-100 text-slate-600 font-black text-[10px] uppercase tracking-wide disabled:opacity-40'
+            >
+              ← Prev
+            </button>
+            <span className='text-[10px] font-black text-slate-400'>
+              Page {curPage + 1} of {pageCount}
+            </span>
+            <button
+              onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+              disabled={onLastPage}
+              className='h-10 px-4 rounded-xl bg-slate-100 text-slate-600 font-black text-[10px] uppercase tracking-wide disabled:opacity-40'
+            >
+              Next →
+            </button>
+          </div>
+        )}
+
+        {/* Submit — always available, but only after the last page when paginated */}
+        {(!paginated || onLastPage) && (
+          <button
+            onClick={() => submit(false)}
+            disabled={submitting}
+            className='w-full flex items-center justify-center gap-2 h-12 bg-[#002EFF] text-white rounded-2xl font-black text-[11px] uppercase tracking-wide hover:bg-blue-700 disabled:opacity-50'
+          >
+            {submitting ? (
+              <Loader2 size={16} className='animate-spin' />
+            ) : (
+              <CheckCircle2 size={16} />
+            )}
+            Submit quiz
+          </button>
+        )}
       </div>
     )
   }
