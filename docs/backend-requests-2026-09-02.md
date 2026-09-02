@@ -1,12 +1,13 @@
 # Backend requests — 2026-09-02
 
-Two new features plus one carry-over. As with the 2026-09-01 batch, the frontend
-is built (or will be built) **live-first** so each switches on automatically once
-the backend ships its side.
+Three new features plus one carry-over. As with the 2026-09-01 batch, the
+frontend is built **live-first** so each switches on automatically once the
+backend ships its side.
 
 1. [Notify programme students when a quiz is created](#1-quiz-created-notifications)
 2. [Free / public quizzes (no-login link, name + age)](#2-free--public-quizzes)
-3. [Carry-over: course-announcement delivery filtering](#3-carry-over)
+3. [Rich text / math formatting in questions](#3-rich-text--math-formatting-in-questions)
+4. [Carry-over: course-announcement delivery filtering](#4-carry-over)
 
 The **programme + department** key model from 2026-09-01 applies again: the
 dept-split programmes are JAMB, Post-UTME, WAEC, After-School (each Science / Art /
@@ -133,7 +134,36 @@ further frontend change.
 
 ---
 
-## 3. Carry-over
+## 3. Rich text / math formatting in questions
+
+Tutors can now format question text — **bold**, superscript / subscript, and
+math (`$x^3$`, `$\frac{1}{2}$`, `$\sqrt{16}$`, symbols like `π ≤ ± × ÷`). This is
+rendered on the frontend with Markdown + KaTeX, everywhere a question appears
+(question bank, quiz builder, student runner, guardian, public `/q/:link`).
+
+### ✅ No new endpoint
+
+Formatted content is stored **as plain text** in the existing fields — the
+markers (`**`, `$…$`, `^`, `_`, `\frac{}`) live inside the same strings you
+already store. Nothing about the API shape changes.
+
+### ⚠️ The one backend guarantee needed
+
+**Do not strip, escape, HTML-sanitize, or normalize these fields** — store and
+return them **verbatim**, including the characters `$ * ^ _ \ { } ~`:
+
+- Question `body` (and the folded comprehension `PASSAGE:` prefix)
+- Options `A`–`E`
+- `explanation`
+
+This applies on **`POST /questions`**, the **bulk Excel import**, and the
+**embedded questions inside `POST /quizzes`** (`subjects[].questions[]`). If any
+sanitizer currently escapes `$` or `\`, or collapses `**`, the math/formatting
+will break. A tutor typing `$x^3$` in the Excel template must get `$x^3$` back.
+
+---
+
+## 4. Carry-over
 
 Still open from 2026-09-01 (found during endpoint verification):
 
@@ -145,3 +175,8 @@ Still open from 2026-09-01 (found during endpoint verification):
   filters client-side as a safety net, so this isn't user-visible breakage — but
   it should be enforced server-side. See
   `docs/backend-requests-2026-09-01.md` §2.
+
+  > **Recommendation:** send this back to the backend dev — `GET /announcements`
+  > should filter `scope:"course"` posts to enrolled students server-side (right
+  > now it returns them to everyone). It's the one item that's only half-done:
+  > the **write path is correct, the delivery enforcement isn't.**

@@ -16,6 +16,7 @@ import {
   AlertCircle,
 } from 'lucide-react'
 import { dsaApi } from '@/lib/api'
+import RichText from '@/components/ui/RichText'
 import type { PublicQuizResult } from '@/lib/types'
 
 const LETTERS = ['A', 'B', 'C', 'D', 'E'] as const
@@ -309,9 +310,9 @@ export default function PublicQuizPage() {
                   <span className='text-[11px] font-black text-[#002EFF]'>
                     {i + 1}.
                   </span>
-                  <p className='text-[13px] font-bold text-slate-800 whitespace-pre-wrap flex-1'>
+                  <RichText className='text-[13px] font-bold text-slate-800 flex-1'>
                     {q.questionText}
-                  </p>
+                  </RichText>
                 </div>
                 <div className='space-y-1.5'>
                   {q.options.map((o, oi) => (
@@ -327,7 +328,7 @@ export default function PublicQuizPage() {
                       }`}
                     >
                       <span className='font-black mr-1.5'>{LETTERS[oi]}.</span>
-                      {o}
+                      <RichText className='inline'>{o}</RichText>
                     </button>
                   ))}
                 </div>

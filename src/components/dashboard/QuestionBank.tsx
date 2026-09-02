@@ -20,6 +20,8 @@ import { dsaApi } from '@/lib/api'
 import { getToken } from '@/lib/auth'
 import { uploadToCloudinary } from '@/lib/cloudinary'
 import { JAMB_SUBJECTS } from '@/app/admin/constants/quiz'
+import RichText from '@/components/ui/RichText'
+import RichTextField from '@/components/ui/RichTextField'
 
 // A ready-to-fill Excel template so tutors get the columns right.
 function downloadTemplate() {
@@ -340,19 +342,17 @@ export default function QuestionBank({ token }: { token?: string }) {
             className='h-10 px-3 rounded-lg bg-slate-50 outline-none text-sm font-medium'
           />
         </div>
-        <textarea
+        <RichTextField
           value={form.passage}
-          onChange={(e) => setForm((f) => ({ ...f, passage: e.target.value }))}
+          onChange={(v) => setForm((f) => ({ ...f, passage: v }))}
           placeholder='Passage (optional) — for comprehension. It shows above the question; reuse the same passage for each question about it.'
           rows={2}
-          className='w-full px-3 py-2 rounded-lg bg-slate-50 outline-none text-sm font-medium resize-none'
         />
-        <textarea
+        <RichTextField
           value={form.body}
-          onChange={(e) => setForm((f) => ({ ...f, body: e.target.value }))}
-          placeholder='Question…'
+          onChange={(v) => setForm((f) => ({ ...f, body: v }))}
+          placeholder='Question… (format with the toolbar — bold, x², H₂O, √, symbols)'
           rows={2}
-          className='w-full px-3 py-2 rounded-lg bg-slate-50 outline-none text-sm font-medium resize-none'
         />
 
         {/* Options */}
@@ -489,9 +489,9 @@ export default function QuestionBank({ token }: { token?: string }) {
                 {i + 1}
               </span>
               <div className='min-w-0 flex-1'>
-                <p className='text-[13px] font-bold text-slate-800 whitespace-pre-wrap'>
+                <RichText className='text-[13px] font-bold text-slate-800'>
                   {q.body}
-                </p>
+                </RichText>
                 {q.imageUrl && (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -510,7 +510,7 @@ export default function QuestionBank({ token }: { token?: string }) {
                           : 'bg-slate-50 text-slate-500'
                       }`}
                     >
-                      {LETTERS[oi]}. {o}
+                      {LETTERS[oi]}. <RichText className='inline'>{o}</RichText>
                     </span>
                   ))}
                 </div>
