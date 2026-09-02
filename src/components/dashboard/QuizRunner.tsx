@@ -72,7 +72,8 @@ export default function QuizRunner() {
   // split-screen). Auto-submit after more than two.
   const [breaches, setBreaches] = useState(0)
   const breachRef = useRef(0)
-  const MAX_BREACHES = 2
+  const [showWarning, setShowWarning] = useState(false)
+  const MAX_BREACHES = 5
 
   const loadList = useCallback(async () => {
     setLoading(true)
@@ -148,11 +149,18 @@ export default function QuizRunner() {
     return () => clearInterval(id)
   }, [view, submit])
 
-  // Register a "left the quiz" breach; the 3rd one auto-submits.
+  // Register a "left the quiz" breach; auto-submits once past MAX_BREACHES.
+  // Within the limit, raise a blocking warning modal so the student sees it the
+  // moment they return (an inline banner is easy to miss, especially on mobile
+  // where switching apps hides the page entirely).
   const registerBreach = useCallback(() => {
     breachRef.current += 1
     setBreaches(breachRef.current)
-    if (breachRef.current > MAX_BREACHES) submit(true)
+    if (breachRef.current > MAX_BREACHES) {
+      submit(true)
+    } else {
+      setShowWarning(true)
+    }
   }, [submit])
 
   // Anti-cheating: detect tab switches, minimising and split-screen (focus loss)
@@ -217,6 +225,7 @@ export default function QuizRunner() {
       setResult(null)
       breachRef.current = 0
       setBreaches(0)
+      setShowWarning(false)
       const secs = (minutes || Number(full.timeLimit) || 0) * 60
       totalTime.current = secs
       setRemaining(secs)
@@ -320,9 +329,41 @@ export default function QuizRunner() {
           >
             {breaches > 0
               ? `Warning ${breaches}/${MAX_BREACHES} — leaving the quiz again will auto-submit it.`
-              : 'Stay on this screen — no tab-switching, minimising or split-screen. The quiz auto-submits after 2 warnings.'}
+              : `Stay on this screen — no tab-switching, minimising or split-screen. The quiz auto-submits after ${MAX_BREACHES} warnings.`}
           </p>
         </div>
+
+        {/* Blocking warning shown the moment the student returns after leaving.
+            A full-screen modal so it can't be missed (esp. on mobile). */}
+        {showWarning && breaches > 0 && breaches <= MAX_BREACHES && (
+          <div className='fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-5'>
+            <div className='w-full max-w-sm bg-white rounded-3xl shadow-2xl p-6 text-center'>
+              <div className='h-16 w-16 mx-auto rounded-2xl bg-rose-50 text-rose-500 flex items-center justify-center mb-3'>
+                <AlertTriangle size={30} />
+              </div>
+              <p className='text-lg font-black text-slate-900'>
+                Warning {breaches} of {MAX_BREACHES}
+              </p>
+              <p className='text-[12px] font-bold text-slate-500 mt-2'>
+                You left the quiz screen. Don&apos;t switch tabs, minimise, or open
+                another app while taking the quiz.
+              </p>
+              <p className='text-[11px] font-black text-rose-600 mt-3'>
+                {MAX_BREACHES - breaches > 0
+                  ? `${MAX_BREACHES - breaches} warning${
+                      MAX_BREACHES - breaches === 1 ? '' : 's'
+                    } left — the next leave after that auto-submits.`
+                  : 'One more time and the quiz auto-submits.'}
+              </p>
+              <button
+                onClick={() => setShowWarning(false)}
+                className='mt-5 w-full h-11 bg-[#002EFF] text-white rounded-xl font-black text-[11px] uppercase tracking-wide active:scale-[0.98]'
+              >
+                Continue quiz
+              </button>
+            </div>
+          </div>
+        )}
 
         {error && <p className='text-[11px] font-bold text-rose-600 px-1'>{error}</p>}
 
