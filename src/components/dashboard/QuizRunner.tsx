@@ -10,15 +10,20 @@ import {
   Play,
   CheckCircle2,
   XCircle,
-  Trophy,
   ArrowLeft,
   AlertTriangle,
   Download,
   Eye,
   RotateCcw,
+  Calculator as CalculatorIcon,
+  AlertCircle,
+  Target,
+  Home,
+  BarChart3,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import RichText from '@/components/ui/RichText'
+import { ScientificCalculator } from '@/app/rapid-quiz/components/Calculator'
 import { dsaApi } from '@/lib/api'
 import { getToken, getUser } from '@/lib/auth'
 import { capFor } from '@/lib/access'
@@ -80,6 +85,8 @@ export default function QuizRunner() {
   // Pagination while taking: how many questions to show per page (0 = all).
   const [perPage, setPerPage] = useState(0)
   const [page, setPage] = useState(0)
+  const [showCalc, setShowCalc] = useState(false)
+  const [confirmSubmit, setConfirmSubmit] = useState(false)
   const MAX_BREACHES = 5
 
   const loadList = useCallback(async () => {
@@ -235,6 +242,8 @@ export default function QuizRunner() {
       setShowWarning(false)
       setShowCorrections(false)
       setPage(0)
+      setShowCalc(false)
+      setConfirmSubmit(false)
       const secs = (minutes || Number(full.timeLimit) || 0) * 60
       totalTime.current = secs
       setRemaining(secs)
@@ -338,39 +347,54 @@ export default function QuizRunner() {
       URL.revokeObjectURL(url)
     }
 
+    const band =
+      pct >= 75
+        ? 'Excellent!'
+        : pct >= 50
+          ? 'Well done'
+          : pct >= 40
+            ? 'Keep going'
+            : 'Practice required'
     return (
       <div className='max-w-2xl mx-auto space-y-5'>
-        <Card className='p-8 rounded-4xl border-none shadow-sm bg-[#002EFF] text-white text-center'>
-          <Trophy size={40} className='mx-auto text-[#FCB900] mb-2' />
-          <p className='text-[11px] font-black uppercase tracking-widest text-blue-200'>
-            Your Score
-          </p>
-          <p className='text-5xl font-black mt-1'>{pct}%</p>
-          <p className='text-sm font-bold text-blue-100 mt-1'>
-            {result.totalScore} / {result.totalMarks} marks
-          </p>
-        </Card>
-
-        {/* Per-subject scores */}
-        {subjects.length > 0 && (
-          <Card className='p-4 rounded-3xl border-none shadow-sm bg-white'>
-            <p className='text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2'>
-              Scores by subject
+        {/* Score + performance analysis card */}
+        <Card className='rounded-4xl border-none shadow-sm bg-white overflow-hidden'>
+          <div className='p-7 text-center'>
+            <div className='h-14 w-14 mx-auto rounded-2xl bg-slate-50 text-slate-700 flex items-center justify-center mb-3'>
+              <Target size={26} />
+            </div>
+            <p className='text-5xl font-black text-slate-900 leading-none'>
+              {pct}
+              <span className='text-2xl text-slate-400'>%</span>
             </p>
-            <div className='space-y-2.5'>
+            <p className='text-[11px] font-black uppercase tracking-widest text-slate-400 mt-2'>
+              {band}
+            </p>
+            <p className='text-[11px] font-bold text-slate-400 mt-1'>
+              {result.totalScore} / {result.totalMarks} marks
+            </p>
+          </div>
+
+          {subjects.length > 0 && (
+            <div className='border-t border-slate-100 p-6 space-y-3'>
+              <p className='text-[9px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5'>
+                <BarChart3 size={12} /> Performance analysis
+              </p>
               {subjects.map(([name, s]) => {
                 const sp = s.total ? Math.round((s.earned / s.total) * 100) : 0
                 return (
                   <div key={name}>
                     <div className='flex items-center justify-between mb-1'>
-                      <span className='text-[11px] font-black text-slate-700'>
+                      <span className='text-[12px] font-black text-slate-700 uppercase'>
                         {name}
                       </span>
-                      <span className='text-[10px] font-bold text-slate-400'>
-                        {s.earned}/{s.total} · {sp}%
+                      <span
+                        className={`text-[12px] font-black ${sp >= 50 ? 'text-emerald-600' : 'text-rose-500'}`}
+                      >
+                        {sp}%
                       </span>
                     </div>
-                    <div className='h-2 bg-slate-100 rounded-full overflow-hidden'>
+                    <div className='h-1.5 bg-slate-100 rounded-full overflow-hidden'>
                       <div
                         className={`h-full rounded-full ${sp >= 50 ? 'bg-emerald-500' : 'bg-rose-400'}`}
                         style={{ width: `${sp}%` }}
@@ -380,25 +404,39 @@ export default function QuizRunner() {
                 )
               })}
             </div>
-          </Card>
-        )}
+          )}
+        </Card>
 
-        {/* Actions */}
-        <div className={`grid ${canSeeCorrections ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
-          <button
-            onClick={downloadResult}
-            className='flex items-center justify-center gap-2 h-11 rounded-xl bg-slate-100 text-slate-700 font-black text-[10px] uppercase tracking-wide hover:bg-slate-200'
-          >
-            <Download size={14} /> Download
-          </button>
-          {canSeeCorrections && (
+        {/* Actions — Review / Report, then Try again / Dashboard */}
+        <div className='grid grid-cols-2 gap-2'>
+          {canSeeCorrections ? (
             <button
               onClick={() => setShowCorrections((v) => !v)}
-              className='flex items-center justify-center gap-2 h-11 rounded-xl bg-[#FCB900] text-[#002EFF] font-black text-[10px] uppercase tracking-wide'
+              className='flex items-center justify-center gap-2 h-12 rounded-2xl bg-slate-900 text-white font-black text-[11px] uppercase tracking-wide active:scale-[0.98]'
             >
-              <Eye size={14} /> {showCorrections ? 'Hide' : 'View'} corrections
+              <Eye size={15} /> {showCorrections ? 'Hide' : 'Review'}
             </button>
+          ) : (
+            <div />
           )}
+          <button
+            onClick={downloadResult}
+            className={`flex items-center justify-center gap-2 h-12 rounded-2xl bg-[#002EFF] text-white font-black text-[11px] uppercase tracking-wide active:scale-[0.98] ${canSeeCorrections ? '' : 'col-span-2'}`}
+          >
+            <Download size={15} /> Report
+          </button>
+          <button
+            onClick={() => quiz && start(quiz)}
+            className='flex items-center justify-center gap-2 h-11 rounded-2xl bg-slate-100 text-slate-500 font-black text-[10px] uppercase tracking-wide hover:text-[#002EFF]'
+          >
+            <RotateCcw size={14} /> Try again
+          </button>
+          <button
+            onClick={() => setView('list')}
+            className='flex items-center justify-center gap-2 h-11 rounded-2xl bg-slate-100 text-slate-500 font-black text-[10px] uppercase tracking-wide hover:text-[#002EFF]'
+          >
+            <Home size={14} /> Dashboard
+          </button>
         </div>
 
         {/* Corrections — only when allowed and the student chooses to view them */}
@@ -423,21 +461,6 @@ export default function QuizRunner() {
             ))}
           </div>
         )}
-
-        <div className='flex items-center justify-between pt-1'>
-          <button
-            onClick={() => setView('list')}
-            className='flex items-center gap-2 text-[11px] font-black uppercase text-[#002EFF]'
-          >
-            <ArrowLeft size={14} /> Back to quizzes
-          </button>
-          <button
-            onClick={() => quiz && start(quiz)}
-            className='flex items-center gap-2 text-[11px] font-black uppercase text-slate-500 hover:text-[#002EFF]'
-          >
-            <RotateCcw size={14} /> Retake
-          </button>
-        </div>
       </div>
     )
   }
@@ -616,7 +639,7 @@ export default function QuizRunner() {
         {/* Submit — always available, but only after the last page when paginated */}
         {(!paginated || onLastPage) && (
           <button
-            onClick={() => submit(false)}
+            onClick={() => setConfirmSubmit(true)}
             disabled={submitting}
             className='w-full flex items-center justify-center gap-2 h-12 bg-[#002EFF] text-white rounded-2xl font-black text-[11px] uppercase tracking-wide hover:bg-blue-700 disabled:opacity-50'
           >
@@ -627,6 +650,66 @@ export default function QuizRunner() {
             )}
             Submit quiz
           </button>
+        )}
+
+        {/* Floating calculator toggle + the draggable calculator */}
+        <button
+          onClick={() => setShowCalc((v) => !v)}
+          className='fixed bottom-6 right-6 z-40 h-12 w-12 rounded-2xl bg-[#002EFF] text-white shadow-xl flex items-center justify-center active:scale-95'
+          title='Calculator'
+        >
+          <CalculatorIcon size={20} />
+        </button>
+        {showCalc && <ScientificCalculator onClose={() => setShowCalc(false)} />}
+
+        {/* Submit confirmation */}
+        {confirmSubmit && (
+          <div className='fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-5'>
+            <div className='w-full max-w-sm bg-white rounded-4xl shadow-2xl p-7 text-center'>
+              <div className='h-14 w-14 mx-auto rounded-2xl bg-blue-50 text-[#002EFF] flex items-center justify-center mb-3'>
+                <AlertCircle size={26} />
+              </div>
+              <p className='text-xl font-black text-slate-900 tracking-tight'>
+                Submit quiz?
+              </p>
+              <p className='text-[10px] font-black uppercase tracking-widest text-slate-400 mt-1'>
+                Confirm your progress below
+              </p>
+              <div className='flex items-center justify-center gap-6 my-5'>
+                <div>
+                  <p className='text-3xl font-black text-[#002EFF]'>{answered}</p>
+                  <p className='text-[9px] font-black uppercase tracking-widest text-slate-400'>
+                    Solved
+                  </p>
+                </div>
+                <div className='h-10 w-px bg-slate-200' />
+                <div>
+                  <p className='text-3xl font-black text-rose-500'>
+                    {questions.length - answered}
+                  </p>
+                  <p className='text-[9px] font-black uppercase tracking-widest text-slate-400'>
+                    Empty
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setConfirmSubmit(false)
+                  submit(false)
+                }}
+                disabled={submitting}
+                className='w-full h-12 bg-[#002EFF] text-white rounded-2xl font-black text-[11px] uppercase tracking-wide active:scale-[0.98] disabled:opacity-60'
+              >
+                Confirm &amp; submit
+              </button>
+              <button
+                onClick={() => setConfirmSubmit(false)}
+                className='mt-3 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-[#002EFF]'
+              >
+                Review questions
+              </button>
+            </div>
+          </div>
         )}
       </div>
     )
