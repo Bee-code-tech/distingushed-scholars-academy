@@ -106,6 +106,10 @@ export default function QuizBuilder() {
   // Access mode: 'portal' (enrolled students, audience-filtered) or 'free'
   // (public link, anyone with name + age). Free quizzes are always 'all'.
   const [accessMode, setAccessMode] = useState<'portal' | 'free'>('portal')
+  // Attempts & result controls. maxAttempts 0 = unlimited.
+  const [maxAttempts, setMaxAttempts] = useState('1')
+  const [showResults, setShowResults] = useState(true)
+  const [showCorrections, setShowCorrections] = useState(true)
   const [blocks, setBlocks] = useState<SubjectBlock[]>([])
   const [publishing, setPublishing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -172,6 +176,10 @@ export default function QuizBuilder() {
           description: description.trim() || title.trim(),
           type: 'general',
           accessMode,
+          // Attempts & result controls (see docs/backend-requests-2026-09-02.md).
+          maxAttempts: Math.max(0, parseInt(maxAttempts, 10) || 0),
+          showResults,
+          showCorrections,
           // Audience targeting — students only see quizzes for their programme.
           track: effectiveTrack === 'all' ? 'all' : effectiveTrack,
           department: dept,
@@ -203,6 +211,9 @@ export default function QuizBuilder() {
       setTrack('all')
       setDepartment('science')
       setAccessMode('portal')
+      setMaxAttempts('1')
+      setShowResults(true)
+      setShowCorrections(true)
       setBlocks([])
       flash(isFree ? 'Free quiz published' : 'Quiz published')
       loadList()
@@ -400,6 +411,51 @@ export default function QuizBuilder() {
             quiz, then see their result.
           </p>
         )}
+
+        {/* Attempts & result controls */}
+        <div className='rounded-2xl bg-slate-50/70 p-3 space-y-2.5'>
+          <p className='text-[9px] font-black uppercase text-slate-400'>
+            Attempts &amp; results
+          </p>
+          <label className='flex items-center justify-between gap-3'>
+            <span className='text-[11px] font-bold text-slate-600'>
+              Attempts allowed{' '}
+              <span className='text-slate-400'>(0 = unlimited)</span>
+            </span>
+            <input
+              type='number'
+              min={0}
+              value={maxAttempts}
+              onChange={(e) => setMaxAttempts(e.target.value)}
+              className='w-20 h-9 px-2 rounded-lg bg-white border border-slate-200 outline-none text-[12px] font-black text-center'
+            />
+          </label>
+          <label className='flex items-center justify-between gap-3 cursor-pointer'>
+            <span className='text-[11px] font-bold text-slate-600'>
+              Show results to students
+            </span>
+            <input
+              type='checkbox'
+              checked={showResults}
+              onChange={(e) => setShowResults(e.target.checked)}
+              className='h-4 w-4 accent-[#002EFF]'
+            />
+          </label>
+          <label
+            className={`flex items-center justify-between gap-3 cursor-pointer ${!showResults ? 'opacity-50' : ''}`}
+          >
+            <span className='text-[11px] font-bold text-slate-600'>
+              Allow viewing corrections
+            </span>
+            <input
+              type='checkbox'
+              checked={showCorrections && showResults}
+              disabled={!showResults}
+              onChange={(e) => setShowCorrections(e.target.checked)}
+              className='h-4 w-4 accent-[#002EFF]'
+            />
+          </label>
+        </div>
 
         {blocks.map((b, i) => (
           <SubjectBlockEditor

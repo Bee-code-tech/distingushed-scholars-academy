@@ -252,6 +252,33 @@ export default function QuizRunner() {
         ? Math.round((result.totalScore / result.totalMarks) * 100)
         : 0
 
+    // Admin can hide the score and/or corrections for a quiz.
+    const canSeeResults = quiz?.showResults !== false
+    const canSeeCorrections = quiz?.showCorrections !== false && canSeeResults
+
+    // When results are hidden, just confirm the submission.
+    if (!canSeeResults) {
+      return (
+        <div className='max-w-2xl mx-auto'>
+          <Card className='p-8 rounded-4xl border-none shadow-sm bg-white text-center'>
+            <CheckCircle2 size={40} className='mx-auto text-emerald-500 mb-2' />
+            <p className='text-sm font-black text-slate-800 uppercase'>
+              Answers submitted
+            </p>
+            <p className='text-[12px] font-bold text-slate-400 mt-1'>
+              Your results for “{str(quiz?.title)}” are not shown here.
+            </p>
+            <button
+              onClick={() => setView('list')}
+              className='mt-5 inline-flex items-center gap-2 text-[11px] font-black uppercase text-[#002EFF]'
+            >
+              <ArrowLeft size={14} /> Back to quizzes
+            </button>
+          </Card>
+        </div>
+      )
+    }
+
     // Per-subject scores: join the breakdown (by questionId) onto the questions
     // we took (which carry the subject) and total the marks per subject.
     const marksById = new Map(
@@ -353,23 +380,25 @@ export default function QuizRunner() {
         )}
 
         {/* Actions */}
-        <div className='grid grid-cols-2 gap-2'>
+        <div className={`grid ${canSeeCorrections ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
           <button
             onClick={downloadResult}
             className='flex items-center justify-center gap-2 h-11 rounded-xl bg-slate-100 text-slate-700 font-black text-[10px] uppercase tracking-wide hover:bg-slate-200'
           >
             <Download size={14} /> Download
           </button>
-          <button
-            onClick={() => setShowCorrections((v) => !v)}
-            className='flex items-center justify-center gap-2 h-11 rounded-xl bg-[#FCB900] text-[#002EFF] font-black text-[10px] uppercase tracking-wide'
-          >
-            <Eye size={14} /> {showCorrections ? 'Hide' : 'View'} corrections
-          </button>
+          {canSeeCorrections && (
+            <button
+              onClick={() => setShowCorrections((v) => !v)}
+              className='flex items-center justify-center gap-2 h-11 rounded-xl bg-[#FCB900] text-[#002EFF] font-black text-[10px] uppercase tracking-wide'
+            >
+              <Eye size={14} /> {showCorrections ? 'Hide' : 'View'} corrections
+            </button>
+          )}
         </div>
 
-        {/* Corrections — only when the student chooses to view them */}
-        {showCorrections && (
+        {/* Corrections — only when allowed and the student chooses to view them */}
+        {canSeeCorrections && showCorrections && (
           <div className='space-y-2'>
             {result.breakdown?.map((b, i) => (
               <Card

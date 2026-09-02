@@ -8,6 +8,8 @@ backend ships its side.
 2. [Free / public quizzes (no-login link, name + age)](#2-free--public-quizzes)
 3. [Rich text / math formatting in questions](#3-rich-text--math-formatting-in-questions)
 4. [Carry-over: course-announcement delivery filtering](#4-carry-over)
+5. [Quiz attempts & result controls](#5-quiz-attempts--result-controls)
+6. [Admin quiz attempt analytics](#6-admin-quiz-attempt-analytics)
 
 The **programme + department** key model from 2026-09-01 applies again: the
 dept-split programmes are JAMB, Post-UTME, WAEC, After-School (each Science / Art /
@@ -180,3 +182,66 @@ Still open from 2026-09-01 (found during endpoint verification):
   > should filter `scope:"course"` posts to enrolled students server-side (right
   > now it returns them to everyone). It's the one item that's only half-done:
   > the **write path is correct, the delivery enforcement isn't.**
+
+---
+
+## 5. Quiz attempts & result controls
+
+The admin quiz builder now sets three controls when publishing a quiz. The
+frontend sends them on `POST /quizzes` and reads them back on `GET /quizzes[/:id]`:
+
+```json
+{ "maxAttempts": 1, "showResults": true, "showCorrections": true }
+```
+
+- **`maxAttempts`** (int, `0` = unlimited) — how many times a student may take
+  the quiz. **Enforce server-side on submit:** reject a submission (409/403) once
+  the student has used all attempts, and expose the student's used-attempt count
+  (e.g. on `GET /quizzes/:id`, a per-student `attemptsUsed`) so the portal can
+  disable the **Retake** button instead of relying on a rejected submit.
+- **`showResults`** (bool) — when `false`, the submit response should omit the
+  score/breakdown (or flag it) so the student only sees "submitted". The portal
+  already hides the score when `showResults === false`.
+- **`showCorrections`** (bool) — when `false`, the student can't open the
+  per-question corrections. The portal hides the "View corrections" button.
+
+### Richer corrections data (needed for real corrections)
+
+The submit breakdown currently returns only `{ questionId, isCorrect,
+marksEarned, questionText }`. To show **actual corrections** (what the student
+picked, what was right, and why), the breakdown should also include, per
+question — only when `showCorrections` is true:
+
+```json
+{ "selectedOption": 2, "correctOption": 0, "options": ["..."], "explanation": "..." }
+```
+
+Then the portal can render the student's choice vs the correct one with the
+explanation, instead of just a right/wrong tick.
+
+---
+
+## 6. Admin quiz attempt analytics
+
+From the admin quiz list, the admin needs to see who took each quiz and manage
+attempts. All admin-only:
+
+- **`GET /quizzes/:id/attempts`** → every attempt for the quiz:
+  `[{ attemptId, studentId, studentName, score, totalMarks, percentage, attemptsUsed, submittedAt }]`,
+  plus a total **count** (also handy as `GET /quizzes/:id` → `takenCount`).
+- **`GET /quizzes/:id/leaderboard`** already exists — surface it in the admin
+  quiz view (top scores, ranked; tie-break by `timeTaken`).
+- **`DELETE /quizzes/:id/attempts/:attemptId`** (admin) → delete one student's
+  attempt (frees an attempt so they can retake; removes it from the leaderboard).
+- **`POST /quizzes/:id/attempts/:attemptId/withdraw`** (or a `PATCH` with
+  `{ withdrawn: true }`) → withdraw/void a result without deleting the record
+  (keeps the audit trail, excludes it from the leaderboard and the student's
+  view).
+
+Frontend: an admin "Attempts" panel on each quiz (count, list, leaderboard, and
+per-row delete / withdraw) will be built live-first against these routes.
+
+### Not a backend item — student pagination
+
+"Questions per page" (let the student page through the quiz N questions at a
+time) is a **frontend-only** change — no endpoint needed.
