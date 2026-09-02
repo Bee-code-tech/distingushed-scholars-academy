@@ -9,6 +9,7 @@ import {
   Video,
   CheckCheck,
   Loader2,
+  HelpCircle,
 } from 'lucide-react'
 import { getToken } from '@/lib/auth'
 import { isDemoToken } from '@/lib/demoAccounts'
@@ -39,6 +40,8 @@ function iconFor(type: string) {
       return Award
     case 'class_reminder':
       return Video
+    case 'quiz':
+      return HelpCircle
     default:
       return Bell
   }
@@ -132,6 +135,17 @@ export default function NotificationBell() {
     }
   }
 
+  // Click a notification: mark it read, then follow its deep link (e.g. a quiz
+  // notification opens the Quizzes tab). A full navigation is used so the
+  // target dashboard re-reads the `?tab=` param even when it's already mounted.
+  const openNotif = (n: Notif) => {
+    if (!n.isRead) void markRead(n.id)
+    if (n.link) {
+      setOpen(false)
+      window.location.assign(n.link)
+    }
+  }
+
   const markAllRead = async () => {
     setItems((prev) => prev.map((n) => ({ ...n, isRead: true })))
     try {
@@ -192,7 +206,7 @@ export default function NotificationBell() {
                 return (
                   <button
                     key={n.id}
-                    onClick={() => !n.isRead && markRead(n.id)}
+                    onClick={() => openNotif(n)}
                     className={`w-full text-left flex gap-3 px-4 py-3 border-b border-slate-50 last:border-0 transition-colors ${n.isRead ? 'bg-white hover:bg-slate-50/60' : 'bg-blue-50/50 hover:bg-blue-50'}`}
                   >
                     <div

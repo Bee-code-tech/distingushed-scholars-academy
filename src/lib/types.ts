@@ -223,6 +223,23 @@ export interface Quiz {
   durationMinutes?: number
   questions: Question[]
   createdAt?: string
+  // Audience targeting (see docs/backend-requests-2026-09-01.md §3).
+  track?: string
+  department?: string
+  audience?: string
+  // Access mode (see docs/backend-requests-2026-09-02.md §2):
+  //  'portal' — enrolled/logged-in students, filtered by track/department.
+  //  'free'   — public; anyone with the `link` takes it with just name + age.
+  // Free quizzes are always open to everyone (track is forced to 'all').
+  accessMode?: 'portal' | 'free'
+}
+
+/** Result returned by a public (free) quiz submission. */
+export interface PublicQuizResult {
+  totalScore: number
+  totalMarks: number
+  percentage: number
+  breakdown?: unknown[]
 }
 
 export interface QuizAnswer {

@@ -15,6 +15,8 @@ import {
   Copy,
   ListPlus,
   Clock,
+  Users,
+  Link as LinkIcon,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { dsaApi } from '@/lib/api'
@@ -101,10 +103,16 @@ export default function QuizBuilder() {
   // Audience: which programme (+ department) the quiz targets. 'all' = everyone.
   const [track, setTrack] = useState<ExamTrack | 'all'>('all')
   const [department, setDepartment] = useState<Department>('science')
+  // Access mode: 'portal' (enrolled students, audience-filtered) or 'free'
+  // (public link, anyone with name + age). Free quizzes are always 'all'.
+  const [accessMode, setAccessMode] = useState<'portal' | 'free'>('portal')
   const [blocks, setBlocks] = useState<SubjectBlock[]>([])
   const [publishing, setPublishing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  // Shareable public link shown after a free quiz is published.
+  const [publicLink, setPublicLink] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
 
   const loadList = useCallback(async () => {
     setLoadingList(true)
@@ -148,18 +156,29 @@ export default function QuizBuilder() {
     if (title.trim().length < 3) return setError('Enter a quiz title.')
     if (totalQuestions === 0) return setError('Add at least one question.')
     setPublishing(true)
+    setPublicLink(null)
+    setCopied(false)
+    // Free quizzes are always open to everyone — force the audience to 'all'.
+    const isFree = accessMode === 'free'
+    const effectiveTrack = isFree ? 'all' : track
     const dept =
-      track !== 'all' && isDeptSplitTrack(track) ? department : undefined
+      !isFree && effectiveTrack !== 'all' && isDeptSplitTrack(effectiveTrack)
+        ? department
+        : undefined
     try {
-      await dsaApi.quizzes.create(
+      const created = (await dsaApi.quizzes.create(
         {
           title: title.trim(),
           description: description.trim() || title.trim(),
           type: 'general',
+          accessMode,
           // Audience targeting — students only see quizzes for their programme.
-          track: track === 'all' ? 'all' : track,
+          track: effectiveTrack === 'all' ? 'all' : effectiveTrack,
           department: dept,
-          audience: audienceLabel(track === 'all' ? null : track, dept),
+          audience: audienceLabel(
+            effectiveTrack === 'all' ? null : effectiveTrack,
+            dept,
+          ),
           subjects: blocks
             .filter((b) => b.picked.length)
             .map((b) => ({
@@ -169,13 +188,23 @@ export default function QuizBuilder() {
             })),
         } as Record<string, unknown>,
         token,
-      )
+      )) as { link?: string } | undefined
+      if (isFree) {
+        // Show the shareable public link (the backend returns a `link` slug).
+        const slug = created?.link
+        setPublicLink(
+          slug
+            ? `${window.location.origin}/q/${slug}`
+            : 'link-pending', // backend hasn't shipped the slug yet
+        )
+      }
       setTitle('')
       setDescription('')
       setTrack('all')
       setDepartment('science')
+      setAccessMode('portal')
       setBlocks([])
-      flash('Quiz published')
+      flash(isFree ? 'Free quiz published' : 'Quiz published')
       loadList()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not publish the quiz.')
@@ -224,6 +253,44 @@ export default function QuizBuilder() {
         </div>
       )}
 
+      {publicLink && (
+        <div className='rounded-2xl border border-[#FCB900]/50 bg-amber-50 px-4 py-3 space-y-2'>
+          <p className='text-[10px] font-black uppercase tracking-widest text-amber-700 flex items-center gap-1.5'>
+            <LinkIcon size={13} /> Shareable quiz link
+          </p>
+          {publicLink === 'link-pending' ? (
+            <p className='text-[11px] font-bold text-amber-700'>
+              The quiz is published as free. The public link will appear here once
+              the backend returns its slug.
+            </p>
+          ) : (
+            <div className='flex items-center gap-2'>
+              <input
+                readOnly
+                value={publicLink}
+                onFocus={(e) => e.currentTarget.select()}
+                className='flex-1 h-9 px-2 rounded-lg bg-white border border-amber-200 text-[11px] font-bold text-slate-700 outline-none'
+              />
+              <button
+                type='button'
+                onClick={() => {
+                  navigator.clipboard?.writeText(publicLink)
+                  setCopied(true)
+                  setTimeout(() => setCopied(false), 1800)
+                }}
+                className='h-9 px-3 rounded-lg bg-[#002EFF] text-white text-[10px] font-black uppercase flex items-center gap-1.5'
+              >
+                {copied ? <Check size={13} /> : <Copy size={13} />}
+                {copied ? 'Copied' : 'Copy'}
+              </button>
+            </div>
+          )}
+          <p className='text-[9px] font-bold text-amber-600'>
+            Anyone with this link can take the quiz — no account needed.
+          </p>
+        </div>
+      )}
+
       {/* Builder */}
       <Card className='p-5 rounded-3xl border-none shadow-sm bg-white space-y-3'>
         {error && <p className='text-[11px] font-bold text-rose-600'>{error}</p>}
@@ -240,46 +307,99 @@ export default function QuizBuilder() {
           className='w-full h-10 px-3 rounded-lg bg-slate-50 outline-none text-sm font-medium'
         />
 
-        {/* Audience: which programme (+ department) sees this quiz */}
+        {/* Access mode: portal (enrolled students) vs free (public link) */}
         <div className='rounded-2xl bg-slate-50/70 p-3 space-y-2'>
           <p className='text-[9px] font-black uppercase text-slate-400'>
-            Who sees this quiz
+            Access
           </p>
-          <div className='flex flex-wrap items-center gap-2'>
-            <select
-              value={track}
-              onChange={(e) => setTrack(e.target.value as ExamTrack | 'all')}
-              className='h-9 px-2 rounded-lg bg-white border border-slate-200 outline-none text-[12px] font-black'
+          <div className='grid grid-cols-2 gap-2'>
+            <button
+              type='button'
+              onClick={() => setAccessMode('portal')}
+              className={`flex flex-col items-start gap-0.5 rounded-xl px-3 py-2 border text-left transition-all ${
+                accessMode === 'portal'
+                  ? 'bg-[#002EFF] text-white border-[#002EFF] shadow'
+                  : 'bg-white text-slate-600 border-slate-200 hover:border-[#002EFF]/40'
+              }`}
             >
-              <option value='all'>All students</option>
-              {QUIZ_TRACKS.map((t) => (
-                <option key={t} value={t}>
-                  {EXAM_TRACKS[t].label}
-                </option>
-              ))}
-            </select>
-            {track !== 'all' && isDeptSplitTrack(track) && (
+              <span className='flex items-center gap-1.5 text-[11px] font-black'>
+                <Users size={13} /> Portal
+              </span>
+              <span
+                className={`text-[9px] font-bold ${accessMode === 'portal' ? 'text-blue-100' : 'text-slate-400'}`}
+              >
+                Enrolled students, by programme
+              </span>
+            </button>
+            <button
+              type='button'
+              onClick={() => setAccessMode('free')}
+              className={`flex flex-col items-start gap-0.5 rounded-xl px-3 py-2 border text-left transition-all ${
+                accessMode === 'free'
+                  ? 'bg-[#FCB900] text-[#002EFF] border-[#FCB900] shadow'
+                  : 'bg-white text-slate-600 border-slate-200 hover:border-[#FCB900]/60'
+              }`}
+            >
+              <span className='flex items-center gap-1.5 text-[11px] font-black'>
+                <LinkIcon size={13} /> Free (public link)
+              </span>
+              <span
+                className={`text-[9px] font-bold ${accessMode === 'free' ? 'text-[#002EFF]/70' : 'text-slate-400'}`}
+              >
+                Anyone — just name &amp; age
+              </span>
+            </button>
+          </div>
+        </div>
+
+        {/* Audience: which programme (+ department) sees this quiz (portal only) */}
+        {accessMode === 'portal' ? (
+          <div className='rounded-2xl bg-slate-50/70 p-3 space-y-2'>
+            <p className='text-[9px] font-black uppercase text-slate-400'>
+              Who sees this quiz
+            </p>
+            <div className='flex flex-wrap items-center gap-2'>
               <select
-                value={department}
-                onChange={(e) => setDepartment(e.target.value as Department)}
+                value={track}
+                onChange={(e) => setTrack(e.target.value as ExamTrack | 'all')}
                 className='h-9 px-2 rounded-lg bg-white border border-slate-200 outline-none text-[12px] font-black'
               >
-                {QUIZ_DEPARTMENTS.map((d) => (
-                  <option key={d} value={d}>
-                    {DEPARTMENT_LABELS[d]}
+                <option value='all'>All students</option>
+                {QUIZ_TRACKS.map((t) => (
+                  <option key={t} value={t}>
+                    {EXAM_TRACKS[t].label}
                   </option>
                 ))}
               </select>
-            )}
-            <span className='text-[10px] font-bold text-slate-400'>
-              →{' '}
-              {audienceLabel(
-                track === 'all' ? null : track,
-                track !== 'all' && isDeptSplitTrack(track) ? department : null,
+              {track !== 'all' && isDeptSplitTrack(track) && (
+                <select
+                  value={department}
+                  onChange={(e) => setDepartment(e.target.value as Department)}
+                  className='h-9 px-2 rounded-lg bg-white border border-slate-200 outline-none text-[12px] font-black'
+                >
+                  {QUIZ_DEPARTMENTS.map((d) => (
+                    <option key={d} value={d}>
+                      {DEPARTMENT_LABELS[d]}
+                    </option>
+                  ))}
+                </select>
               )}
-            </span>
+              <span className='text-[10px] font-bold text-slate-400'>
+                →{' '}
+                {audienceLabel(
+                  track === 'all' ? null : track,
+                  track !== 'all' && isDeptSplitTrack(track) ? department : null,
+                )}
+              </span>
+            </div>
           </div>
-        </div>
+        ) : (
+          <p className='text-[10px] font-bold text-slate-400 px-1'>
+            Open to <span className='text-[#002EFF]'>everyone</span> via a shareable
+            link — no account needed. Takers enter their name and age, take the
+            quiz, then see their result.
+          </p>
+        )}
 
         {blocks.map((b, i) => (
           <SubjectBlockEditor

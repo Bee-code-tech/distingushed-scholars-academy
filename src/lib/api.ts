@@ -10,7 +10,9 @@ import type {
   ResetPasswordPayload,
   User,
   Quiz,
+  QuizAnswer,
   QuizSubmission,
+  PublicQuizResult,
   LeaderboardEntry,
   Program,
 } from './types'
@@ -225,6 +227,30 @@ export const dsaApi = {
         method: 'GET',
         headers: getHeaders(token),
       }).then((r) => handleResponse<Quiz>(r)),
+
+    // ---- Free / public quizzes (no auth) — docs/backend-requests-2026-09-02.md §2 ----
+    // GET /public/quizzes/:link — a free quiz for an anonymous taker (answers
+    // stripped). No token, no access code.
+    getPublic: (link: string) =>
+      fetch(`${BASE_URL}/public/quizzes/${encodeURIComponent(link)}`, {
+        headers: { 'Content-Type': 'application/json' },
+      }).then((r) => handleResponse<Quiz>(r)),
+
+    // POST /public/quizzes/:link/submit — anonymous submission (name + age).
+    submitPublic: (
+      link: string,
+      body: {
+        name: string
+        age: number
+        answers: QuizAnswer[]
+        timeTaken: number
+      },
+    ) =>
+      fetch(`${BASE_URL}/public/quizzes/${encodeURIComponent(link)}/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }).then((r) => handleResponse<PublicQuizResult>(r)),
 
     verifyCode: (
       payload: { link: string; accessCode: string },
