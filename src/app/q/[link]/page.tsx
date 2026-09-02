@@ -14,9 +14,11 @@ import {
   Trophy,
   Sparkles,
   AlertCircle,
+  Calculator as CalculatorIcon,
 } from 'lucide-react'
 import { dsaApi } from '@/lib/api'
 import RichText from '@/components/ui/RichText'
+import { ScientificCalculator } from '@/app/rapid-quiz/components/Calculator'
 import type { PublicQuizResult } from '@/lib/types'
 
 const LETTERS = ['A', 'B', 'C', 'D', 'E'] as const
@@ -83,6 +85,8 @@ export default function PublicQuizPage() {
   const [remaining, setRemaining] = useState(0)
   const [submitting, setSubmitting] = useState(false)
   const [result, setResult] = useState<PublicQuizResult | null>(null)
+  const [showCalc, setShowCalc] = useState(false)
+  const [confirmSubmit, setConfirmSubmit] = useState(false)
   const totalTime = useRef(0)
 
   // Load the quiz for this link.
@@ -186,6 +190,8 @@ export default function PublicQuizPage() {
     totalTime.current = secs
     setRemaining(secs)
     setAnswers({})
+    setShowCalc(false)
+    setConfirmSubmit(false)
     setStep('quiz')
   }
 
@@ -338,7 +344,7 @@ export default function PublicQuizPage() {
               <p className='text-[11px] font-bold text-rose-600'>{errorMsg}</p>
             )}
             <button
-              onClick={() => submit(false)}
+              onClick={() => setConfirmSubmit(true)}
               disabled={submitting}
               className='w-full flex items-center justify-center gap-2 h-12 bg-[#002EFF] text-white rounded-xl font-black text-[12px] uppercase tracking-wide hover:bg-blue-700 active:scale-[0.98] transition-all disabled:opacity-60'
             >
@@ -348,6 +354,70 @@ export default function PublicQuizPage() {
                 <>Submit answers</>
               )}
             </button>
+
+            {/* Floating calculator */}
+            <button
+              onClick={() => setShowCalc((v) => !v)}
+              className='fixed bottom-6 right-6 z-40 h-12 w-12 rounded-2xl bg-[#002EFF] text-white shadow-xl flex items-center justify-center active:scale-95'
+              title='Calculator'
+            >
+              <CalculatorIcon size={20} />
+            </button>
+            {showCalc && (
+              <ScientificCalculator onClose={() => setShowCalc(false)} />
+            )}
+
+            {/* Submit confirmation */}
+            {confirmSubmit && (
+              <div className='fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-5'>
+                <div className='w-full max-w-sm bg-white rounded-3xl shadow-2xl p-7 text-center'>
+                  <div className='h-14 w-14 mx-auto rounded-2xl bg-blue-50 text-[#002EFF] flex items-center justify-center mb-3'>
+                    <AlertCircle size={26} />
+                  </div>
+                  <p className='text-xl font-black text-slate-900 tracking-tight'>
+                    Submit quiz?
+                  </p>
+                  <p className='text-[10px] font-black uppercase tracking-widest text-slate-400 mt-1'>
+                    Confirm your progress below
+                  </p>
+                  <div className='flex items-center justify-center gap-6 my-5'>
+                    <div>
+                      <p className='text-3xl font-black text-[#002EFF]'>
+                        {answered}
+                      </p>
+                      <p className='text-[9px] font-black uppercase tracking-widest text-slate-400'>
+                        Solved
+                      </p>
+                    </div>
+                    <div className='h-10 w-px bg-slate-200' />
+                    <div>
+                      <p className='text-3xl font-black text-rose-500'>
+                        {questions.length - answered}
+                      </p>
+                      <p className='text-[9px] font-black uppercase tracking-widest text-slate-400'>
+                        Empty
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setConfirmSubmit(false)
+                      submit(false)
+                    }}
+                    disabled={submitting}
+                    className='w-full h-12 bg-[#002EFF] text-white rounded-2xl font-black text-[11px] uppercase tracking-wide active:scale-[0.98] disabled:opacity-60'
+                  >
+                    Confirm &amp; submit
+                  </button>
+                  <button
+                    onClick={() => setConfirmSubmit(false)}
+                    className='mt-3 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-[#002EFF]'
+                  >
+                    Review questions
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
