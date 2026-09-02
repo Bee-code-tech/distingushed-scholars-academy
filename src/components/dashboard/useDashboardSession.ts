@@ -11,6 +11,7 @@ import {
   dashboardPathForRole,
 } from '@/lib/auth'
 import { isDemoToken } from '@/lib/demoAccounts'
+import { useSecureSession } from '@/components/dashboard/useSecureSession'
 import type { User, UserRole } from '@/lib/types'
 
 interface SessionState {
@@ -78,6 +79,10 @@ export function useDashboardSession(requiredRole: UserRole): SessionState {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requiredRole, router])
+
+  // Auto-logout after 30 minutes of inactivity (applies to every dashboard that
+  // uses this hook — tutor, guardian, staff).
+  useSecureSession({ onIdleTimeout: logout, idleMinutes: 30 })
 
   return { user, loading, logout }
 }

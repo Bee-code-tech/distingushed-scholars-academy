@@ -23,7 +23,6 @@ import DashboardShell, {
   type NavGroup,
 } from '@/components/dashboard/DashboardShell'
 import { useDashboardSession } from '@/components/dashboard/useDashboardSession'
-import { useSecureSession } from '@/components/dashboard/useSecureSession'
 import { useTabState } from '@/components/dashboard/useTabState'
 import { useCommunityUnread } from '@/components/dashboard/useCommunityUnread'
 import TakeAttendance from '@/components/dashboard/TakeAttendance'
@@ -136,8 +135,7 @@ function TrackBadge({ track }: { track: string }) {
 
 export default function TutorDashboard() {
   const { user, loading, logout } = useDashboardSession('tutor')
-  // Security: auto sign-out after 30 minutes with no activity.
-  useSecureSession({ onIdleTimeout: logout, idleMinutes: 30 })
+  // (30-minute idle auto-logout is handled inside useDashboardSession.)
   // Persist the active tab in the URL (?tab=) so a browser refresh keeps you on
   // the same screen instead of resetting to Overview.
   const [view, setView] = useTabState<string>('overview')

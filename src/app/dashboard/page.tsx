@@ -358,6 +358,7 @@ import SettingsView from './settings/page'
 import OverviewUI from './OverviewUI'
 import ResourcesView from './resources/page'
 import CommunityView from './community/page'
+import { useSecureSession } from '@/components/dashboard/useSecureSession'
 import StudentAttendance from '@/components/dashboard/StudentAttendance'
 import Timetable from '@/components/dashboard/Timetable'
 import Assignments from '@/components/dashboard/Assignments'
@@ -421,6 +422,9 @@ export default function AcademyDashboard() {
     clearSession()
     router.push('/auth/signin')
   }, [router])
+
+  // Auto sign-out after 30 minutes of inactivity.
+  useSecureSession({ onIdleTimeout: handleLogout, idleMinutes: 30 })
 
   useEffect(() => {
     setMounted(true)
