@@ -13,6 +13,9 @@ import {
   Trophy,
   ArrowLeft,
   AlertTriangle,
+  Download,
+  Eye,
+  RotateCcw,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import RichText from '@/components/ui/RichText'
@@ -73,6 +76,7 @@ export default function QuizRunner() {
   const [breaches, setBreaches] = useState(0)
   const breachRef = useRef(0)
   const [showWarning, setShowWarning] = useState(false)
+  const [showCorrections, setShowCorrections] = useState(false)
   const MAX_BREACHES = 5
 
   const loadList = useCallback(async () => {
@@ -226,6 +230,7 @@ export default function QuizRunner() {
       breachRef.current = 0
       setBreaches(0)
       setShowWarning(false)
+      setShowCorrections(false)
       const secs = (minutes || Number(full.timeLimit) || 0) * 60
       totalTime.current = secs
       setRemaining(secs)
@@ -246,6 +251,62 @@ export default function QuizRunner() {
       result.totalMarks > 0
         ? Math.round((result.totalScore / result.totalMarks) * 100)
         : 0
+
+    // Per-subject scores: join the breakdown (by questionId) onto the questions
+    // we took (which carry the subject) and total the marks per subject.
+    const marksById = new Map(
+      (result.breakdown ?? []).map((b) => [b.questionId, b] as const),
+    )
+    const perSubject = new Map<
+      string,
+      { earned: number; total: number; correct: number; count: number }
+    >()
+    questions.forEach((q) => {
+      const subj = q.subject || 'General'
+      const row = perSubject.get(subj) ?? {
+        earned: 0,
+        total: 0,
+        correct: 0,
+        count: 0,
+      }
+      const b = marksById.get(q.questionId)
+      row.total += q.marks || 1
+      row.count += 1
+      if (b) {
+        row.earned += b.marksEarned || 0
+        if (b.isCorrect) row.correct += 1
+      }
+      perSubject.set(subj, row)
+    })
+    const subjects = [...perSubject.entries()]
+
+    const downloadResult = () => {
+      const rows = subjects
+        .map(
+          ([name, s]) =>
+            `<tr><td>${name}</td><td>${s.earned}/${s.total}</td><td>${
+              s.total ? Math.round((s.earned / s.total) * 100) : 0
+            }%</td></tr>`,
+        )
+        .join('')
+      const html = `<!doctype html><meta charset="utf-8"><title>Quiz Result</title>
+<body style="font-family:system-ui,Arial;max-width:640px;margin:2rem auto;color:#0f172a">
+<h1 style="color:#002EFF">${str(quiz?.title) || 'Quiz'} — Result</h1>
+<p><b>${getUser()?.fullName || getUser()?.username || 'Student'}</b></p>
+<p style="font-size:2rem;font-weight:800">${pct}% <span style="font-size:1rem;color:#64748b">(${result.totalScore}/${result.totalMarks} marks)</span></p>
+<table border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse;width:100%">
+<thead><tr style="background:#f1f5f9"><th align="left">Subject</th><th align="left">Score</th><th align="left">%</th></tr></thead>
+<tbody>${rows}</tbody></table>
+<p style="color:#94a3b8;font-size:.8rem;margin-top:1rem">Distinguished Scholars Academy</p>
+</body>`
+      const url = URL.createObjectURL(new Blob([html], { type: 'text/html' }))
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${(str(quiz?.title) || 'quiz').replace(/[^\w]+/g, '-')}-result.html`
+      a.click()
+      URL.revokeObjectURL(url)
+    }
+
     return (
       <div className='max-w-2xl mx-auto space-y-5'>
         <Card className='p-8 rounded-4xl border-none shadow-sm bg-[#002EFF] text-white text-center'>
@@ -258,29 +319,92 @@ export default function QuizRunner() {
             {result.totalScore} / {result.totalMarks} marks
           </p>
         </Card>
-        <div className='space-y-2'>
-          {result.breakdown?.map((b, i) => (
-            <Card
-              key={b.questionId || i}
-              className='p-3 rounded-2xl border-none shadow-sm bg-white flex items-start gap-2'
-            >
-              {b.isCorrect ? (
-                <CheckCircle2 size={16} className='text-emerald-500 mt-0.5 shrink-0' />
-              ) : (
-                <XCircle size={16} className='text-rose-500 mt-0.5 shrink-0' />
-              )}
-              <p className='text-[12px] font-medium text-slate-700'>
-                {b.questionText || `Question ${i + 1}`}
-              </p>
-            </Card>
-          ))}
+
+        {/* Per-subject scores */}
+        {subjects.length > 0 && (
+          <Card className='p-4 rounded-3xl border-none shadow-sm bg-white'>
+            <p className='text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2'>
+              Scores by subject
+            </p>
+            <div className='space-y-2.5'>
+              {subjects.map(([name, s]) => {
+                const sp = s.total ? Math.round((s.earned / s.total) * 100) : 0
+                return (
+                  <div key={name}>
+                    <div className='flex items-center justify-between mb-1'>
+                      <span className='text-[11px] font-black text-slate-700'>
+                        {name}
+                      </span>
+                      <span className='text-[10px] font-bold text-slate-400'>
+                        {s.earned}/{s.total} · {sp}%
+                      </span>
+                    </div>
+                    <div className='h-2 bg-slate-100 rounded-full overflow-hidden'>
+                      <div
+                        className={`h-full rounded-full ${sp >= 50 ? 'bg-emerald-500' : 'bg-rose-400'}`}
+                        style={{ width: `${sp}%` }}
+                      />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </Card>
+        )}
+
+        {/* Actions */}
+        <div className='grid grid-cols-2 gap-2'>
+          <button
+            onClick={downloadResult}
+            className='flex items-center justify-center gap-2 h-11 rounded-xl bg-slate-100 text-slate-700 font-black text-[10px] uppercase tracking-wide hover:bg-slate-200'
+          >
+            <Download size={14} /> Download
+          </button>
+          <button
+            onClick={() => setShowCorrections((v) => !v)}
+            className='flex items-center justify-center gap-2 h-11 rounded-xl bg-[#FCB900] text-[#002EFF] font-black text-[10px] uppercase tracking-wide'
+          >
+            <Eye size={14} /> {showCorrections ? 'Hide' : 'View'} corrections
+          </button>
         </div>
-        <button
-          onClick={() => setView('list')}
-          className='flex items-center gap-2 text-[11px] font-black uppercase text-[#002EFF]'
-        >
-          <ArrowLeft size={14} /> Back to quizzes
-        </button>
+
+        {/* Corrections — only when the student chooses to view them */}
+        {showCorrections && (
+          <div className='space-y-2'>
+            {result.breakdown?.map((b, i) => (
+              <Card
+                key={b.questionId || i}
+                className='p-3 rounded-2xl border-none shadow-sm bg-white flex items-start gap-2'
+              >
+                {b.isCorrect ? (
+                  <CheckCircle2 size={16} className='text-emerald-500 mt-0.5 shrink-0' />
+                ) : (
+                  <XCircle size={16} className='text-rose-500 mt-0.5 shrink-0' />
+                )}
+                <div className='min-w-0 flex-1'>
+                  <RichText className='text-[12px] font-medium text-slate-700'>
+                    {b.questionText || `Question ${i + 1}`}
+                  </RichText>
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
+
+        <div className='flex items-center justify-between pt-1'>
+          <button
+            onClick={() => setView('list')}
+            className='flex items-center gap-2 text-[11px] font-black uppercase text-[#002EFF]'
+          >
+            <ArrowLeft size={14} /> Back to quizzes
+          </button>
+          <button
+            onClick={() => quiz && start(quiz)}
+            className='flex items-center gap-2 text-[11px] font-black uppercase text-slate-500 hover:text-[#002EFF]'
+          >
+            <RotateCcw size={14} /> Retake
+          </button>
+        </div>
       </div>
     )
   }
