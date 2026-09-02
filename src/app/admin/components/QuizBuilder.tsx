@@ -17,6 +17,7 @@ import {
   Clock,
   Users,
   Link as LinkIcon,
+  ArrowLeft,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { dsaApi } from '@/lib/api'
@@ -98,6 +99,8 @@ export default function QuizBuilder() {
   const [quizzes, setQuizzes] = useState<Record<string, unknown>[]>([])
   const [loadingList, setLoadingList] = useState(true)
   const [openAttempts, setOpenAttempts] = useState<string | null>(null)
+  // The list is the default view; the builder form opens on "Create New Quiz".
+  const [showBuilder, setShowBuilder] = useState(false)
 
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -216,6 +219,9 @@ export default function QuizBuilder() {
       setShowResults(true)
       setShowCorrections(true)
       setBlocks([])
+      // Free quizzes keep the builder open so the shareable link is visible;
+      // otherwise drop back to the list where the new quiz now appears.
+      if (!isFree) setShowBuilder(false)
       flash(isFree ? 'Free quiz published' : 'Quiz published')
       loadList()
     } catch (e) {
@@ -249,13 +255,31 @@ export default function QuizBuilder() {
 
   return (
     <div className='max-w-4xl mx-auto space-y-6 px-1'>
-      <div>
-        <h1 className='text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2'>
-          <HelpCircle size={20} className='text-[#002EFF]' /> Quizzes
-        </h1>
-        <p className='text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-1'>
-          Build a quiz from the tutor question bank
-        </p>
+      <div className='flex items-start justify-between gap-3'>
+        <div>
+          <h1 className='text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2'>
+            <HelpCircle size={20} className='text-[#002EFF]' /> Quizzes
+          </h1>
+          <p className='text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-1'>
+            {showBuilder
+              ? 'Build a quiz from the tutor question bank'
+              : 'Your published quizzes'}
+          </p>
+        </div>
+        <button
+          onClick={() => setShowBuilder((v) => !v)}
+          className='flex items-center gap-2 h-10 px-4 rounded-xl bg-[#002EFF] text-white font-black text-[11px] uppercase tracking-wide hover:bg-blue-700 active:scale-[0.98] shrink-0'
+        >
+          {showBuilder ? (
+            <>
+              <ArrowLeft size={15} /> Back to list
+            </>
+          ) : (
+            <>
+              <Plus size={15} /> Create New Quiz
+            </>
+          )}
+        </button>
       </div>
 
       {notice && (
@@ -303,7 +327,8 @@ export default function QuizBuilder() {
         </div>
       )}
 
-      {/* Builder */}
+      {/* Builder — only when creating a new quiz */}
+      {showBuilder && (
       <Card className='p-5 rounded-3xl border-none shadow-sm bg-white space-y-3'>
         {error && <p className='text-[11px] font-bold text-rose-600'>{error}</p>}
         <input
@@ -500,8 +525,10 @@ export default function QuizBuilder() {
           </button>
         </div>
       </Card>
+      )}
 
-      {/* Existing quizzes */}
+      {/* Existing quizzes — the default list view */}
+      {!showBuilder && (
       <div className='space-y-2'>
         <p className='text-[11px] font-black uppercase tracking-widest text-slate-500'>
           Published quizzes
@@ -588,6 +615,7 @@ export default function QuizBuilder() {
           })
         )}
       </div>
+      )}
     </div>
   )
 }
