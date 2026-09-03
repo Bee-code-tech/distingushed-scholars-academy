@@ -73,3 +73,16 @@ localStorage), so roles never reach the backend — this is behind the
 switch the create/edit/delete handlers to `dsaApi.admin.createRole` (a stub
 already exists in `admin-api.ts`) instead of `saveRole`. Left to you as the admin
 frontend owner — I didn't modify your component.
+
+## 5. Post-presentation P5 items in your area (2026-09-03)
+
+Two backlog items land in admin components you own (I didn't touch them):
+
+- **Merge the People screens** — combine **Tutors + Create Tutor** into one screen
+  and **Guardians + Create Guardian** into one (the list-first pattern the quiz
+  builder now uses: a list with a "Create" button that reveals the form). Files:
+  `PeopleRoster.tsx`, `CreateTutor.tsx`, `CreateGuardian.tsx`, and the admin nav
+  in `admin/page.tsx` (drop the separate "Create …" nav items).
+- **Course UX (admin)** — tidy the create/manage course flow in `CourseManager.tsx`.
+
+Both are frontend-only. Full backlog + priorities: `docs/post-presentation-backlog-2026-09-03.md`.
