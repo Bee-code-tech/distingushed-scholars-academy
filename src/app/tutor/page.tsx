@@ -27,6 +27,7 @@ import DashboardShell, {
 import { useDashboardSession } from '@/components/dashboard/useDashboardSession'
 import { useTabState } from '@/components/dashboard/useTabState'
 import { useCommunityUnread } from '@/components/dashboard/useCommunityUnread'
+import { useAnnouncementsUnread } from '@/components/dashboard/useAnnouncementsUnread'
 import TakeAttendance from '@/components/dashboard/TakeAttendance'
 import ReadOnlyTimetable from '@/components/dashboard/ReadOnlyTimetable'
 import LiveClasses from '@/components/dashboard/LiveClasses'
@@ -149,10 +150,15 @@ export default function TutorDashboard() {
   // the same screen instead of resetting to Overview.
   const [view, setView] = useTabState<string>('overview')
   const communityUnread = useCommunityUnread(view === 'community')
+  const announcementsUnread = useAnnouncementsUnread(view === 'announcements')
   const nav = NAV.map((group) => ({
     ...group,
     items: group.items.map((n) =>
-      n.key === 'community' ? { ...n, badge: communityUnread } : n,
+      n.key === 'community'
+        ? { ...n, badge: communityUnread }
+        : n.key === 'announcements'
+          ? { ...n, badge: announcementsUnread }
+          : n,
     ),
   }))
   // Live-first: a real JWT reads the tutor roster + overview (GET

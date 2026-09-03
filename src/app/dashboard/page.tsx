@@ -371,6 +371,7 @@ import QuizRunner from '@/components/dashboard/QuizRunner'
 import UnlockPlans from '@/components/dashboard/UnlockPlans'
 import { useTabState } from '@/components/dashboard/useTabState'
 import { useCommunityUnread } from '@/components/dashboard/useCommunityUnread'
+import { useAnnouncementsUnread } from '@/components/dashboard/useAnnouncementsUnread'
 import { LockedNotice } from '@/components/dashboard/LockedNotice'
 import { canAccess } from '@/lib/access'
 import { recordLogin } from '@/lib/loginStreak'
@@ -397,6 +398,9 @@ export default function AcademyDashboard() {
   const [isLoading, setIsLoading] = useState(true)
   const [activeView, setActiveView] = useTabState<ViewState>('overview')
   const communityUnread = useCommunityUnread(activeView === 'community')
+  const announcementsUnread = useAnnouncementsUnread(
+    activeView === 'announcements',
+  )
   const [isSheetOpen, setIsSheetOpen] = useState(false)
   const router = useRouter()
 
@@ -535,7 +539,12 @@ export default function AcademyDashboard() {
     {
       group: 'Engagement',
       items: [
-        { icon: Megaphone, label: 'Announcements', view: 'announcements' as ViewState },
+        {
+          icon: Megaphone,
+          label: 'Announcements',
+          view: 'announcements' as ViewState,
+          badge: announcementsUnread,
+        },
         {
           icon: Users,
           label: 'Community',
