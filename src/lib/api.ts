@@ -239,12 +239,14 @@ export const dsaApi = {
         // Tolerate both an enveloped `{ data }` and a bare quiz object.
         .then((r) => ((r as { data?: unknown }).data ?? r) as Quiz),
 
-    // POST /public/quizzes/:link/submit — anonymous submission (name + age).
+    // POST /public/quizzes/:link/submit — anonymous submission. Collects name,
+    // email & phone; the backend emails the score to `email` and de-dupes by it.
     submitPublic: (
       link: string,
       body: {
         name: string
-        age: number
+        email: string
+        phone: string
         answers: QuizAnswer[]
         timeTaken: number
       },

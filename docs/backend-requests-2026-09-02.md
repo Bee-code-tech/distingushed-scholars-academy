@@ -104,10 +104,14 @@ On the quiz:
    - Must **not** require a token or access code.
 
 2. **`POST /public/quizzes/:link/submit`** — submit a public attempt.
-   - Body: `{ "name": "...", "age": 17, "answers": [ { "questionId": "...", "selectedOption": 0 } ], "timeTaken": 123 }`
+   - Body (**updated 2026-09-03**): `{ "name": "...", "email": "...", "phone": "...", "answers": [ { "questionId": "...", "selectedOption": 0 } ], "timeTaken": 123 }`
    - Returns the same result shape as the authed submit:
      `{ totalScore, totalMarks, percentage, breakdown[] }`.
-   - Stores a **public attempt** record `{ quizId, name, age, score, totalMarks, percentage, submittedAt }` (no account, no PII beyond name + age).
+   - Stores a **public attempt** record `{ quizId, name, email, phone, score, totalMarks, percentage, submittedAt }`.
+   - **Email the score** to `email` (a short "here's your DSA quiz result" mail).
+   - **One attempt per person:** de-dupe by `email` (+ quiz) — reject a second
+     submission for the same email on the same quiz (the frontend also blocks a
+     retake per-device via localStorage, but the email guard is the real one).
    - Rate-limit this (it's unauthenticated) to prevent abuse.
 
 3. *(optional, admin)* **`GET /quizzes/:id/public-results`** — list public attempts

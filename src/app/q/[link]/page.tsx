@@ -1,7 +1,8 @@
 'use client'
 
 // Public (free) quiz taker — no login. Anyone with the link enters their name
-// and age, takes the quiz, sees their result, then is invited to the homepage.
+// email and phone, takes the quiz once per device, gets their result (also
+// emailed), then is invited to the homepage.
 // Backed by the no-auth endpoints in docs/backend-requests-2026-09-02.md §2.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -82,14 +83,20 @@ export default function PublicQuizPage() {
   const [minutes, setMinutes] = useState(0)
 
   const [name, setName] = useState('')
-  const [age, setAge] = useState('')
+  const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('')
   const [answers, setAnswers] = useState<Record<string, number>>({})
   const [remaining, setRemaining] = useState(0)
   const [submitting, setSubmitting] = useState(false)
   const [result, setResult] = useState<PublicQuizResult | null>(null)
   const [showCalc, setShowCalc] = useState(false)
   const [confirmSubmit, setConfirmSubmit] = useState(false)
+  const [alreadyTaken, setAlreadyTaken] = useState(false)
   const totalTime = useRef(0)
+
+  // One attempt per device: a flag (with the last result) is stored under the
+  // quiz link so a revisit/reload can't retake it.
+  const takenKey = `dsa-freequiz-${link}`
 
   // Load the quiz for this link.
   useEffect(() => {
@@ -110,6 +117,21 @@ export default function PublicQuizPage() {
         setTitle(mapped.title)
         setQuestions(mapped.questions)
         setMinutes(mapped.minutes)
+        // Already taken on this device? Show the stored result, no retake.
+        let prior: { result?: PublicQuizResult; name?: string } | null = null
+        try {
+          const raw = localStorage.getItem(takenKey)
+          if (raw) prior = JSON.parse(raw)
+        } catch {
+          prior = null
+        }
+        if (prior?.result) {
+          setResult(prior.result)
+          if (prior.name) setName(prior.name)
+          setAlreadyTaken(true)
+          setStep('result')
+          return
+        }
         setStep('details')
       } catch (e) {
         if (cancelled) return
@@ -139,7 +161,8 @@ export default function PublicQuizPage() {
       try {
         const res = (await dsaApi.quizzes.submitPublic(link, {
           name: name.trim(),
-          age: Number(age) || 0,
+          email: email.trim().toLowerCase(),
+          phone: phone.trim(),
           answers: questions.map((q) => ({
             questionId: q.questionId,
             selectedOption:
@@ -148,6 +171,15 @@ export default function PublicQuizPage() {
           timeTaken,
         })) as PublicQuizResult
         setResult(res)
+        // Lock this device from retaking, and keep the result for a revisit.
+        try {
+          localStorage.setItem(
+            takenKey,
+            JSON.stringify({ result: res, name: name.trim() }),
+          )
+        } catch {
+          /* storage unavailable — the backend still de-dupes by email */
+        }
         setStep('result')
       } catch (e) {
         setErrorMsg(
@@ -158,7 +190,7 @@ export default function PublicQuizPage() {
       }
       setSubmitting(false)
     },
-    [answers, age, link, name, questions, remaining, submitting],
+    [answers, email, phone, link, name, questions, remaining, submitting, takenKey],
   )
 
   // Countdown while taking the quiz.
@@ -182,9 +214,12 @@ export default function PublicQuizPage() {
       setErrorMsg('Please enter your name.')
       return
     }
-    const a = Number(age)
-    if (!a || a < 3 || a > 120) {
-      setErrorMsg('Please enter a valid age.')
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setErrorMsg('Please enter a valid email — your score is sent there.')
+      return
+    }
+    if (phone.trim().replace(/\D/g, '').length < 7) {
+      setErrorMsg('Please enter a valid phone number.')
       return
     }
     setErrorMsg('')
@@ -248,7 +283,7 @@ export default function PublicQuizPage() {
     const html = `<!doctype html><meta charset="utf-8"><title>Quiz Result</title>
 <body style="font-family:system-ui,Arial;max-width:640px;margin:2rem auto;color:#0f172a">
 <h1 style="color:#002EFF">${title} — Result</h1>
-<p><b>${name || 'Student'}${age ? `, age ${age}` : ''}</b></p>
+<p><b>${name || 'Student'}${email ? ` · ${email}` : ''}</b></p>
 <p style="font-size:2rem;font-weight:800">${pct}% <span style="font-size:1rem;color:#64748b">(${result?.totalScore}/${result?.totalMarks} marks)</span></p>
 ${rows ? `<table border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse;width:100%"><thead><tr style="background:#f1f5f9"><th align="left">Subject</th><th align="left">Score</th><th align="left">%</th></tr></thead><tbody>${rows}</tbody></table>` : ''}
 <p style="color:#94a3b8;font-size:.8rem;margin-top:1rem">Distinguished Scholars Academy</p>
@@ -332,18 +367,32 @@ ${rows ? `<table border="1" cellpadding="8" cellspacing="0" style="border-collap
               </div>
               <div>
                 <label className='text-[9px] font-black uppercase text-slate-400'>
-                  Age
+                  Email <span className='text-slate-300'>· your score is sent here</span>
                 </label>
                 <input
-                  type='number'
-                  min={3}
-                  max={120}
-                  value={age}
-                  onChange={(e) => setAge(e.target.value)}
-                  placeholder='e.g. 16'
+                  type='email'
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder='you@example.com'
                   className='mt-1 w-full h-11 px-3 rounded-xl bg-slate-50 border border-transparent focus:border-[#002EFF]/30 focus:bg-white outline-none text-sm font-bold'
                 />
               </div>
+              <div>
+                <label className='text-[9px] font-black uppercase text-slate-400'>
+                  Phone number
+                </label>
+                <input
+                  type='tel'
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder='080…'
+                  className='mt-1 w-full h-11 px-3 rounded-xl bg-slate-50 border border-transparent focus:border-[#002EFF]/30 focus:bg-white outline-none text-sm font-bold'
+                />
+              </div>
+              <p className='text-[10px] font-bold text-slate-400'>
+                You can only take this quiz <span className='text-[#002EFF]'>once</span> on
+                this device.
+              </p>
               {errorMsg && (
                 <p className='text-[11px] font-bold text-rose-600'>{errorMsg}</p>
               )}
@@ -478,6 +527,13 @@ ${rows ? `<table border="1" cellpadding="8" cellspacing="0" style="border-collap
 
         {step === 'result' && result && (
           <div className='mt-8 space-y-4'>
+            <div className='rounded-2xl bg-emerald-50 border border-emerald-100 px-4 py-2.5 text-center'>
+              <p className='text-[11px] font-bold text-emerald-700'>
+                {alreadyTaken
+                  ? "You've already completed this quiz — here's your result."
+                  : 'Your result has been sent to your email.'}
+              </p>
+            </div>
             {/* Score + performance analysis */}
             <div className='bg-white rounded-3xl shadow-sm overflow-hidden'>
               <div className='p-7 text-center'>
