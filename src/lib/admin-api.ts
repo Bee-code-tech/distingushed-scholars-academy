@@ -1331,6 +1331,15 @@ export const adminApi = {
       body: JSON.stringify(roleData),
     }),
 
+  /**
+   * Delete a staff role.
+   * Endpoint: DELETE /api/admin/roles/:id
+   */
+  deleteRole: <T = ActionSuccessResponse>(id: string) =>
+    adminFetch<T>(`/api/admin/roles/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
+
   /** Mark student paid (offline / cash / bank transfer) */
   markManualPayment: <T = any>(paymentData: {
     studentId: string

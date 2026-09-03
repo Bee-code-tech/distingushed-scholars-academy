@@ -94,3 +94,13 @@ Endpoint sweep confirms **`POST /api/admin/roles`** (200, creates) and
 **no longer blocked** — just switch `RolesPermissions.tsx` off `staffStore.saveRole`
 onto `dsaApi.admin.createRole` / the delete route. `GET /admin/roles` already
 returns the seeded `secretary` / `auditor` roles from the backend.
+
+### Update 2 (2026-09-03): roles screen rewired to the backend — DONE
+
+Per the site owner's request I wired `RolesPermissions.tsx` to the live backend:
+create/edit now call `dsaApi.admin.upsertRole` (POST /api/admin/roles) and delete
+calls the new `dsaApi.admin.deleteRole` (DELETE /api/admin/roles/:id); the local
+`staffStore` is kept only as an offline fallback. **Verified end-to-end**: a role
+created in the UI persists to `GET /admin/roles`, and delete removes it. Roles now
+persist across devices. (Only handlers were touched — the rest of your component
+is unchanged.)

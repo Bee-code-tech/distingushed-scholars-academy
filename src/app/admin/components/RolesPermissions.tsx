@@ -1073,7 +1073,11 @@ export default function RolesPermissions() {
                               `Delete the custom role "${r.name}"? Staff assigned to this role will lose permissions.`,
                             )
                           ) {
-                            deleteRole(r.id)
+                            try {
+                              await dsaApi.admin.deleteRole(r.id)
+                            } catch {
+                              deleteRole(r.id) // offline fallback
+                            }
                             await refresh()
                           }
                         }}
@@ -1088,9 +1092,20 @@ export default function RolesPermissions() {
               ))}
               <NewRoleButton
                 onCreate={async (name) => {
-                  const created = saveRole({ name, permissions: [] })
-                  await refresh()
-                  setActiveRoleId(created.id)
+                  try {
+                    const res = (await dsaApi.admin.upsertRole({
+                      name,
+                      permissions: [],
+                    })) as { data?: { id?: string; _id?: string } }
+                    await refresh()
+                    const newId = res?.data?.id ?? res?.data?._id
+                    if (newId) setActiveRoleId(String(newId))
+                  } catch {
+                    // offline fallback — keep the local store working
+                    const created = saveRole({ name, permissions: [] })
+                    await refresh()
+                    setActiveRoleId(created.id)
+                  }
                 }}
               />
             </div>
@@ -1100,11 +1115,19 @@ export default function RolesPermissions() {
               <PermissionToggles
                 role={activeRole}
                 onSave={async (perms) => {
-                  saveRole({
-                    id: activeRole.id,
-                    name: activeRole.name,
-                    permissions: perms,
-                  })
+                  try {
+                    await dsaApi.admin.upsertRole({
+                      id: activeRole.id,
+                      name: activeRole.name,
+                      permissions: perms,
+                    })
+                  } catch {
+                    saveRole({
+                      id: activeRole.id,
+                      name: activeRole.name,
+                      permissions: perms,
+                    })
+                  }
                   await refresh()
                 }}
               />
