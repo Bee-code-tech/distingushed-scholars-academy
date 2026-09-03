@@ -226,3 +226,41 @@ Full sweep with real admin / student / guardian tokens.
 
 **⚠️ Works but incomplete:** course-scoped announcement **delivery filtering**
 (§ carry-over) — stores fine, still returned to everyone.
+
+---
+
+## 9. `PUT /questions/:id` — ready-to-paste handler
+
+The frontend is wired (`dsaApi.questions.update` → `PUT /questions/:id`; the bank's
+Edit button already calls it). Only the route is missing (404). Drop this into the
+questions router — mirror whatever `POST /questions` does when it maps `A–E` onto
+the stored options, so edits stay consistent:
+
+```js
+// PUT /api/questions/:id — edit a question (owner tutor / admin)
+router.put('/:id', protect, async (req, res) => {
+  try {
+    const q = await Question.findById(req.params.id);
+    if (!q) return res.status(404).json({ success: false, message: 'Question not found' });
+
+    // Ownership: a tutor may only edit their own; admins/staff-with-perm any.
+    const isOwner = String(q.tutorId || q.createdBy) === String(req.user.id);
+    const isPrivileged = ['admin', 'super_admin'].includes(req.user.role);
+    if (!isOwner && !isPrivileged)
+      return res.status(403).json({ success: false, message: 'Not allowed' });
+
+    // Same fields POST /questions accepts (map A–E the same way POST does).
+    const fields = ['subject','topic','body','A','B','C','D','E',
+                    'Answer','explanation','mark','imageUrl'];
+    for (const f of fields) if (req.body[f] !== undefined) q[f] = req.body[f];
+
+    await q.save();
+    return res.json({ success: true, data: q });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+```
+
+(If questions store options as an `optionsLabeled` object or `options` array rather
+than `A`–`E` columns, apply the same A–E → storage mapping the create route uses.)
