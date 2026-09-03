@@ -192,3 +192,37 @@ also **re-derive existing** 100-Level/Preclinical students once so the current
 `jamb`-tagged ones flip to `undergrad` / `preclinical`. (The portal treats
 `examTrack` as authoritative, so this takes effect on their next load; an admin
 can also correct individuals via the roster "Set track" override.)
+
+---
+
+## 8. Endpoint verification — results (2026-09-03)
+
+Full sweep with real admin / student / guardian tokens.
+
+**✅ Working (200):** `GET /auth/me`, `/quizzes`, `/courses/mine`, `/announcements`,
+`/notifications`, `/timetable/:key`, `/grades/me`, `/plans`, `/community/channels`
+(+ `/messages`, `/:id/members`), `/submissions/me`, all guardian ward endpoints
+(`/parents/me/wards`, `…/performance`, `…/fees`, `…/quiz-results`,
+`…/assignment-grades`), `/admin/users?role=`, `/admin/roles`.
+
+**✅ Now live (were listed as pending — the backend shipped them):**
+- **`GET /quizzes/:id/attempts`** → 200 → the admin **Attempts panel works live**
+  (§6). Also `…/leaderboard` 200.
+- **`POST /support`** → 201 "Support request received" → the **support form works
+  end-to-end** (§7 satisfied).
+- **`POST /admin/roles`** → 200 (creates), **`DELETE /admin/roles/:id`** → 200 →
+  the **roles create/delete backend is live**. The "can't create a role" report is
+  therefore **frontend-only**: `RolesPermissions.tsx` still saves to localStorage
+  instead of calling `dsaApi.admin.createRole` — see §1 + the admin-dev note. No
+  backend work left here.
+- **`POST/PUT/DELETE /quizzes`**, **`PATCH /admin/users/:id`**,
+  **`POST /announcements`** — all verified live earlier.
+
+**🔴 Still missing (404 — genuinely not built):**
+- **`PUT /questions/:id`** — question edit (§6). Edit button errors until shipped.
+- **`GET /public/quizzes/:link`** + **`POST /public/quizzes/:link/submit`** — the
+  free/public quiz endpoints (`docs/backend-requests-2026-09-02.md` §2). The
+  taker page shows "unavailable" until shipped.
+
+**⚠️ Works but incomplete:** course-scoped announcement **delivery filtering**
+(§ carry-over) — stores fine, still returned to everyone.

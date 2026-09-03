@@ -86,3 +86,11 @@ Two backlog items land in admin components you own (I didn't touch them):
 - **Course UX (admin)** — tidy the create/manage course flow in `CourseManager.tsx`.
 
 Both are frontend-only. Full backlog + priorities: `docs/post-presentation-backlog-2026-09-03.md`.
+
+### Update 2026-09-03: the roles backend is LIVE — you can wire it now
+
+Endpoint sweep confirms **`POST /api/admin/roles`** (200, creates) and
+**`DELETE /api/admin/roles/:id`** (200) both work. So the roles create/delete is
+**no longer blocked** — just switch `RolesPermissions.tsx` off `staffStore.saveRole`
+onto `dsaApi.admin.createRole` / the delete route. `GET /admin/roles` already
+returns the seeded `secretary` / `auditor` roles from the backend.
