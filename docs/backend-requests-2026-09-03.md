@@ -170,3 +170,25 @@ to **`POST /support`** with `{ subject, message }` (the authenticated user's nam
 - Optional: **`GET /admin/support`** so admins can read/close tickets.
 
 Until it ships, the Send button will error (the form is otherwise ready).
+
+### Track derivation for 100-Level / Preclinical (found 2026-09-03)
+
+Several **100-Level / Preclinical students are stored with `examTrack: "jamb"`** —
+e.g. a student whose only programme is `"A(100) Level Tutorials"` came out as
+`examTrack: jamb`. The level shows fine, but their dashboard reads **"Road to
+JAMB"** instead of their undergrad/preclinical programme.
+
+Fix the registration **track derivation** (the same place the JAMB-first rule
+lives — `docs/backend-requests-2026-09-01.md` §5):
+
+- `"A(100) Level Tutorials"` (and `"200 Level"`) → **`examTrack: "undergrad"`**
+- `"Preclinical Tutorials"` → **`examTrack: "preclinical"`**
+- These are **not exam tracks** — they must not fall through to `jamb`/`waec`.
+
+Priority when a student picks several: an explicit undergrad/preclinical
+programme should win over a co-selected exam programme for the *dashboard* track
+(they may still attend JAMB tutorials, but their home is their level). Please
+also **re-derive existing** 100-Level/Preclinical students once so the current
+`jamb`-tagged ones flip to `undergrad` / `preclinical`. (The portal treats
+`examTrack` as authoritative, so this takes effect on their next load; an admin
+can also correct individuals via the roster "Set track" override.)
