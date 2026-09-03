@@ -17,6 +17,7 @@ import {
   MessagesSquare,
   HelpCircle,
   Settings,
+  FileQuestion,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -36,6 +37,7 @@ import Analytics from '@/components/dashboard/Analytics'
 import Announcements from '@/components/dashboard/Announcements'
 import Community from '@/components/dashboard/Community'
 import QuestionBank from '@/components/dashboard/QuestionBank'
+import QuizBuilder from '@/app/admin/components/QuizBuilder'
 import SettingsView from '@/app/dashboard/settings/page'
 import { getStudents, type StoredStudent } from '@/lib/studentsStore'
 import { getCourses, categoryForTrack, getCoursesForTutor } from '@/lib/coursesStore'
@@ -96,6 +98,7 @@ const NAV: NavGroup[] = [
       { key: 'assignments', label: 'Assignments', icon: ClipboardList },
       { key: 'gradebook', label: 'Gradebook', icon: Award },
       { key: 'questions', label: 'Question Bank', icon: HelpCircle },
+      { key: 'create-quiz', label: 'Create Quiz', icon: FileQuestion },
     ],
   },
   {
@@ -364,6 +367,7 @@ export default function TutorDashboard() {
       {view === 'timetable' && <ReadOnlyTimetable />}
 
       {view === 'analytics' && <Analytics mode='tutor' />}
+      {view === 'create-quiz' && <QuizBuilder />}
       {view === 'settings' && <SettingsView />}
     </DashboardShell>
   )

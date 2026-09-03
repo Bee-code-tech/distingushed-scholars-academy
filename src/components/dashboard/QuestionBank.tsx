@@ -13,6 +13,7 @@ import {
   Download,
   Check,
   X,
+  Pencil,
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { Card } from '@/components/ui/card'
@@ -138,6 +139,9 @@ export default function QuestionBank({ token }: { token?: string }) {
   const [busy, setBusy] = useState(false)
   const [uploadingImg, setUploadingImg] = useState(false)
   const [form, setForm] = useState(emptyForm)
+  // Editing an existing question — the backend has no update route, so on save
+  // we create the edited copy and delete the original.
+  const [editingId, setEditingId] = useState<string | null>(null)
   const excelInput = useRef<HTMLInputElement | null>(null)
   const imgInput = useRef<HTMLInputElement | null>(null)
 
@@ -172,27 +176,33 @@ export default function QuestionBank({ token }: { token?: string }) {
     if (!form.options[form.Answer]?.trim())
       return setError('The correct option is empty.')
     setBusy(true)
+    const payload = {
+      subject: form.subject,
+      topic: form.topic || undefined,
+      body: withPassage(form.passage, form.body.trim()),
+      A: form.options.A,
+      B: form.options.B,
+      C: form.options.C,
+      D: form.options.D,
+      E: form.options.E || undefined,
+      Answer: form.Answer,
+      explanation: form.explanation || undefined,
+      mark: Number(form.mark) || 1,
+      imageUrl: form.imageUrl || undefined,
+    }
     try {
-      await dsaApi.questions.create(
-        {
-          subject: form.subject,
-          topic: form.topic || undefined,
-          body: withPassage(form.passage, form.body.trim()),
-          A: form.options.A,
-          B: form.options.B,
-          C: form.options.C,
-          D: form.options.D,
-          E: form.options.E || undefined,
-          Answer: form.Answer,
-          explanation: form.explanation || undefined,
-          mark: Number(form.mark) || 1,
-          imageUrl: form.imageUrl || undefined,
-        },
-        authToken,
-      )
-      // Keep subject + passage so the next question in a comprehension set is quick.
-      setForm({ ...emptyForm, subject: form.subject, passage: form.passage })
-      flash('Question added')
+      if (editingId) {
+        // A real edit — update the question in place (PUT /questions/:id).
+        await dsaApi.questions.update(editingId, payload, authToken)
+        setEditingId(null)
+        setForm(emptyForm)
+        flash('Question updated')
+      } else {
+        await dsaApi.questions.create(payload, authToken)
+        // Keep subject + passage so the next question in a set is quick.
+        setForm({ ...emptyForm, subject: form.subject, passage: form.passage })
+        flash('Question added')
+      }
       if (form.subject === subject) load()
       else setSubject(form.subject)
     } catch (e) {
@@ -200,6 +210,28 @@ export default function QuestionBank({ token }: { token?: string }) {
     } finally {
       setBusy(false)
     }
+  }
+
+  // Load a bank question into the form for editing (splits off any folded passage).
+  const startEdit = (q: BankQuestion) => {
+    const m = q.body.match(/^PASSAGE:\n([\s\S]*?)\n\n([\s\S]*)$/)
+    const passage = m ? m[1] : ''
+    const body = m ? m[2] : q.body
+    const [A = '', B = '', C = '', D = '', E = ''] = q.options
+    setForm({
+      subject: q.subject || JAMB_SUBJECTS[0],
+      topic: q.topic || '',
+      passage,
+      body,
+      options: { A, B, C, D, E },
+      Answer: (q.correctOption as Letter) || 'A',
+      explanation: '',
+      mark: q.mark || 1,
+      imageUrl: q.imageUrl || '',
+    })
+    setEditingId(q.id)
+    setError(null)
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const onImage = async (file: File | null) => {
@@ -439,14 +471,34 @@ export default function QuestionBank({ token }: { token?: string }) {
           )}
         </div>
 
-        <button
-          onClick={addOne}
-          disabled={busy}
-          className='w-full flex items-center justify-center gap-2 h-11 bg-[#002EFF] text-white rounded-xl font-black text-[11px] uppercase tracking-wide hover:bg-blue-700 active:scale-[0.98] transition-all disabled:opacity-50'
-        >
-          {busy ? <Loader2 size={15} className='animate-spin' /> : <Plus size={15} />}
-          Add to bank
-        </button>
+        <div className='flex gap-2'>
+          <button
+            onClick={addOne}
+            disabled={busy}
+            className='flex-1 flex items-center justify-center gap-2 h-11 bg-[#002EFF] text-white rounded-xl font-black text-[11px] uppercase tracking-wide hover:bg-blue-700 active:scale-[0.98] transition-all disabled:opacity-50'
+          >
+            {busy ? (
+              <Loader2 size={15} className='animate-spin' />
+            ) : editingId ? (
+              <Check size={15} />
+            ) : (
+              <Plus size={15} />
+            )}
+            {editingId ? 'Save changes' : 'Add to bank'}
+          </button>
+          {editingId && (
+            <button
+              onClick={() => {
+                setEditingId(null)
+                setForm(emptyForm)
+                setError(null)
+              }}
+              className='h-11 px-4 rounded-xl bg-slate-100 text-slate-500 font-black text-[11px] uppercase tracking-wide hover:text-[#002EFF]'
+            >
+              Cancel
+            </button>
+          )}
+        </div>
       </Card>
 
       {/* Existing questions */}
@@ -515,6 +567,13 @@ export default function QuestionBank({ token }: { token?: string }) {
                   ))}
                 </div>
               </div>
+              <button
+                onClick={() => startEdit(q)}
+                className='p-1.5 text-slate-300 hover:text-[#002EFF] shrink-0'
+                title='Edit question'
+              >
+                <Pencil size={14} />
+              </button>
               <button
                 onClick={() => remove(q.id)}
                 className='p-1.5 text-slate-300 hover:text-rose-500 shrink-0'

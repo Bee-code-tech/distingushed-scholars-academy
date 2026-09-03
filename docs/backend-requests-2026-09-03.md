@@ -122,3 +122,36 @@ the track** (frontend done). Remaining work is backend + the admin roster:
 **Admin frontend (admin dev):** wire a search box + programme/class filter dropdown
 into `StudentRoster.tsx` against that endpoint. Left to the admin owner (didn't
 touch the component).
+
+---
+
+## 6. Academics & community (P4)
+
+### Edit a question — `PUT /questions/:id` 🔴 needed
+The tutor question bank now has an **Edit** button that loads a question into the
+form and saves via **`PUT /questions/:id`** (a real update — *not* delete + re-
+create). The endpoint is **missing** (`PUT`/`PATCH /questions/:id` currently
+**404**). Please add **`PUT /questions/:id`** (tutor owns / admin) taking the same
+body as `POST /questions` (`subject, topic, body, A–E, Answer, explanation, mark,
+imageUrl`) and returning the updated question. Until it ships, the Edit button
+will error on save.
+
+### Tutors create quizzes 🟡
+The quiz builder is now mounted in the **tutor** dashboard ("Create Quiz"). It
+posts to `POST /quizzes` with the **tutor's** token. Backend must **authorize a
+tutor to create quizzes** (today quiz create may be admin-only), and ideally
+scope a tutor-authored quiz to **their own students/courses** rather than letting
+a tutor target all students.
+
+### Community — tutor limited to their track 🟡
+Per-programme channels exist; **students** are already filtered to General + their
+programme. A **tutor should be limited to the community for the track(s) they
+teach** (today tutors see every channel). Enforce server-side from the tutor's
+assigned courses/track, and expose the tutor's track(s) so the frontend can filter
+the channel list too.
+
+### Excel upload — named batches 🟡
+Each bulk Excel upload should carry a **batch name** shown on the admin & tutor
+ends (so uploads are identifiable). Store a `batchName` (and uploader) on the
+questions created by an import; return it on `GET /questions` so both ends can
+group/label by batch.

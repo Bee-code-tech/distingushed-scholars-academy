@@ -404,6 +404,17 @@ export const dsaApi = {
         .then((r) => handleResponse<{ data?: unknown }>(r))
         .then((r) => (r as { data?: unknown }).data ?? r),
 
+    // PUT /questions/:id — edit a question in the bank (tutor own / admin).
+    // Backend endpoint pending — see docs/backend-requests-2026-09-03.md §6.
+    update: (id: string, body: Record<string, unknown>, token?: string) =>
+      fetch(`${BASE_URL}/questions/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        headers: getHeaders(token),
+        body: JSON.stringify(body),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+
     // DELETE /questions/:id.
     remove: (id: string, token?: string) =>
       fetch(`${BASE_URL}/questions/${encodeURIComponent(id)}`, {
