@@ -63,3 +63,13 @@ details, payloads and access rules are in
 - [ ] **Timetable by programme** — accept the `jamb-*` / `postutme-*` (+ existing
   dept-split) keys on `GET`/`PUT /timetable/:key`; store cells as arrays of up to
   three subjects. *(§6)*
+
+## 4. Permissions screen creates roles LOCALLY only (2026-09-03)
+
+`RolesPermissions.tsx` creates/edits roles via `staffStore.saveRole` (browser
+localStorage), so roles never reach the backend — this is behind the
+"can't create a new role" report. Once the backend ships
+`POST/PUT/DELETE /api/admin/roles` (see `docs/backend-requests-2026-09-03.md` §1),
+switch the create/edit/delete handlers to `dsaApi.admin.createRole` (a stub
+already exists in `admin-api.ts`) instead of `saveRole`. Left to you as the admin
+frontend owner — I didn't modify your component.

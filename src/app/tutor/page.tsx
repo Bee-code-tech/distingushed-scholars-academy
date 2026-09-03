@@ -16,6 +16,7 @@ import {
   Award,
   MessagesSquare,
   HelpCircle,
+  Settings,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -35,6 +36,7 @@ import Analytics from '@/components/dashboard/Analytics'
 import Announcements from '@/components/dashboard/Announcements'
 import Community from '@/components/dashboard/Community'
 import QuestionBank from '@/components/dashboard/QuestionBank'
+import SettingsView from '@/app/dashboard/settings/page'
 import { getStudents, type StoredStudent } from '@/lib/studentsStore'
 import { getCourses, categoryForTrack, getCoursesForTutor } from '@/lib/coursesStore'
 import { getAssignments, getSubmissions } from '@/lib/assignmentsStore'
@@ -110,6 +112,10 @@ const NAV: NavGroup[] = [
       { key: 'live', label: 'Live Classes', icon: Video },
       { key: 'timetable', label: 'Timetable', icon: CalendarDays },
     ],
+  },
+  {
+    group: 'Account',
+    items: [{ key: 'settings', label: 'Profile & Settings', icon: Settings }],
   },
 ]
 
@@ -358,6 +364,7 @@ export default function TutorDashboard() {
       {view === 'timetable' && <ReadOnlyTimetable />}
 
       {view === 'analytics' && <Analytics mode='tutor' />}
+      {view === 'settings' && <SettingsView />}
     </DashboardShell>
   )
 }

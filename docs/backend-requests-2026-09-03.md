@@ -1,0 +1,73 @@
+# Backend requests — 2026-09-03 (P0 from post-presentation backlog)
+
+The three P0 items from `docs/post-presentation-backlog-2026-09-03.md`. Item 2
+(tutor profile) was a pure frontend gap and is **fixed**; items 1 and 3 need the
+backend.
+
+---
+
+## 1. Custom roles / permissions — create-role API 🔴
+
+**Symptom:** "not allowed to create a new role."
+
+**Current state (frontend):** the admin *Permissions* screen
+(`src/app/admin/components/RolesPermissions.tsx`) reads roles from
+`GET /api/admin/roles`, but **creating / editing a role saves to a browser-local
+store** (`staffStore.saveRole`) — it never persists server-side. So a created
+role disappears on another device and can't be assigned for real.
+
+**Backend needed:**
+- **`POST /api/admin/roles`** (admin) — create a custom role
+  `{ name, permissions: string[] }` → returns the saved role `{ id, name, permissions }`.
+- **`PUT /api/admin/roles/:id`** (admin) — update a role's name / permissions.
+- **`DELETE /api/admin/roles/:id`** (admin) — remove a role.
+- Make sure the acting admin is **permitted** to manage roles (the current error
+  reads like an authorization rejection, not a missing route).
+- Related, still pending: **staff-account creation** (`POST /api/admin/staff`)
+  so a person can actually be given one of these roles and sign in.
+
+**Frontend follow-up (admin dev):** once the endpoints persist + allow creation,
+switch `RolesPermissions.tsx` from `staffStore.saveRole` to
+`dsaApi.admin.createRole` / update / delete (an `createRole` stub already exists
+in `src/lib/admin-api.ts`). Left to the admin frontend owner — noted in
+`docs/note-for-admin-frontend-dev.md`.
+
+---
+
+## 2. Tutor profile — ✅ fixed frontend-side (no backend change)
+
+"Tutor unable to update his profile" was simply that the **tutor dashboard had no
+Settings screen** — the endpoints already exist (`PUT /auth/updatedetails`,
+`PUT /auth/updatepassword`). Added a **Profile & Settings** tab to the tutor
+dashboard reusing the shared `SettingsView`. Works against the existing
+endpoints; no backend work required. (If `PUT /auth/updatedetails` rejects a
+tutor role, that would be the only backend follow-up — please confirm it accepts
+tutors.)
+
+---
+
+## 3. No cross-tutor "spill-over" — scope tutor endpoints 🔴
+
+**Requirement:** a tutor must only ever see **their own students'** data in
+Gradebook, Assignments, Analytics (and the roster). Today a tutor can see beyond
+their assigned students.
+
+**The frontend already asks for scoped data** — it does not request all students:
+- Gradebook: `GET /courses?tutorId=me` + `GET` tutor students (`analytics.tutorStudents`).
+- Analytics (tutor): `analytics.tutorOverview()` + `analytics.tutorStudents()`.
+- Assignments (tutor): `GET /courses?tutorId=me`, then submissions per course.
+
+So the spill-over is **server-side**: these endpoints must filter to the
+**authenticated tutor's** courses/students, not return the whole set. Please
+verify and enforce scoping on:
+
+- **`GET /courses?tutorId=me`** → only courses that tutor is assigned to.
+- **the tutor students endpoint** (roster / `analytics.tutorStudents`) → only
+  students enrolled in that tutor's courses.
+- **`analytics.tutorOverview`** and any per-course grade/assignment/analytics
+  reads → aggregate only over that tutor's students.
+- **assignment submissions** and **manual grades** reads → a tutor may only read
+  submissions/grades for **their own** assignments/courses.
+
+A tutor should never be able to fetch another tutor's roster, submissions, grades
+or analytics — enforce by the token's tutor id, not a client-supplied filter.
