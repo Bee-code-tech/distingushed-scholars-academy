@@ -155,3 +155,18 @@ Each bulk Excel upload should carry a **batch name** shown on the admin & tutor
 ends (so uploads are identifiable). Store a `batchName` (and uploader) on the
 questions created by an import; return it on `GET /questions` so both ends can
 group/label by batch.
+
+---
+
+## 7. Support / customer care — in-app contact form (P5) 🔴
+
+Students and tutors now have a **Support** screen (in-app contact form). It posts
+to **`POST /support`** with `{ subject, message }` (the authenticated user's name
+& email come from the token). Backend needed:
+
+- **`POST /support`** (authenticated) — record the request `{ userId, name,
+  email, subject, message, createdAt }` and **route it to support** (email the
+  team + a confirmation to the user, or drop it in an admin "Support" inbox).
+- Optional: **`GET /admin/support`** so admins can read/close tickets.
+
+Until it ships, the Send button will error (the form is otherwise ready).

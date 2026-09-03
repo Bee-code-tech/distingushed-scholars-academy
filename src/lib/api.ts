@@ -1340,6 +1340,21 @@ export const dsaApi = {
   // Payment plans — admin-managed (see docs/backend-request-payments.md).
   // A plan: { id, name, kind: 'portal'|'tutorial', amount (kobo/naira),
   // durationMonths, grantsLevel: 'portal'|'tutorial', active }.
+  // Support / customer care — an in-app contact form. Backend endpoint pending
+  // (see docs/backend-requests-2026-09-03.md §7).
+  support: {
+    // POST /support — submit a support request { subject, message } (name/email
+    // come from the authenticated user).
+    create: (body: { subject: string; message: string }, token?: string) =>
+      fetch(`${BASE_URL}/support`, {
+        method: 'POST',
+        headers: getHeaders(token),
+        body: JSON.stringify(body),
+      }).then((r) =>
+        handleResponse<{ success?: boolean; message?: string }>(r),
+      ),
+  },
+
   plans: {
     // GET /plans — active plans a student can pick.
     list: (token?: string) =>

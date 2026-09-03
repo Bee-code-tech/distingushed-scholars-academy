@@ -323,6 +323,7 @@ import {
   BookOpen,
   HelpCircle,
   Sparkles,
+  LifeBuoy,
 } from 'lucide-react'
 
 // API Utility
@@ -355,6 +356,7 @@ import { Badge } from '@/components/ui/badge'
 import SyllabusMastery from './syllabus/page'
 import ExamSchedule from './schedule/page'
 import SettingsView from './settings/page'
+import Support from '@/components/dashboard/Support'
 import OverviewUI from './OverviewUI'
 import ResourcesView from './resources/page'
 import CommunityView from './community/page'
@@ -392,6 +394,7 @@ type ViewState =
   | 'community'
   | 'quizzes'
   | 'unlock'
+  | 'support'
 
 export default function AcademyDashboard() {
   const [mounted, setMounted] = useState(false)
@@ -558,6 +561,7 @@ export default function AcademyDashboard() {
       items: [
         { icon: Sparkles, label: 'Unlock More', view: 'unlock' as ViewState },
         { icon: Settings, label: 'Settings', view: 'settings' as ViewState },
+        { icon: LifeBuoy, label: 'Support', view: 'support' as ViewState },
       ],
     },
   ]
@@ -804,6 +808,7 @@ export default function AcademyDashboard() {
             {activeView === 'unlock' && <UnlockPlans />}
             {activeView === 'schedule' && <ExamSchedule mode={student.mode} />}
             {activeView === 'settings' && <SettingsView />}
+            {activeView === 'support' && <Support />}
           </div>
         </div>
       </main>

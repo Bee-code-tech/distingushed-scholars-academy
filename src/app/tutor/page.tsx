@@ -18,6 +18,7 @@ import {
   HelpCircle,
   Settings,
   FileQuestion,
+  LifeBuoy,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -40,6 +41,7 @@ import Community from '@/components/dashboard/Community'
 import QuestionBank from '@/components/dashboard/QuestionBank'
 import QuizBuilder from '@/app/admin/components/QuizBuilder'
 import SettingsView from '@/app/dashboard/settings/page'
+import Support from '@/components/dashboard/Support'
 import { getStudents, type StoredStudent } from '@/lib/studentsStore'
 import { getCourses, categoryForTrack, getCoursesForTutor } from '@/lib/coursesStore'
 import { getAssignments, getSubmissions } from '@/lib/assignmentsStore'
@@ -119,7 +121,10 @@ const NAV: NavGroup[] = [
   },
   {
     group: 'Account',
-    items: [{ key: 'settings', label: 'Profile & Settings', icon: Settings }],
+    items: [
+      { key: 'settings', label: 'Profile & Settings', icon: Settings },
+      { key: 'support', label: 'Support', icon: LifeBuoy },
+    ],
   },
 ]
 
@@ -375,6 +380,7 @@ export default function TutorDashboard() {
       {view === 'analytics' && <Analytics mode='tutor' />}
       {view === 'create-quiz' && <QuizBuilder />}
       {view === 'settings' && <SettingsView />}
+      {view === 'support' && <Support />}
     </DashboardShell>
   )
 }

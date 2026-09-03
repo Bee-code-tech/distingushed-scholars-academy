@@ -98,8 +98,7 @@ Bigger structural change — do together.
 19. **Announcement badge** 🔴 **[F]** — show a **count of new** announcements/
     notifications on the bell/announcements.
 20. **Support / customer care** 🔴 **[F+B]** — a support/contact channel on the site.
-21. **Timetable "cleared"** ⚪ **[?]** — *needs clarification*: is the timetable
-    showing empty (a bug), or is this item done? Confirm intent.
+21. ~~**Timetable "cleared"**~~ ✅ — resolved / already done (confirmed 2026-09-03).
 
 ---
 
