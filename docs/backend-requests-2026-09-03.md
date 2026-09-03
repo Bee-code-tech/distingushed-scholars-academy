@@ -1,4 +1,4 @@
-# Backend requests — 2026-09-03 (P0 from post-presentation backlog)
+# Backend requests — 2026-09-03 (P0–P2 from post-presentation backlog)
 
 The three P0 items from `docs/post-presentation-backlog-2026-09-03.md`. Item 2
 (tutor profile) was a pure frontend gap and is **fixed**; items 1 and 3 need the
@@ -71,3 +71,29 @@ verify and enforce scoping on:
 
 A tutor should never be able to fetch another tutor's roster, submissions, grades
 or analytics — enforce by the token's tutor id, not a client-supplied filter.
+
+---
+
+## 4. Payments — paid vs free access + 1/2/3-month plans 🟡 (P2)
+
+The 3-level access model (`free` / `portal` / `tutorial`) and the plans UI are
+built (`src/lib/access.ts`, `UnlockPlans.tsx`); the frontend now lets a student
+buy a **tutorial plan for 1, 2 or 3 months** (price = monthly × months). Backend
+needed to make it real:
+
+- **`GET /plans`** — the admin-managed plan list `{ id, name, kind, amount,
+  durationMonths, grantsLevel, note }`. (Frontend shows sensible defaults until
+  this is live.) `amount` is the **per-month** price for tutorial plans.
+- **`POST /payments/online`** and **`POST /payments/offline`** now receive
+  `{ planId, months, amount }` — `months` ∈ {1,2,3} and `amount` = monthly ×
+  months. Verify/record the payment, then **grant access**: set the user's
+  `accessLevel` (`portal` or the plan's `grantsLevel`) and, for tutorial plans,
+  **`tutorialExpiry = now + months`**. The portal already reads `accessLevel` +
+  `tutorialExpiry` and expires access past the date.
+- Return `accessLevel` / `tutorialExpiry` on `GET /auth/me` so the portal
+  reflects paid vs free correctly.
+- The paywall itself is gated by `NEXT_PUBLIC_PAYWALL_ENABLED` (off in beta);
+  flip it on once payments + access-grant are verified.
+
+Admin side (offline approvals) already exists; it just needs the grant-on-approve
+to set `accessLevel` + `tutorialExpiry`.

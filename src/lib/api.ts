@@ -1382,7 +1382,7 @@ export const dsaApi = {
     // POST /payments/online — start a Paystack transaction for a plan; returns
     // an accessCode the browser resumes (like registration). { planId, months? }.
     initOnline: (
-      body: { planId: string; months?: number },
+      body: { planId: string; months?: number; amount?: number },
       token?: string,
     ) =>
       fetch(`${BASE_URL}/payments/online`, {

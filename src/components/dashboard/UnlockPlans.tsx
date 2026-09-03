@@ -102,7 +102,17 @@ export default function UnlockPlans() {
   const [proofUrl, setProofUrl] = useState('')
   const [reference, setReference] = useState('')
   const [amountPaid, setAmountPaid] = useState<number>(0)
+  // Chosen subscription length for tutorial plans (1, 2 or 3 months).
+  const [months, setMonths] = useState(1)
   const proofInput = useRef<HTMLInputElement | null>(null)
+
+  // Tutorial plans are billed per month; portal access is a one-time fee.
+  const isTutorial = selected?.kind === 'tutorial'
+  const effectiveAmount = selected
+    ? isTutorial
+      ? selected.amount * months
+      : selected.amount
+    : 0
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -127,6 +137,7 @@ export default function UnlockPlans() {
     setDone(null)
     setProofUrl('')
     setReference('')
+    setMonths(1)
     setAmountPaid(p.amount)
   }
 
@@ -136,7 +147,11 @@ export default function UnlockPlans() {
     setBusy(true)
     try {
       const res = (await dsaApi.payments.initOnline(
-        { planId: selected.id, months: selected.durationMonths || undefined },
+        {
+          planId: selected.id,
+          months: isTutorial ? months : selected.durationMonths || undefined,
+          amount: effectiveAmount,
+        },
         token,
       )) as { accessCode?: string }
       if (!res?.accessCode)
@@ -184,8 +199,8 @@ export default function UnlockPlans() {
       await dsaApi.payments.offline(
         {
           planId: selected.id,
-          months: selected.durationMonths || undefined,
-          amount: amountPaid || selected.amount,
+          months: isTutorial ? months : selected.durationMonths || undefined,
+          amount: amountPaid || effectiveAmount,
           method: 'offline',
           reference: reference || undefined,
           proofUrl,
@@ -224,12 +239,11 @@ export default function UnlockPlans() {
           </p>
           <h3 className='text-xl font-black mt-1'>{selected.name}</h3>
           <p className='text-3xl font-black mt-2'>
-            {naira(selected.amount)}
-            {selected.durationMonths > 0 && (
+            {naira(effectiveAmount)}
+            {isTutorial && (
               <span className='text-sm font-bold text-blue-200'>
                 {' '}
-                / {selected.durationMonths} month
-                {selected.durationMonths === 1 ? '' : 's'}
+                / {months} month{months === 1 ? '' : 's'}
               </span>
             )}
           </p>
@@ -237,6 +251,40 @@ export default function UnlockPlans() {
             <p className='text-[12px] text-blue-100 mt-2'>{selected.note}</p>
           )}
         </Card>
+
+        {/* Duration — tutorial plans can be bought for 1, 2 or 3 months */}
+        {isTutorial && (
+          <Card className='p-3 rounded-2xl border-none shadow-sm bg-white'>
+            <p className='text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2'>
+              Duration
+            </p>
+            <div className='grid grid-cols-3 gap-2'>
+              {[1, 2, 3].map((m) => (
+                <button
+                  key={m}
+                  onClick={() => {
+                    setMonths(m)
+                    setAmountPaid(selected.amount * m)
+                  }}
+                  className={`rounded-xl px-2 py-2.5 text-center border transition-all ${
+                    months === m
+                      ? 'bg-[#002EFF] text-white border-[#002EFF]'
+                      : 'bg-slate-50 text-slate-600 border-transparent hover:border-[#002EFF]/30'
+                  }`}
+                >
+                  <span className='block text-[13px] font-black'>
+                    {m} month{m === 1 ? '' : 's'}
+                  </span>
+                  <span
+                    className={`block text-[10px] font-bold ${months === m ? 'text-blue-100' : 'text-slate-400'}`}
+                  >
+                    {naira(selected.amount * m)}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </Card>
+        )}
 
         {error && <p className='text-[11px] font-bold text-rose-600 px-1'>{error}</p>}
 
