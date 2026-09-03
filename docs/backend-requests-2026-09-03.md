@@ -97,3 +97,28 @@ needed to make it real:
 
 Admin side (offline approvals) already exists; it just needs the grant-on-approve
 to set `accessLevel` + `tutorialExpiry`.
+
+---
+
+## 5. Classes & tracks (P3)
+
+Registration **already** captures a **class** (SS1 / SS2 / SS3) separate from the
+programme (`classLevel`, sent as `currentLevel`; the backend stores & returns it —
+confirmed `currentLevel: "SS3"`). The student **home now shows the class beside
+the track** (frontend done). Remaining work is backend + the admin roster:
+
+- **Courses keyed off class** — a course should target a **class** (SS1/SS2/SS3),
+  so a tutor's course and a student's class line up. Add a `class` (or reuse
+  `currentLevel`) dimension to the course model / enrolment.
+- **WAEC as a course** under the SS classes (rather than a standalone programme),
+  per the new structure.
+- **Tutor sees his class's students** — the tutor roster/analytics should include
+  the students in the classes/courses he teaches (this is the same scoping fix as
+  §3 — enforce by the tutor's assignments).
+- **Get students by programme / class** — an admin endpoint (or query params on
+  the roster list, e.g. `GET /admin/users?role=student&programme=&class=`) so the
+  admin roster can **search + filter** by programme/class.
+
+**Admin frontend (admin dev):** wire a search box + programme/class filter dropdown
+into `StudentRoster.tsx` against that endpoint. Left to the admin owner (didn't
+touch the component).

@@ -352,7 +352,7 @@ export default function OverviewUI({
                   {DEPARTMENT_LABELS[student.department]}
                 </Badge>
               )}
-              {!trackConfig.hasExam && student.yearLabel && (
+              {student.yearLabel && (
                 <Badge className='bg-white/15 text-white border-none font-bold px-3 py-1'>
                   {student.yearLabel}
                 </Badge>

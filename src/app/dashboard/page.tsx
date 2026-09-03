@@ -617,10 +617,15 @@ export default function AcademyDashboard() {
           <span className='text-white font-black text-sm tracking-tighter uppercase leading-none'>
             DSA.Portal
           </span>
-          <div className='flex items-center gap-1 mt-1'>
+          <div className='flex items-center gap-1 mt-1 flex-wrap'>
             <Badge className='bg-yellow-400 text-[#002EFF] text-[8px] py-0 h-4 w-fit font-black'>
               {student.trackConfig.label}
             </Badge>
+            {student.yearLabel && (
+              <Badge className='bg-white/15 text-white text-[8px] py-0 h-4 w-fit font-bold'>
+                {student.yearLabel}
+              </Badge>
+            )}
             <Badge className='bg-white/15 text-white text-[8px] py-0 h-4 w-fit font-bold'>
               {student.modeConfig.label}
             </Badge>
@@ -736,7 +741,9 @@ export default function AcademyDashboard() {
                   {user.name}
                 </p>
                 <p className='text-[9px] text-zinc-400 font-bold uppercase'>
-                  {student.trackConfig.label} · {student.modeConfig.label}
+                  {student.trackConfig.label}
+                  {student.yearLabel ? ` · ${student.yearLabel}` : ''} ·{' '}
+                  {student.modeConfig.label}
                 </p>
               </div>
               <Avatar className='h-9 w-9 border-2 border-white shadow-md'>
