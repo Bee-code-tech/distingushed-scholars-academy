@@ -35,6 +35,8 @@ export const PERMISSIONS: Permission[] = [
   // Academics
   { key: 'courses.manage', label: 'Manage courses & tutor assignments', module: 'Academics' },
   { key: 'quizzes.manage', label: 'Build / manage quizzes', module: 'Academics' },
+  { key: 'quizzes.create', label: 'Create quizzes', module: 'Academics' },
+  { key: 'quizzes.delete', label: 'Delete quizzes', module: 'Academics' },
   { key: 'library.manage', label: 'Manage learning library', module: 'Academics' },
   { key: 'attendance.manage', label: 'Activate / close attendance', module: 'Academics' },
   { key: 'timetable.view', label: 'View timetable', module: 'Academics' },
