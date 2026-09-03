@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { dsaApi } from '@/lib/api'
+import { canCreateQuiz, canDeleteQuiz } from '@/lib/quizPermissions'
 import { JAMB_SUBJECTS } from '../constants/quiz'
 import {
   EXAM_TRACKS,
@@ -97,6 +98,8 @@ function toEmbed(q: BankQ) {
 
 export default function QuizBuilder() {
   const token = adminToken()
+  const canCreate = canCreateQuiz()
+  const canDelete = canDeleteQuiz()
   const [quizzes, setQuizzes] = useState<Record<string, unknown>[]>([])
   const [loadingList, setLoadingList] = useState(true)
   const [openAttempts, setOpenAttempts] = useState<string | null>(null)
@@ -300,29 +303,31 @@ export default function QuizBuilder() {
                 : 'Your published quizzes'}
           </p>
         </div>
-        <button
-          onClick={() => {
-            if (showBuilder) {
-              // Leaving the builder — clear any in-progress edit.
-              setEditingId(null)
-              setShowBuilder(false)
-            } else {
-              setEditingId(null)
-              setShowBuilder(true)
-            }
-          }}
-          className='flex items-center gap-2 h-10 px-4 rounded-xl bg-[#002EFF] text-white font-black text-[11px] uppercase tracking-wide hover:bg-blue-700 active:scale-[0.98] shrink-0'
-        >
-          {showBuilder ? (
-            <>
-              <ArrowLeft size={15} /> Back to list
-            </>
-          ) : (
-            <>
-              <Plus size={15} /> Create New Quiz
-            </>
-          )}
-        </button>
+        {(canCreate || showBuilder) && (
+          <button
+            onClick={() => {
+              if (showBuilder) {
+                // Leaving the builder — clear any in-progress edit.
+                setEditingId(null)
+                setShowBuilder(false)
+              } else {
+                setEditingId(null)
+                setShowBuilder(true)
+              }
+            }}
+            className='flex items-center gap-2 h-10 px-4 rounded-xl bg-[#002EFF] text-white font-black text-[11px] uppercase tracking-wide hover:bg-blue-700 active:scale-[0.98] shrink-0'
+          >
+            {showBuilder ? (
+              <>
+                <ArrowLeft size={15} /> Back to list
+              </>
+            ) : (
+              <>
+                <Plus size={15} /> Create New Quiz
+              </>
+            )}
+          </button>
+        )}
       </div>
 
       {notice && (
@@ -665,13 +670,15 @@ export default function QuizBuilder() {
                 >
                   <Power size={11} /> {q.isActive ? 'Live' : 'Draft'}
                 </button>
-                <button
-                  onClick={() => removeQuiz(id)}
-                  className='p-1.5 text-slate-300 hover:text-rose-500'
-                  title='Delete quiz'
-                >
-                  <Trash2 size={14} />
-                </button>
+                {canDelete && (
+                  <button
+                    onClick={() => removeQuiz(id)}
+                    className='p-1.5 text-slate-300 hover:text-rose-500'
+                    title='Delete quiz'
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                )}
               </Card>
               {openAttempts === id && (
                 <AttemptsPanel quizId={id} token={token} />

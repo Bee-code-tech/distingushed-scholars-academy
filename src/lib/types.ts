@@ -19,6 +19,9 @@ export interface User {
   // For `role: 'staff'` — which staff role (secretary, auditor, …) they hold.
   // Their permissions are resolved from this via staffStore.getRole().
   staffRoleId?: string
+  // Effective permission keys, when the backend supplies them directly (e.g. on
+  // /auth/me). Falls back to the staff role's permissions when absent.
+  permissions?: string[]
   isDSAite?: boolean
   avatarUrl?: string
   phone?: string
