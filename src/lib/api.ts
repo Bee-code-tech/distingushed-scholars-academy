@@ -222,6 +222,17 @@ export const dsaApi = {
         body: JSON.stringify(payload),
       }).then((r) => handleResponse<Quiz>(r)),
 
+    // PUT /quizzes/:id — partial update of a quiz's details (admin/owner).
+    // Omitting `subjects` leaves the existing questions untouched.
+    update: (id: string, payload: Record<string, unknown>, token?: string) =>
+      fetch(`${BASE_URL}/quizzes/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        headers: getHeaders(token),
+        body: JSON.stringify(payload),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => ((r as { data?: unknown }).data ?? r) as Quiz),
+
     getByLink: (link: string, token?: string) =>
       fetch(`${BASE_URL}/quizzes/link/${link}`, {
         method: 'GET',

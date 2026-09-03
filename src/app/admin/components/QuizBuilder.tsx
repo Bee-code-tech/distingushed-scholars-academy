@@ -18,6 +18,7 @@ import {
   Users,
   Link as LinkIcon,
   ArrowLeft,
+  Pencil,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { dsaApi } from '@/lib/api'
@@ -101,6 +102,8 @@ export default function QuizBuilder() {
   const [openAttempts, setOpenAttempts] = useState<string | null>(null)
   // The list is the default view; the builder form opens on "Create New Quiz".
   const [showBuilder, setShowBuilder] = useState(false)
+  // When set, the builder is editing an existing quiz's details (not creating).
+  const [editingId, setEditingId] = useState<string | null>(null)
 
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -162,7 +165,9 @@ export default function QuizBuilder() {
   const publish = async () => {
     setError(null)
     if (title.trim().length < 3) return setError('Enter a quiz title.')
-    if (totalQuestions === 0) return setError('Add at least one question.')
+    // When editing, we update details only — questions aren't re-picked here.
+    if (!editingId && totalQuestions === 0)
+      return setError('Add at least one question.')
     setPublishing(true)
     setPublicLink(null)
     setCopied(false)
@@ -173,43 +178,49 @@ export default function QuizBuilder() {
       !isFree && effectiveTrack !== 'all' && isDeptSplitTrack(effectiveTrack)
         ? department
         : undefined
+    // Shared detail fields (title, audience, access, attempts, result controls).
+    const details: Record<string, unknown> = {
+      title: title.trim(),
+      description: description.trim() || title.trim(),
+      accessMode,
+      maxAttempts: Math.max(0, parseInt(maxAttempts, 10) || 0),
+      showResults,
+      showCorrections,
+      track: effectiveTrack === 'all' ? 'all' : effectiveTrack,
+      department: dept,
+      audience: audienceLabel(
+        effectiveTrack === 'all' ? null : effectiveTrack,
+        dept,
+      ),
+    }
     try {
-      const created = (await dsaApi.quizzes.create(
-        {
-          title: title.trim(),
-          description: description.trim() || title.trim(),
-          type: 'general',
-          accessMode,
-          // Attempts & result controls (see docs/backend-requests-2026-09-02.md).
-          maxAttempts: Math.max(0, parseInt(maxAttempts, 10) || 0),
-          showResults,
-          showCorrections,
-          // Audience targeting — students only see quizzes for their programme.
-          track: effectiveTrack === 'all' ? 'all' : effectiveTrack,
-          department: dept,
-          audience: audienceLabel(
-            effectiveTrack === 'all' ? null : effectiveTrack,
-            dept,
-          ),
-          subjects: blocks
-            .filter((b) => b.picked.length)
-            .map((b) => ({
-              name: b.name,
-              timeLimit: Number(b.timeLimit) || 0,
-              questions: b.picked.map(toEmbed),
-            })),
-        } as Record<string, unknown>,
-        token,
-      )) as { link?: string } | undefined
-      if (isFree) {
-        // Show the shareable public link (the backend returns a `link` slug).
-        const slug = created?.link
-        setPublicLink(
-          slug
-            ? `${window.location.origin}/q/${slug}`
-            : 'link-pending', // backend hasn't shipped the slug yet
-        )
+      if (editingId) {
+        // Update details only — omitting `subjects` keeps the questions intact.
+        await dsaApi.quizzes.update(editingId, details, token)
+      } else {
+        const created = (await dsaApi.quizzes.create(
+          {
+            ...details,
+            type: 'general',
+            subjects: blocks
+              .filter((b) => b.picked.length)
+              .map((b) => ({
+                name: b.name,
+                timeLimit: Number(b.timeLimit) || 0,
+                questions: b.picked.map(toEmbed),
+              })),
+          } as Record<string, unknown>,
+          token,
+        )) as { link?: string } | undefined
+        if (isFree) {
+          // Show the shareable public link (backend returns a `link` slug).
+          const slug = created?.link
+          setPublicLink(
+            slug ? `${window.location.origin}/q/${slug}` : 'link-pending',
+          )
+        }
       }
+      const wasEditing = !!editingId
       setTitle('')
       setDescription('')
       setTrack('all')
@@ -219,16 +230,37 @@ export default function QuizBuilder() {
       setShowResults(true)
       setShowCorrections(true)
       setBlocks([])
-      // Free quizzes keep the builder open so the shareable link is visible;
-      // otherwise drop back to the list where the new quiz now appears.
-      if (!isFree) setShowBuilder(false)
-      flash(isFree ? 'Free quiz published' : 'Quiz published')
+      setEditingId(null)
+      // Editing or a portal publish returns to the list; a free publish stays so
+      // the shareable link shows.
+      if (wasEditing || !isFree) setShowBuilder(false)
+      flash(wasEditing ? 'Quiz updated' : isFree ? 'Free quiz published' : 'Quiz published')
       loadList()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not publish the quiz.')
+      setError(e instanceof Error ? e.message : 'Could not save the quiz.')
     } finally {
       setPublishing(false)
     }
+  }
+
+  // Open the builder pre-filled to edit a quiz's details.
+  const startEdit = (q: Record<string, unknown>) => {
+    const id = str(q.id ?? q._id)
+    setEditingId(id)
+    setTitle(str(q.title))
+    setDescription(str(q.description))
+    const mode = q.accessMode === 'free' ? 'free' : 'portal'
+    setAccessMode(mode)
+    const t = str(q.track || 'all')
+    setTrack((t === 'all' ? 'all' : t) as ExamTrack | 'all')
+    if (q.department) setDepartment(q.department as Department)
+    setMaxAttempts(String(q.maxAttempts ?? 1))
+    setShowResults(q.showResults !== false)
+    setShowCorrections(q.showCorrections !== false)
+    setBlocks([])
+    setPublicLink(null)
+    setError(null)
+    setShowBuilder(true)
   }
 
   const toggleStatus = async (q: Record<string, unknown>) => {
@@ -261,13 +293,24 @@ export default function QuizBuilder() {
             <HelpCircle size={20} className='text-[#002EFF]' /> Quizzes
           </h1>
           <p className='text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-1'>
-            {showBuilder
-              ? 'Build a quiz from the tutor question bank'
-              : 'Your published quizzes'}
+            {editingId
+              ? 'Edit quiz details'
+              : showBuilder
+                ? 'Build a quiz from the tutor question bank'
+                : 'Your published quizzes'}
           </p>
         </div>
         <button
-          onClick={() => setShowBuilder((v) => !v)}
+          onClick={() => {
+            if (showBuilder) {
+              // Leaving the builder — clear any in-progress edit.
+              setEditingId(null)
+              setShowBuilder(false)
+            } else {
+              setEditingId(null)
+              setShowBuilder(true)
+            }
+          }}
           className='flex items-center gap-2 h-10 px-4 rounded-xl bg-[#002EFF] text-white font-black text-[11px] uppercase tracking-wide hover:bg-blue-700 active:scale-[0.98] shrink-0'
         >
           {showBuilder ? (
@@ -483,31 +526,47 @@ export default function QuizBuilder() {
           </label>
         </div>
 
-        {blocks.map((b, i) => (
-          <SubjectBlockEditor
-            key={i}
-            block={b}
-            token={token}
-            onChange={(patch) => patchBlock(i, patch)}
-            onRemove={() => removeBlock(i)}
-          />
-        ))}
+        {editingId ? (
+          <p className='text-[10px] font-bold text-slate-400 rounded-xl bg-slate-50 px-3 py-2.5'>
+            Editing this quiz&apos;s details (title, audience, access, attempts,
+            result settings). The questions stay as they are — to change questions,
+            create a new quiz.
+          </p>
+        ) : (
+          <>
+            {blocks.map((b, i) => (
+              <SubjectBlockEditor
+                key={i}
+                block={b}
+                token={token}
+                onChange={(patch) => patchBlock(i, patch)}
+                onRemove={() => removeBlock(i)}
+              />
+            ))}
 
-        <button
-          onClick={addBlock}
-          className='w-full flex items-center justify-center gap-2 h-10 rounded-xl border-2 border-dashed border-slate-200 text-slate-500 text-[11px] font-black uppercase tracking-wide hover:border-[#002EFF]/40 hover:text-[#002EFF]'
-        >
-          <Plus size={14} /> Add subject
-        </button>
+            <button
+              onClick={addBlock}
+              className='w-full flex items-center justify-center gap-2 h-10 rounded-xl border-2 border-dashed border-slate-200 text-slate-500 text-[11px] font-black uppercase tracking-wide hover:border-[#002EFF]/40 hover:text-[#002EFF]'
+            >
+              <Plus size={14} /> Add subject
+            </button>
+          </>
+        )}
 
         <div className='flex items-center justify-between pt-1'>
           <span className='text-[11px] font-black text-slate-400 flex items-center gap-1'>
-            {totalQuestions} question{totalQuestions === 1 ? '' : 's'} ·{' '}
-            {blocks.length} subject{blocks.length === 1 ? '' : 's'}
-            {totalMinutes > 0 && (
+            {editingId ? (
+              'Editing details'
+            ) : (
               <>
-                {' '}
-                · <Clock size={11} /> {totalMinutes} min total
+                {totalQuestions} question{totalQuestions === 1 ? '' : 's'} ·{' '}
+                {blocks.length} subject{blocks.length === 1 ? '' : 's'}
+                {totalMinutes > 0 && (
+                  <>
+                    {' '}
+                    · <Clock size={11} /> {totalMinutes} min total
+                  </>
+                )}
               </>
             )}
           </span>
@@ -521,7 +580,7 @@ export default function QuizBuilder() {
             ) : (
               <Check size={15} />
             )}
-            Publish quiz
+            {editingId ? 'Save changes' : 'Publish quiz'}
           </button>
         </div>
       </Card>
@@ -575,6 +634,13 @@ export default function QuizBuilder() {
                     )}
                   </p>
                 </div>
+                <button
+                  onClick={() => startEdit(q)}
+                  className='flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase bg-slate-100 text-slate-500 hover:text-[#002EFF]'
+                  title='Edit quiz details'
+                >
+                  <Pencil size={11} /> Edit
+                </button>
                 <button
                   onClick={() =>
                     setOpenAttempts((cur) => (cur === id ? null : id))
