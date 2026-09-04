@@ -9,6 +9,7 @@ export interface StoredStudent {
   key: string // username
   name: string
   track: string // display label, e.g. "JAMB"
+  level?: string // class/level, e.g. "SS2", "100 Level"
   mode?: string // "physical" | "online"
   avg?: number
   progress?: number

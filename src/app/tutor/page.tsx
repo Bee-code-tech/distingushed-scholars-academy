@@ -67,10 +67,12 @@ const TRACK_LABEL: Record<string, string> = {
 function mapRosterStudent(s: Record<string, unknown>): StoredStudent {
   const track = String(s.examTrack ?? s.level ?? '')
   const mode = String(s.learningMode ?? s.studyMode ?? '')
+  const level = String(s.currentLevel ?? s.level ?? '').trim()
   return {
     key: String(s.id ?? s._id ?? ''),
     name: String(s.fullname ?? s.fullName ?? 'Student'),
     track: TRACK_LABEL[track] ?? (track || '—'),
+    level: level || undefined,
     mode: mode === 'physical' || mode === 'online' ? mode : undefined,
     avg: asNum(s.averageScore) ?? asNum(s.avg),
     progress: asNum(s.progressPercent) ?? asNum(s.progress),
@@ -327,6 +329,11 @@ export default function TutorDashboard() {
               <div key={s.key} className='grid grid-cols-12 items-center px-5 py-4 border-t border-slate-50'>
                 <span className='col-span-4 text-xs font-black text-gray-800'>
                   {s.name}
+                  {s.level && (
+                    <span className='ml-2 text-[8px] font-black uppercase text-[#002EFF] bg-blue-50 px-1.5 py-0.5 rounded'>
+                      {s.level}
+                    </span>
+                  )}
                   {s.isNew && (
                     <span className='ml-2 text-[8px] font-black uppercase text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded'>
                       New
