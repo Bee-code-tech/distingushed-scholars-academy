@@ -863,17 +863,7 @@ export default function AdminAdmin() {
       group: 'People',
       items: [
         { id: 'view-tutors' as AdminTab, label: 'Tutors', icon: GraduationCap },
-        {
-          id: 'create-tutor' as AdminTab,
-          label: 'Create Tutor',
-          icon: UserPlus,
-        },
         { id: 'view-guardians' as AdminTab, label: 'Guardians', icon: Users },
-        {
-          id: 'create-guardian' as AdminTab,
-          label: 'Create Guardian',
-          icon: UserPlus,
-        },
       ],
     },
     {

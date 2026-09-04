@@ -577,6 +577,8 @@ import {
   BookOpen,
   CheckCircle2,
   XCircle,
+  UserPlus,
+  ArrowLeft,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -589,6 +591,8 @@ import {
   StaffRoleItem,
   type AdminUserListItem,
 } from '@/lib/admin-api'
+import CreateTutor from './CreateTutor'
+import CreateGuardian from './CreateGuardian'
 
 export const PERMISSION_KEYS = [
   'payments.verify',
@@ -650,10 +654,17 @@ export default function PeopleRoster({
   const [showRoleModal, setShowRoleModal] = useState(false)
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  // List-first: the "Create Tutor/Guardian" form is revealed inline (merged in
+  // from the old separate nav screen). reloadKey re-fetches the roster when the
+  // admin returns from creating someone, so the new person shows up.
+  const [showCreate, setShowCreate] = useState(false)
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     let cancelled = false
+    setShowCreate(false)
     ;(async () => {
+      setLoading(true)
       try {
         const response = await adminApi.getUsers({
           role: kind === 'tutors' ? 'tutor' : 'parent',
@@ -682,7 +693,7 @@ export default function PeopleRoster({
     return () => {
       cancelled = true
     }
-  }, [kind])
+  }, [kind, reloadKey])
 
   const toggleExpand = (id: string) => {
     setExpandedId((prev) => (prev === id ? null : id))
@@ -769,6 +780,26 @@ export default function PeopleRoster({
   const title = isTutor ? 'Tutors' : 'Guardians'
   const extraLabel = isTutor ? 'Subject' : 'Ward'
   const Icon = isTutor ? GraduationCap : Users
+  const createLabel = isTutor ? 'Create Tutor' : 'Create Guardian'
+
+  // Merged create screen (list-first): show the create form inline with a way
+  // back to the roster, which re-fetches so the new person appears.
+  if (showCreate) {
+    return (
+      <div className='max-w-5xl mx-auto space-y-4 px-4 py-2'>
+        <button
+          onClick={() => {
+            setShowCreate(false)
+            setReloadKey((k) => k + 1)
+          }}
+          className='inline-flex items-center gap-1.5 text-[11px] font-black uppercase tracking-wide text-[#002EFF] hover:underline'
+        >
+          <ArrowLeft size={14} /> Back to {title}
+        </button>
+        {isTutor ? <CreateTutor /> : <CreateGuardian />}
+      </div>
+    )
+  }
 
   return (
     <div className='max-w-5xl mx-auto space-y-4 px-4 py-2'>
@@ -801,13 +832,22 @@ export default function PeopleRoster({
           </span>
         </div>
 
-        {/* Modal Trigger */}
-        <button
-          onClick={() => setShowRoleModal(true)}
-          className='flex items-center gap-1.5 px-3.5 py-2 bg-[#002EFF] text-white rounded-xl text-[10px] font-black uppercase tracking-wide hover:bg-blue-700 transition-all shadow-md shadow-blue-200 active:scale-95'
-        >
-          <ShieldCheck size={14} /> Upsert Staff Role
-        </button>
+        <div className='flex items-center gap-2'>
+          {/* Create (merged from the old separate screen) */}
+          <button
+            onClick={() => setShowCreate(true)}
+            className='flex items-center gap-1.5 px-3.5 py-2 bg-[#002EFF] text-white rounded-xl text-[10px] font-black uppercase tracking-wide hover:bg-blue-700 transition-all shadow-md shadow-blue-200 active:scale-95'
+          >
+            <UserPlus size={14} /> {createLabel}
+          </button>
+          {/* Modal Trigger */}
+          <button
+            onClick={() => setShowRoleModal(true)}
+            className='flex items-center gap-1.5 px-3.5 py-2 bg-white text-[#002EFF] border border-blue-200 rounded-xl text-[10px] font-black uppercase tracking-wide hover:bg-blue-50 transition-all active:scale-95'
+          >
+            <ShieldCheck size={14} /> Upsert Staff Role
+          </button>
+        </div>
       </div>
 
       {/* Cards Box Grid */}
