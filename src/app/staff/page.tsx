@@ -15,8 +15,10 @@ import {
   Clock,
   Lock,
   Send,
+  LifeBuoy,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
+import SupportTickets from '@/app/admin/components/SupportTickets'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import DashboardShell, {
@@ -96,6 +98,8 @@ export default function StaffDashboard() {
       items.push({ key: 'announcements', label: 'Announcements', icon: Megaphone })
     if (can('reports.view'))
       items.push({ key: 'reports', label: 'Reports', icon: BarChart3 })
+    if (can('support.view'))
+      items.push({ key: 'support', label: 'Support', icon: LifeBuoy })
     return items
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [permissions])
@@ -155,6 +159,8 @@ export default function StaffDashboard() {
       {view === 'announcements' && <AnnouncementsPanel staffName={firstName} />}
 
       {view === 'reports' && <ReportsPanel />}
+
+      {view === 'support' && <SupportTickets />}
     </DashboardShell>
   )
 }

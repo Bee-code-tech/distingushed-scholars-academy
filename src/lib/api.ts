@@ -1383,6 +1383,29 @@ export const dsaApi = {
       }).then((r) =>
         handleResponse<{ success?: boolean; message?: string }>(r),
       ),
+
+    // GET /admin/support — list tickets (admin or a support agent with the
+    // support.view permission).
+    list: (status?: string, token?: string) => {
+      const qs = status ? `?status=${encodeURIComponent(status)}` : ''
+      return fetch(`${BASE_URL}/admin/support${qs}`, { headers: getHeaders(token) })
+        .then((r) =>
+          handleResponse<
+            Record<string, unknown>[] | { data?: Record<string, unknown>[] }
+          >(r),
+        )
+        .then((res) => (Array.isArray(res) ? res : (res?.data ?? [])))
+    },
+
+    // PATCH /admin/support/:id — close or reopen a ticket.
+    setStatus: (id: string, status: 'open' | 'closed', token?: string) =>
+      fetch(`${BASE_URL}/admin/support/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers: getHeaders(token),
+        body: JSON.stringify({ status }),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
   },
 
   plans: {

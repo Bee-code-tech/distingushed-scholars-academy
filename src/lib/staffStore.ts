@@ -46,6 +46,8 @@ export const PERMISSIONS: Permission[] = [
   { key: 'announcements.send', label: 'Send announcements', module: 'Engagement' },
   { key: 'community.moderate', label: 'Moderate community', module: 'Engagement' },
   { key: 'reports.view', label: 'View reports & analytics', module: 'Engagement' },
+  { key: 'support.view', label: 'View support tickets', module: 'Engagement' },
+  { key: 'support.manage', label: 'Close / reopen support tickets', module: 'Engagement' },
 
   // Finance
   { key: 'payments.history', label: 'View payment history', module: 'Finance' },

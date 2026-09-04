@@ -742,6 +742,7 @@ import {
   ShieldCheck,
   Megaphone,
   MessagesSquare,
+  LifeBuoy,
   Wallet,
   LogOut,
   Menu,
@@ -778,6 +779,7 @@ import QuizBuilder from './components/QuizBuilder'
 import CommunityModeration from './components/CommunityModeration'
 import PaymentsAdmin from './components/PaymentsAdmin'
 import RolesPermissions from './components/RolesPermissions'
+import SupportTickets from './components/SupportTickets'
 import { AnimatePresence, motion } from 'framer-motion'
 import { isAdmin, clearSession } from '@/lib/admin-auth'
 
@@ -796,6 +798,7 @@ type AdminTab =
   | 'timetable'
   | 'broadcast'
   | 'community'
+  | 'support'
   | 'payments'
   | 'roles'
 
@@ -897,6 +900,11 @@ export default function AdminAdmin() {
           label: 'Community',
           icon: MessagesSquare,
         },
+        {
+          id: 'support' as AdminTab,
+          label: 'Support',
+          icon: LifeBuoy,
+        },
       ],
     },
     {
@@ -936,6 +944,8 @@ export default function AdminAdmin() {
         return <Announcements mode='tutor' />
       case 'community':
         return <CommunityModeration />
+      case 'support':
+        return <SupportTickets />
       case 'payments':
         return <PaymentsAdmin />
       case 'roles':
