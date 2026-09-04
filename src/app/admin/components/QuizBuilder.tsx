@@ -1105,6 +1105,74 @@ function AttemptsPanel({ quizId, token }: { quizId: string; token?: string }) {
   const [board, setBoard] = useState<Record<string, unknown>[]>([])
   const [loading, setLoading] = useState(true)
   const [ready, setReady] = useState(true)
+  // Per-student score breakdown (View button).
+  const [openDetail, setOpenDetail] = useState<string | null>(null)
+  const [resultsById, setResultsById] = useState<
+    Record<string, Record<string, unknown>>
+  >({})
+  const [questionMap, setQuestionMap] = useState<
+    Record<string, { subject: string }>
+  >({})
+  const [detailLoading, setDetailLoading] = useState(false)
+
+  // Load the per-question results + the quiz's question→subject map, once.
+  const loadDetailData = useCallback(async () => {
+    if (Object.keys(resultsById).length) return
+    setDetailLoading(true)
+    try {
+      const [results, quiz] = await Promise.all([
+        dsaApi.quizzes.results(quizId, token) as Promise<
+          Record<string, unknown>[]
+        >,
+        dsaApi.quizzes.get(quizId, token) as Promise<Record<string, unknown>>,
+      ])
+      const byId: Record<string, Record<string, unknown>> = {}
+      results.forEach((r) => {
+        byId[str(r.id ?? r._id)] = r
+      })
+      setResultsById(byId)
+      const qmap: Record<string, { subject: string }> = {}
+      const subjects = Array.isArray(quiz?.subjects) ? quiz.subjects : []
+      subjects.forEach((s: Record<string, unknown>) => {
+        const qs = Array.isArray(s.questions) ? s.questions : []
+        qs.forEach((q: Record<string, unknown>) => {
+          qmap[str(q._id ?? q.id)] = { subject: str(s.name || 'General') }
+        })
+      })
+      setQuestionMap(qmap)
+    } catch {
+      /* results endpoint unavailable — the detail just won't populate */
+    } finally {
+      setDetailLoading(false)
+    }
+  }, [quizId, token, resultsById])
+
+  const openStudent = (aid: string) => {
+    if (openDetail === aid) {
+      setOpenDetail(null)
+      return
+    }
+    setOpenDetail(aid)
+    loadDetailData()
+  }
+
+  // Compute a student's per-subject correct/total from their stored answers.
+  const breakdownFor = (aid: string) => {
+    const result = resultsById[aid]
+    const answers = Array.isArray(result?.answers)
+      ? (result!.answers as Record<string, unknown>[])
+      : []
+    if (!answers.length) return null
+    const bySubject: Record<string, { correct: number; total: number }> = {}
+    answers.forEach((a) => {
+      const subj = questionMap[str(a.questionId)]?.subject || 'General'
+      if (!bySubject[subj]) bySubject[subj] = { correct: 0, total: 0 }
+      bySubject[subj].total += 1
+      if (a.isCorrect) bySubject[subj].correct += 1
+    })
+    const correct = answers.filter((a) => a.isCorrect).length
+    return { bySubject, correct, total: answers.length, answers }
+  }
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -1204,44 +1272,100 @@ function AttemptsPanel({ quizId, token }: { quizId: string; token?: string }) {
               {attempts.map((r) => {
                 const aid = rowId(r)
                 const withdrawn = !!r.withdrawn
+                const isOpen = openDetail === aid
+                const detail = isOpen ? breakdownFor(aid) : null
                 return (
-                  <div
-                    key={aid}
-                    className={`flex items-center gap-2 rounded-xl bg-white px-3 py-2 ${withdrawn ? 'opacity-50' : ''}`}
-                  >
-                    <div className='min-w-0 flex-1'>
-                      <p className='text-[11px] font-black text-slate-700 truncate'>
-                        {str(r.studentName ?? r.fullname ?? r.username ?? 'Student')}
-                        {withdrawn && (
-                          <span className='ml-1 text-[9px] font-black uppercase text-rose-500'>
-                            · withdrawn
-                          </span>
-                        )}
-                      </p>
-                      <p className='text-[9px] font-bold text-slate-400'>
-                        {pctOf(r)}% · {str(r.score ?? r.totalScore)}/
-                        {str(r.totalMarks ?? r.total)}
-                        {r.submittedAt
-                          ? ` · ${new Date(str(r.submittedAt)).toLocaleDateString()}`
-                          : ''}
-                      </p>
-                    </div>
-                    {!withdrawn && (
-                      <button
-                        onClick={() => withdraw(aid)}
-                        className='px-2 py-1 rounded-lg bg-amber-50 text-amber-600 text-[9px] font-black uppercase'
-                        title='Withdraw result (keeps the record, voids the score)'
-                      >
-                        Withdraw
-                      </button>
-                    )}
-                    <button
-                      onClick={() => del(aid)}
-                      className='p-1 text-slate-300 hover:text-rose-500'
-                      title='Delete attempt'
+                  <div key={aid} className='rounded-xl bg-white overflow-hidden'>
+                    <div
+                      className={`flex items-center gap-2 px-3 py-2 ${withdrawn ? 'opacity-50' : ''}`}
                     >
-                      <Trash2 size={13} />
-                    </button>
+                      <div className='min-w-0 flex-1'>
+                        <p className='text-[11px] font-black text-slate-700 truncate'>
+                          {str(r.studentName ?? r.fullname ?? r.username ?? 'Student')}
+                          {withdrawn && (
+                            <span className='ml-1 text-[9px] font-black uppercase text-rose-500'>
+                              · withdrawn
+                            </span>
+                          )}
+                        </p>
+                        <p className='text-[9px] font-bold text-slate-400'>
+                          {pctOf(r)}% · {str(r.score ?? r.totalScore)}/
+                          {str(r.totalMarks ?? r.total)}
+                          {r.submittedAt
+                            ? ` · ${new Date(str(r.submittedAt)).toLocaleDateString()}`
+                            : ''}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => openStudent(aid)}
+                        className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase ${
+                          isOpen
+                            ? 'bg-[#002EFF] text-white'
+                            : 'bg-blue-50 text-[#002EFF]'
+                        }`}
+                        title='View this student’s score breakdown'
+                      >
+                        View
+                      </button>
+                      {!withdrawn && (
+                        <button
+                          onClick={() => withdraw(aid)}
+                          className='px-2 py-1 rounded-lg bg-amber-50 text-amber-600 text-[9px] font-black uppercase'
+                          title='Withdraw result (keeps the record, voids the score)'
+                        >
+                          Withdraw
+                        </button>
+                      )}
+                      <button
+                        onClick={() => del(aid)}
+                        className='p-1 text-slate-300 hover:text-rose-500'
+                        title='Delete attempt'
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+
+                    {isOpen && (
+                      <div className='px-3 pb-3 pt-1 border-t border-slate-100 bg-slate-50/60'>
+                        {detailLoading && !detail ? (
+                          <div className='py-3 flex justify-center'>
+                            <Loader2 size={14} className='animate-spin text-[#002EFF]' />
+                          </div>
+                        ) : !detail ? (
+                          <p className='text-[10px] font-bold text-slate-400 py-2'>
+                            No per-question breakdown available for this result.
+                          </p>
+                        ) : (
+                          <div className='space-y-2 pt-1'>
+                            <p className='text-[10px] font-black text-slate-600'>
+                              {detail.correct}/{detail.total} correct ·{' '}
+                              {str(r.score ?? r.totalScore)}/{str(r.totalMarks ?? r.total)} marks
+                            </p>
+                            <div className='space-y-1'>
+                              {Object.entries(detail.bySubject).map(([subj, v]) => {
+                                const pct = v.total ? Math.round((v.correct / v.total) * 100) : 0
+                                return (
+                                  <div key={subj} className='flex items-center gap-2'>
+                                    <span className='text-[10px] font-bold text-slate-500 w-24 truncate'>
+                                      {subj}
+                                    </span>
+                                    <div className='flex-1 h-1.5 rounded-full bg-slate-200 overflow-hidden'>
+                                      <div
+                                        className={`h-full rounded-full ${pct >= 50 ? 'bg-emerald-500' : 'bg-rose-400'}`}
+                                        style={{ width: `${pct}%` }}
+                                      />
+                                    </div>
+                                    <span className='text-[10px] font-black text-slate-600 w-12 text-right tabular-nums'>
+                                      {v.correct}/{v.total}
+                                    </span>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )
               })}

@@ -293,6 +293,19 @@ export const dsaApi = {
         headers: getHeaders(token),
       }).then((r) => handleResponse<LeaderboardEntry[]>(r)),
 
+    // GET /quizzes/:id/results — every submission for a quiz (admin/tutor), each
+    // with the student's per-question answers for a score breakdown.
+    results: (id: string, token?: string) =>
+      fetch(`${BASE_URL}/quizzes/${encodeURIComponent(id)}/results`, {
+        headers: getHeaders(token),
+      })
+        .then((r) =>
+          handleResponse<
+            Record<string, unknown>[] | { data?: Record<string, unknown>[] }
+          >(r),
+        )
+        .then((res) => (Array.isArray(res) ? res : (res?.data ?? []))),
+
     // GET /quizzes/results/me — the logged-in student's quiz history (all their
     // past submissions across quizzes).
     myResults: (token?: string) =>
