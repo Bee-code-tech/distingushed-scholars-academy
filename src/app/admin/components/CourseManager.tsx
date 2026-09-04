@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { COURSE_CATEGORIES, categoryLabel } from '@/lib/coursesStore'
+import { CLASS_LEVELS } from '@/lib/registration'
 import { dsaApi } from '@/lib/api'
 import { adminApi } from '@/lib/admin-api'
 import type { CourseCategory } from '@/lib/types'
@@ -24,6 +25,8 @@ type UICourse = {
   title: string
   subject?: string
   category: string
+  /** Target class/level (SS1…200 Level); '' ⇒ all classes in the category. */
+  classLevel: string
   /** Ids of every tutor assigned to this course (one or more). */
   tutorIds: string[]
 }
@@ -78,6 +81,7 @@ export default function CourseManager() {
   const [title, setTitle] = useState('')
   const [subject, setSubject] = useState('')
   const [category, setCategory] = useState<CourseCategory>('jamb-putme')
+  const [classLevel, setClassLevel] = useState('')
   const [tutorId, setTutorId] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -108,6 +112,7 @@ export default function CourseManager() {
           title: String(c.title ?? 'Course'),
           subject: c.subject ? String(c.subject) : undefined,
           category: String(c.category ?? ''),
+          classLevel: c.classLevel ? String(c.classLevel) : '',
           tutorIds: tutorIdsFromCourse(c),
         })),
       )
@@ -132,16 +137,21 @@ export default function CourseManager() {
     setError('')
     const cleanTitle = title.trim()
     if (cleanTitle.length < 2) return setError('Enter a course title')
-    // Block duplicates: same title + same category already exists. (Same name in
-    // a different category is allowed — e.g. JAMB Chemistry vs WAEC Chemistry.)
+    // Block duplicates: same title + same category + same class already exists.
+    // (Same name in a different category — JAMB vs WAEC Chemistry — or a
+    // different class — SS1 vs SS2 Biology — is allowed.)
     const exists = courses.some(
       (c) =>
         c.category === category &&
+        (c.classLevel || '') === classLevel &&
         c.title.trim().toLowerCase() === cleanTitle.toLowerCase(),
     )
     if (exists) {
+      const where = classLevel
+        ? `${categoryLabel(category)} · ${classLevel}`
+        : categoryLabel(category)
       return setError(
-        `“${cleanTitle}” already exists in ${categoryLabel(category)}. Assign another tutor to the existing course instead of creating a new one.`,
+        `“${cleanTitle}” already exists in ${where}. Assign another tutor to the existing course instead of creating a new one.`,
       )
     }
     setBusy(true)
@@ -150,6 +160,7 @@ export default function CourseManager() {
         title: title.trim(),
         subject: subject.trim() || title.trim(),
         category,
+        classLevel: classLevel || undefined,
         // Send both: `tutorId` for the current backend and `tutorIds` for the
         // multi-tutor backend (see docs/backend-request-course-tutors.md).
         tutorId: tutorId || undefined,
@@ -189,6 +200,16 @@ export default function CourseManager() {
     async (courseId: string, newTitle: string) => {
       setError('')
       await adminApi.updateCourse(courseId, { title: newTitle })
+      await load()
+    },
+    [load],
+  )
+
+  /** Change which class an existing course targets (PUT /courses/:id). */
+  const setCourseClass = useCallback(
+    async (courseId: string, newClass: string) => {
+      setError('')
+      await adminApi.updateCourse(courseId, { classLevel: newClass })
       await load()
     },
     [load],
@@ -254,6 +275,23 @@ export default function CourseManager() {
               {COURSE_CATEGORIES.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.label} — {c.note}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className='space-y-1'>
+            <span className='text-[9px] font-black uppercase text-slate-400'>
+              Class
+            </span>
+            <select
+              value={classLevel}
+              onChange={(e) => setClassLevel(e.target.value)}
+              className='w-full h-11 px-3 rounded-lg bg-slate-50 border border-transparent focus:border-[#002EFF]/30 focus:bg-white outline-none text-sm font-bold'
+            >
+              <option value=''>All classes</option>
+              {CLASS_LEVELS.map((c) => (
+                <option key={c} value={c}>
+                  {c}
                 </option>
               ))}
             </select>
@@ -326,6 +364,7 @@ export default function CourseManager() {
                       tutors={tutors}
                       onSetTutors={setCourseTutors}
                       onRename={renameCourse}
+                      onSetClass={setCourseClass}
                       onRemove={remove}
                     />
                   ))}
@@ -349,12 +388,14 @@ function CourseCard({
   tutors,
   onSetTutors,
   onRename,
+  onSetClass,
   onRemove,
 }: {
   course: UICourse
   tutors: UITutor[]
   onSetTutors: (courseId: string, ids: string[]) => Promise<void>
   onRename: (courseId: string, title: string) => Promise<void>
+  onSetClass: (courseId: string, classLevel: string) => Promise<void>
   onRemove: (id: string) => void
 }) {
   const [adding, setAdding] = useState('')
@@ -439,10 +480,32 @@ function CourseCard({
               </button>
             </p>
           )}
-          <p className='text-[9px] font-black uppercase tracking-widest text-slate-400'>
-            {course.tutorIds.length} tutor
-            {course.tutorIds.length === 1 ? '' : 's'}
-          </p>
+          <div className='flex items-center gap-2 mt-0.5'>
+            <p className='text-[9px] font-black uppercase tracking-widest text-slate-400'>
+              {course.tutorIds.length} tutor
+              {course.tutorIds.length === 1 ? '' : 's'}
+            </p>
+            <span className='text-slate-300'>·</span>
+            <select
+              value={course.classLevel}
+              disabled={busy}
+              onChange={(e) => {
+                setBusy(true)
+                onSetClass(course.id, e.target.value).finally(() =>
+                  setBusy(false),
+                )
+              }}
+              title='Class this course targets'
+              className='h-6 -ml-1 px-1 rounded bg-transparent hover:bg-slate-50 border border-transparent focus:border-[#002EFF]/30 outline-none text-[10px] font-black uppercase tracking-wide text-slate-500 disabled:opacity-50'
+            >
+              <option value=''>All classes</option>
+              {CLASS_LEVELS.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
         <button
           onClick={() => onRemove(course.id)}

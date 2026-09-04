@@ -1068,6 +1068,8 @@ export interface CreateCoursePayload {
   tutorIds?: string[]
   description?: string
   department?: string
+  /** Target class/level (SS1, SS2, SS3, Jambite/Aspirant, 100 Level, 200 Level). Empty ⇒ all classes in the category. */
+  classLevel?: string
   thumbnailUrl?: string
   price?: number
   isPublished?: boolean
@@ -1077,6 +1079,7 @@ export interface UpdateCoursePayload extends Partial<CreateCoursePayload> {}
 
 export interface CourseListParams {
   category?: CourseCategory
+  classLevel?: string
   tutorId?: string
 }
 
@@ -1406,6 +1409,7 @@ export const adminApi = {
   getCourses: (params?: CourseListParams) => {
     const queryParams = new URLSearchParams()
     if (params?.category) queryParams.append('category', params.category)
+    if (params?.classLevel) queryParams.append('classLevel', params.classLevel)
     if (params?.tutorId) queryParams.append('tutorId', params.tutorId)
 
     const queryString = queryParams.toString()
