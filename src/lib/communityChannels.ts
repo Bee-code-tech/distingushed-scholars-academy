@@ -1,23 +1,18 @@
-// Community channels — the "General" channel plus one per programme (and, for
-// department-split programmes, per department), mirroring the timetable / quiz
-// audience model. Admins can create and delete channels; the backend is the
-// source of truth when live, with a seeded browser-local list as the fallback
-// so the switcher works before the endpoints ship.
+// Community channels — the "General" channel plus one per course category
+// (SS1, SS2, SS3, WAEC, JAMB, Post-UTME, 100 Level, 200 Level, Preclinical,
+// After-School), the same taxonomy courses use. Admins create and delete
+// channels; the backend is the source of truth when live, with a seeded
+// browser-local list as the fallback so the switcher works before it ships.
 
-import type { ExamTrack, Department } from './studentProfile'
-import { EXAM_TRACKS, DEPARTMENT_LABELS } from './studentProfile'
-import {
-  QUIZ_TRACKS,
-  QUIZ_DEPARTMENTS,
-  isDeptSplitTrack,
-} from './quizAudience'
+import type { CourseCategory } from './types'
+import { COURSE_CATEGORIES, categoryLabel } from './coursesStore'
 
 export interface CommunityChannel {
   id: string
   name: string
-  track?: ExamTrack | null
-  department?: Department | null
-  /** 'general' = everyone; 'program' = a programme(+dept); 'custom' = ad-hoc. */
+  /** The class / exam-track this channel is for (a course category). */
+  category?: CourseCategory | null
+  /** 'general' = everyone; 'program' = a category; 'custom' = ad-hoc. */
   kind: 'general' | 'program' | 'custom'
   /** System channels (General) can't be deleted. */
   system?: boolean
@@ -30,104 +25,66 @@ export const GENERAL_CHANNEL: CommunityChannel = {
   system: true,
 }
 
-/** Stable channel id for a programme(+department), e.g. "jamb-science". */
-export function programChannelId(
-  track: ExamTrack,
-  dept?: Department | null,
-): string {
-  return dept && isDeptSplitTrack(track) ? `${track}-${dept}` : track
+/** Stable channel id for a category, e.g. "ss1". */
+export function programChannelId(category: CourseCategory): string {
+  return category
 }
 
-/** The default set of channels: General + every programme (× department). */
+/** The default set of channels: General + one per course category. */
 export function defaultChannels(): CommunityChannel[] {
-  const out: CommunityChannel[] = [GENERAL_CHANNEL]
-  for (const track of QUIZ_TRACKS) {
-    const label = EXAM_TRACKS[track].label
-    if (isDeptSplitTrack(track)) {
-      for (const dept of QUIZ_DEPARTMENTS) {
-        out.push({
-          id: programChannelId(track, dept),
-          name: `${label} · ${DEPARTMENT_LABELS[dept]}`,
-          track,
-          department: dept,
-          kind: 'program',
-          system: true,
-        })
-      }
-    } else {
-      out.push({
-        id: track,
-        name: label,
-        track,
-        department: null,
-        kind: 'program',
-        system: true,
-      })
-    }
-  }
-  return out
+  return [
+    GENERAL_CHANNEL,
+    ...COURSE_CATEGORIES.map((c) => ({
+      id: c.id,
+      name: c.label,
+      category: c.id,
+      kind: 'program' as const,
+      system: true,
+    })),
+  ]
 }
 
-/** Normalise a backend/store row into a CommunityChannel. */
+/** Normalise a backend/store row into a CommunityChannel. Tolerates the older
+ *  `track` field (which now carries the category value). */
 export function toChannel(raw: Record<string, unknown>): CommunityChannel {
-  const track = raw.track ? (String(raw.track) as ExamTrack) : null
-  const department = raw.department
-    ? (String(raw.department) as Department)
-    : null
+  const category = raw.category
+    ? (String(raw.category) as CourseCategory)
+    : raw.track
+      ? (String(raw.track) as CourseCategory)
+      : null
   const kind =
     raw.kind === 'general' || raw.id === 'general'
       ? 'general'
       : raw.kind === 'custom'
         ? 'custom'
-        : track
+        : category
           ? 'program'
           : 'custom'
   return {
     id: String(raw.id ?? raw._id ?? ''),
     name: String(raw.name ?? 'Channel'),
-    track,
-    department,
+    category,
     kind,
     system: !!raw.system || raw.id === 'general',
   }
 }
 
 /**
- * Which channels a student may see: the General channel plus the channel(s)
- * that match their resolved programme + department.
+ * Which channels a viewer may see: the General channel, any custom (categoryless)
+ * channel, plus the category channels matching `categories`. Students pass their
+ * own categories; tutors pass the categories of the courses they teach. An empty
+ * set means the caller couldn't resolve categories — it should fail open (show
+ * all) rather than hide everything.
  */
-export function channelsForProfile(
+export function channelsForCategories(
   channels: CommunityChannel[],
-  profile: { track: ExamTrack; department: Department | null } | null,
+  categories: string[],
 ): CommunityChannel[] {
+  const allowed = new Set(categories.map(String))
   return channels.filter((c) => {
     if (c.kind === 'general') return true
-    if (!c.track) return true // custom channel with no track → visible to all
-    if (!profile) return true
-    if (c.track !== profile.track) return false
-    if (c.department && isDeptSplitTrack(profile.track)) {
-      return !profile.department || c.department === profile.department
-    }
-    return true
-  })
-}
-
-/**
- * Which channels a tutor may see: the General channel, any custom (track-less)
- * channel, plus the programme channels for the tracks they teach. Pass the set
- * of tracks derived from the tutor's assigned courses. An empty set means we
- * couldn't resolve the tutor's courses — the caller should fail open (show all)
- * rather than lock the tutor out.
- */
-export function channelsForTracks(
-  channels: CommunityChannel[],
-  tracks: ExamTrack[],
-): CommunityChannel[] {
-  const allowed = new Set(tracks)
-  return channels.filter((c) => {
-    if (c.kind === 'general') return true
-    if (!c.track) return true // custom channel with no track → visible to all
-    return allowed.has(c.track)
+    if (!c.category) return true // custom channel with no category → visible to all
+    return allowed.has(String(c.category))
   })
 }
 
@@ -162,22 +119,20 @@ export function getLocalChannels(): CommunityChannel[] {
 
 export function addLocalChannel(input: {
   name: string
-  track?: ExamTrack | null
-  department?: Department | null
+  category?: CourseCategory | null
 }): CommunityChannel {
   const list = getLocalChannels()
-  const base = input.track
-    ? programChannelId(input.track, input.department ?? null)
+  const base = input.category
+    ? programChannelId(input.category)
     : `custom-${input.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
   let id = base
   let n = 2
   while (list.some((c) => c.id === id)) id = `${base}-${n++}`
   const channel: CommunityChannel = {
     id,
-    name: input.name.trim(),
-    track: input.track ?? null,
-    department: input.department ?? null,
-    kind: input.track ? 'program' : 'custom',
+    name: input.name.trim() || (input.category ? categoryLabel(input.category) : 'Channel'),
+    category: input.category ?? null,
+    kind: input.category ? 'program' : 'custom',
   }
   write([...list, channel])
   return channel

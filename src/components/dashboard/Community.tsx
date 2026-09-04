@@ -35,29 +35,20 @@ import {
 import { dsaApi } from '@/lib/api'
 import { getUser } from '@/lib/auth'
 import { uploadToCloudinary } from '@/lib/cloudinary'
-import { resolveStudentProfile } from '@/lib/studentProfile'
 import {
   type CommunityChannel,
   toChannel,
   getLocalChannels,
   addLocalChannel,
   removeLocalChannel,
-  channelsForProfile,
-  channelsForTracks,
+  channelsForCategories,
 } from '@/lib/communityChannels'
-import { tracksForCategory } from '@/lib/coursesStore'
+import {
+  COURSE_CATEGORIES,
+  categoryLabel,
+  categoriesForStudent,
+} from '@/lib/coursesStore'
 import type { CourseCategory } from '@/lib/types'
-import {
-  EXAM_TRACKS,
-  DEPARTMENT_LABELS,
-  type ExamTrack,
-  type Department,
-} from '@/lib/studentProfile'
-import {
-  QUIZ_TRACKS,
-  QUIZ_DEPARTMENTS,
-  isDeptSplitTrack,
-} from '@/lib/quizAudience'
 
 type Mode = 'tutor' | 'student' | 'admin'
 type MsgType = 'text' | 'image' | 'video' | 'audio' | 'file'
@@ -146,8 +137,7 @@ export default function Community({
   >([])
   const [newOpen, setNewOpen] = useState(false)
   const [newName, setNewName] = useState('')
-  const [newTrack, setNewTrack] = useState<ExamTrack | ''>('')
-  const [newDept, setNewDept] = useState<Department>('science')
+  const [newCategory, setNewCategory] = useState<CourseCategory | ''>('')
 
   // Voice-note recording (tutors only).
   const [recording, setRecording] = useState(false)
@@ -474,7 +464,6 @@ export default function Community({
 
   // ---- Channels ----
   const loadChannels = useCallback(async () => {
-    const profile = resolveStudentProfile(getUser() ?? undefined)
     let list: CommunityChannel[]
     try {
       const rows = (await dsaApi.community.channels(token)) as Record<
@@ -489,25 +478,24 @@ export default function Community({
     }
     let visible = list
     if (mode === 'student') {
-      // Students only see General + their programme's channel(s).
-      visible = channelsForProfile(list, profile)
+      // Students see General + the community for each category they belong to
+      // (their class AND their exam track).
+      visible = channelsForCategories(list, categoriesForStudent(getUser()))
     } else if (mode === 'tutor') {
-      // Tutors are scoped to the community of the track(s) they teach — derived
-      // from their assigned courses. Fail open (show all) if we can't resolve
-      // any courses, so a tutor is never locked out of the switcher.
+      // Tutors are scoped to the communities for the categories they teach —
+      // derived from their assigned courses. Fail open (show all) if we can't
+      // resolve any courses, so a tutor is never locked out of the switcher.
       try {
         const courses = (await dsaApi.courses.list(
           { tutorId: 'me' },
           token,
         )) as Record<string, unknown>[]
-        const tracks = [
+        const cats = [
           ...new Set(
-            courses.flatMap((c) =>
-              tracksForCategory(String(c.category ?? '') as CourseCategory),
-            ),
+            courses.map((c) => String(c.category ?? '')).filter(Boolean),
           ),
         ]
-        if (tracks.length) visible = channelsForTracks(list, tracks)
+        if (cats.length) visible = channelsForCategories(list, cats)
       } catch {
         /* keep all channels visible */
       }
@@ -526,23 +514,18 @@ export default function Community({
   const createChannel = useCallback(async () => {
     const name = newName.trim()
     if (!name) return
-    const track = newTrack || undefined
-    const department =
-      track && isDeptSplitTrack(track) ? newDept : undefined
+    const category = newCategory || undefined
     try {
-      await dsaApi.community.createChannel({ name, track, department }, token)
+      // The backend stores the category in its `track` string field.
+      await dsaApi.community.createChannel({ name, track: category }, token)
     } catch {
-      addLocalChannel({
-        name,
-        track: track ?? null,
-        department: department ?? null,
-      })
+      addLocalChannel({ name, category: category ?? null })
     }
     setNewName('')
-    setNewTrack('')
+    setNewCategory('')
     setNewOpen(false)
     await loadChannels()
-  }, [newName, newTrack, newDept, token, loadChannels])
+  }, [newName, newCategory, token, loadChannels])
 
   const deleteChannel = useCallback(
     async (id: string) => {
@@ -735,34 +718,26 @@ export default function Community({
             <input
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              placeholder='Name (e.g. JAMB · Science)'
+              placeholder='Name (e.g. SS1, JAMB)'
               className='h-9 px-3 rounded-lg bg-slate-50 border border-transparent focus:border-[#002EFF]/30 focus:bg-white outline-none text-[12px] font-bold flex-1 min-w-[160px]'
             />
             <select
-              value={newTrack}
-              onChange={(e) => setNewTrack(e.target.value as ExamTrack | '')}
+              value={newCategory}
+              onChange={(e) => {
+                const cat = e.target.value as CourseCategory | ''
+                setNewCategory(cat)
+                // Prefill the name from the category label if left blank.
+                if (cat && !newName.trim()) setNewName(categoryLabel(cat))
+              }}
               className='h-9 px-2 rounded-lg bg-slate-50 border border-slate-200 outline-none text-[12px] font-black'
             >
-              <option value=''>No programme (everyone)</option>
-              {QUIZ_TRACKS.map((t) => (
-                <option key={t} value={t}>
-                  {EXAM_TRACKS[t].label}
+              <option value=''>No class/track (everyone)</option>
+              {COURSE_CATEGORIES.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.label}
                 </option>
               ))}
             </select>
-            {newTrack && isDeptSplitTrack(newTrack) && (
-              <select
-                value={newDept}
-                onChange={(e) => setNewDept(e.target.value as Department)}
-                className='h-9 px-2 rounded-lg bg-slate-50 border border-slate-200 outline-none text-[12px] font-black'
-              >
-                {QUIZ_DEPARTMENTS.map((d) => (
-                  <option key={d} value={d}>
-                    {DEPARTMENT_LABELS[d]}
-                  </option>
-                ))}
-              </select>
-            )}
             <button
               onClick={createChannel}
               disabled={!newName.trim()}
