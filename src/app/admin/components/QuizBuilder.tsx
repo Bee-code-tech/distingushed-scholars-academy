@@ -4,7 +4,7 @@
 // one or more subject blocks, each with its own time limit and its chosen
 // questions. See docs/quiz-feature.md.
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type ComponentType } from 'react'
 import {
   Plus,
   Trash2,
@@ -19,6 +19,12 @@ import {
   Link as LinkIcon,
   ArrowLeft,
   Pencil,
+  Search,
+  FileQuestion,
+  ClipboardList,
+  Circle,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { dsaApi } from '@/lib/api'
@@ -105,6 +111,12 @@ export default function QuizBuilder() {
   const [openAttempts, setOpenAttempts] = useState<string | null>(null)
   // The list is the default view; the builder form opens on "Create New Quiz".
   const [showBuilder, setShowBuilder] = useState(false)
+  // List dashboard controls.
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'live' | 'draft'>('all')
+  const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'az'>('newest')
+  const [page, setPage] = useState(1)
+  const PAGE_SIZE = 8
   // When set, the builder is editing an existing quiz's details (not creating).
   const [editingId, setEditingId] = useState<string | null>(null)
 
@@ -300,7 +312,7 @@ export default function QuizBuilder() {
               ? 'Edit quiz details'
               : showBuilder
                 ? 'Build a quiz from the tutor question bank'
-                : 'Your published quizzes'}
+                : 'Create and manage student assessments'}
           </p>
         </div>
         {(canCreate || showBuilder) && (
@@ -592,104 +604,270 @@ export default function QuizBuilder() {
       )}
 
       {/* Existing quizzes — the default list view */}
-      {!showBuilder && (
-      <div className='space-y-2'>
-        <p className='text-[11px] font-black uppercase tracking-widest text-slate-500'>
-          Published quizzes
-        </p>
-        {loadingList ? (
-          <div className='py-8 flex justify-center'>
-            <Loader2 className='animate-spin text-[#002EFF]' />
-          </div>
-        ) : quizzes.length === 0 ? (
-          <p className='text-[11px] font-bold text-slate-400 py-4'>
-            No quizzes yet.
-          </p>
-        ) : (
-          quizzes.map((q) => {
-            const id = str(q.id ?? q._id)
-            const code = str(q.accessCode)
-            const subjects = Array.isArray(q.subjects) ? q.subjects.length : 0
-            return (
-              <div key={id} className='space-y-2'>
-              <Card
-                className='p-3 rounded-2xl border-none shadow-sm bg-white flex items-center gap-3'
+      {!showBuilder && (() => {
+        const total = quizzes.length
+        const live = quizzes.filter((q) => q.isActive).length
+        const draft = total - live
+        const knowAttempts = quizzes.some(
+          (q) => q.attemptsCount != null || q.attempts != null || q.takenCount != null,
+        )
+        const totalAttempts = quizzes.reduce(
+          (n, q) => n + (Number(q.attemptsCount ?? q.attempts ?? q.takenCount) || 0),
+          0,
+        )
+
+        const term = search.trim().toLowerCase()
+        const list = quizzes
+          .filter((q) => {
+            if (statusFilter === 'live' && !q.isActive) return false
+            if (statusFilter === 'draft' && q.isActive) return false
+            if (!term) return true
+            return `${str(q.title)} ${str(q.accessCode)}`
+              .toLowerCase()
+              .includes(term)
+          })
+          .sort((a, b) => {
+            if (sortBy === 'az') return str(a.title).localeCompare(str(b.title))
+            const ta = new Date(str(a.createdAt)).getTime() || 0
+            const tb = new Date(str(b.createdAt)).getTime() || 0
+            return sortBy === 'oldest' ? ta - tb : tb - ta
+          })
+
+        const pageCount = Math.max(1, Math.ceil(list.length / PAGE_SIZE))
+        const safePage = Math.min(page, pageCount)
+        const paged = list.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
+
+        return (
+          <div className='space-y-4'>
+            {/* Summary */}
+            <div className='grid grid-cols-2 sm:grid-cols-4 gap-3'>
+              <StatCard label='Total quizzes' value={total} icon={ClipboardList} tint='text-[#002EFF] bg-blue-50' />
+              <StatCard label='Live' value={live} icon={Circle} tint='text-emerald-600 bg-emerald-50' />
+              <StatCard label='Draft' value={draft} icon={Circle} tint='text-amber-600 bg-amber-50' />
+              <StatCard label='Attempts' value={knowAttempts ? totalAttempts : '—'} icon={Users} tint='text-violet-600 bg-violet-50' />
+            </div>
+
+            {/* Search + filters */}
+            <div className='flex flex-col sm:flex-row gap-2'>
+              <div className='relative flex-1'>
+                <Search size={14} className='absolute left-3 top-1/2 -translate-y-1/2 text-slate-400' />
+                <input
+                  value={search}
+                  onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+                  placeholder='Search by quiz name or code…'
+                  className='w-full h-10 pl-9 pr-3 rounded-xl bg-white border border-slate-200 focus:border-[#002EFF]/40 outline-none text-sm font-medium'
+                />
+              </div>
+              <select
+                value={statusFilter}
+                onChange={(e) => { setStatusFilter(e.target.value as 'all' | 'live' | 'draft'); setPage(1) }}
+                className='h-10 px-3 rounded-xl bg-white border border-slate-200 outline-none text-[12px] font-bold'
               >
-                <div className='min-w-0 flex-1'>
-                  <p className='text-xs font-black text-gray-800 truncate'>
-                    {str(q.title)}
-                  </p>
-                  <p className='text-[10px] font-bold text-slate-400'>
-                    <span className='text-[#002EFF]'>
-                      {audienceLabel(
-                        (q.track as string) ?? null,
-                        (q.department as string) ?? null,
-                      )}
-                    </span>{' '}
-                    · {subjects} subject{subjects === 1 ? '' : 's'} ·{' '}
-                    {str(q.totalMarks) || 0} marks
-                    {code && (
-                      <button
-                        onClick={() => navigator.clipboard?.writeText(code)}
-                        className='ml-2 inline-flex items-center gap-1 text-[#002EFF] hover:underline'
-                        title='Copy access code'
-                      >
-                        <Copy size={9} /> {code}
-                      </button>
-                    )}
-                  </p>
-                </div>
-                <button
-                  onClick={() => startEdit(q)}
-                  className='flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase bg-slate-100 text-slate-500 hover:text-[#002EFF]'
-                  title='Edit quiz details'
-                >
-                  <Pencil size={11} /> Edit
-                </button>
-                <button
-                  onClick={() =>
-                    setOpenAttempts((cur) => (cur === id ? null : id))
-                  }
-                  className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase ${
-                    openAttempts === id
-                      ? 'bg-[#002EFF] text-white'
-                      : 'bg-blue-50 text-[#002EFF]'
-                  }`}
-                  title='View attempts, leaderboard & manage results'
-                >
-                  <Users size={11} /> Attempts
-                </button>
-                <button
-                  onClick={() => toggleStatus(q)}
-                  className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase ${
-                    q.isActive
-                      ? 'bg-emerald-50 text-emerald-600'
-                      : 'bg-slate-100 text-slate-400'
-                  }`}
-                  title={q.isActive ? 'Published — click to unpublish' : 'Draft — click to publish'}
-                >
-                  <Power size={11} /> {q.isActive ? 'Live' : 'Draft'}
-                </button>
-                {canDelete && (
+                <option value='all'>All status</option>
+                <option value='live'>Live</option>
+                <option value='draft'>Draft</option>
+              </select>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as 'newest' | 'oldest' | 'az')}
+                className='h-10 px-3 rounded-xl bg-white border border-slate-200 outline-none text-[12px] font-bold'
+              >
+                <option value='newest'>Newest</option>
+                <option value='oldest'>Oldest</option>
+                <option value='az'>A–Z</option>
+              </select>
+            </div>
+
+            {/* List */}
+            {loadingList ? (
+              <div className='py-10 flex justify-center'>
+                <Loader2 className='animate-spin text-[#002EFF]' />
+              </div>
+            ) : total === 0 ? (
+              <div className='py-14 flex flex-col items-center gap-2 text-center'>
+                <FileQuestion size={30} className='text-slate-300' />
+                <p className='text-sm font-black text-slate-600'>No quizzes yet</p>
+                <p className='text-[11px] font-bold text-slate-400 max-w-[220px]'>
+                  Create your first quiz to start assessing your students.
+                </p>
+                {canCreate && (
                   <button
-                    onClick={() => removeQuiz(id)}
-                    className='p-1.5 text-slate-300 hover:text-rose-500'
-                    title='Delete quiz'
+                    onClick={() => setShowBuilder(true)}
+                    className='mt-2 flex items-center gap-1.5 h-9 px-4 bg-[#002EFF] text-white rounded-xl font-black text-[10px] uppercase tracking-wide hover:bg-blue-700'
                   >
-                    <Trash2 size={14} />
+                    <Plus size={14} /> Create New Quiz
                   </button>
                 )}
-              </Card>
-              {openAttempts === id && (
-                <AttemptsPanel quizId={id} token={token} />
-              )}
               </div>
-            )
-          })
-        )}
-      </div>
-      )}
+            ) : list.length === 0 ? (
+              <div className='py-14 flex flex-col items-center gap-2 text-center'>
+                <Search size={26} className='text-slate-300' />
+                <p className='text-sm font-black text-slate-600'>No quizzes found</p>
+                <p className='text-[11px] font-bold text-slate-400'>
+                  Nothing matches your search or filter.
+                </p>
+                <button
+                  onClick={() => { setSearch(''); setStatusFilter('all'); setPage(1) }}
+                  className='mt-1 text-[10px] font-black uppercase text-[#002EFF] hover:underline'
+                >
+                  Clear filters
+                </button>
+              </div>
+            ) : (
+              <div className='space-y-2'>
+                {paged.map((q) => {
+                  const id = str(q.id ?? q._id)
+                  const code = str(q.accessCode)
+                  const subjects = Array.isArray(q.subjects) ? q.subjects.length : 0
+                  const open = openAttempts === id
+                  return (
+                    <div key={id} className='space-y-2'>
+                      <Card className='p-3.5 rounded-2xl border border-slate-100 shadow-sm bg-white'>
+                        <div className='flex flex-wrap items-center gap-3'>
+                          {/* Quiz info */}
+                          <div className='min-w-0 flex-1'>
+                            <div className='flex items-center gap-2'>
+                              <p className='text-sm font-black text-gray-800 truncate'>
+                                {str(q.title)}
+                              </p>
+                              <StatusBadge live={Boolean(q.isActive)} />
+                            </div>
+                            <p className='text-[10px] font-bold text-slate-400 mt-0.5 flex items-center flex-wrap gap-x-1.5'>
+                              <span className='text-[#002EFF]'>
+                                {audienceLabel(
+                                  (q.track as string) ?? null,
+                                  (q.department as string) ?? null,
+                                )}
+                              </span>
+                              · {subjects} subject{subjects === 1 ? '' : 's'}
+                              · {str(q.totalMarks) || 0} marks
+                              {code && (
+                                <button
+                                  onClick={() => navigator.clipboard?.writeText(code)}
+                                  className='inline-flex items-center gap-1 text-[#002EFF] hover:underline'
+                                  title='Copy access code'
+                                >
+                                  <Copy size={9} /> {code}
+                                </button>
+                              )}
+                            </p>
+                          </div>
+                          {/* Actions */}
+                          <div className='flex items-center gap-1.5 shrink-0'>
+                            <button
+                              onClick={() => setOpenAttempts((cur) => (cur === id ? null : id))}
+                              className={`flex items-center gap-1 px-2.5 h-8 rounded-lg text-[10px] font-black uppercase ${
+                                open ? 'bg-[#002EFF] text-white' : 'bg-blue-50 text-[#002EFF] hover:bg-blue-100'
+                              }`}
+                              title='View attempts, leaderboard & manage results'
+                            >
+                              <Users size={11} /> Attempts
+                            </button>
+                            <button
+                              onClick={() => startEdit(q)}
+                              className='flex items-center gap-1 px-2.5 h-8 rounded-lg text-[10px] font-black uppercase bg-slate-100 text-slate-500 hover:text-[#002EFF]'
+                              title='Edit quiz details'
+                            >
+                              <Pencil size={11} /> Edit
+                            </button>
+                            <button
+                              onClick={() => toggleStatus(q)}
+                              className='flex items-center gap-1 px-2.5 h-8 rounded-lg text-[10px] font-black uppercase bg-slate-100 text-slate-500 hover:text-[#002EFF]'
+                              title={q.isActive ? 'Unpublish (make draft)' : 'Publish (go live)'}
+                            >
+                              <Power size={11} /> {q.isActive ? 'Unpublish' : 'Publish'}
+                            </button>
+                            {canDelete && (
+                              <button
+                                onClick={() => removeQuiz(id)}
+                                className='p-1.5 text-slate-300 hover:text-rose-500'
+                                title='Delete quiz'
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </Card>
+                      {open && <AttemptsPanel quizId={id} token={token} />}
+                    </div>
+                  )
+                })}
+
+                {/* Pagination */}
+                {pageCount > 1 && (
+                  <div className='flex items-center justify-between pt-2'>
+                    <span className='text-[10px] font-bold text-slate-400'>
+                      Showing {(safePage - 1) * PAGE_SIZE + 1}–
+                      {Math.min(safePage * PAGE_SIZE, list.length)} of {list.length}
+                    </span>
+                    <div className='flex items-center gap-1'>
+                      <button
+                        onClick={() => setPage((p) => Math.max(1, p - 1))}
+                        disabled={safePage <= 1}
+                        className='h-8 w-8 flex items-center justify-center rounded-lg bg-white border border-slate-200 text-slate-500 disabled:opacity-40 hover:border-[#002EFF]/40'
+                      >
+                        <ChevronLeft size={15} />
+                      </button>
+                      <span className='text-[11px] font-black text-slate-600 px-2 tabular-nums'>
+                        {safePage} / {pageCount}
+                      </span>
+                      <button
+                        onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+                        disabled={safePage >= pageCount}
+                        className='h-8 w-8 flex items-center justify-center rounded-lg bg-white border border-slate-200 text-slate-500 disabled:opacity-40 hover:border-[#002EFF]/40'
+                      >
+                        <ChevronRight size={15} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )
+      })()}
     </div>
+  )
+}
+
+/** Compact summary tile for the quizzes dashboard. */
+function StatCard({
+  label,
+  value,
+  icon: Icon,
+  tint,
+}: {
+  label: string
+  value: number | string
+  icon: ComponentType<{ size?: number; className?: string }>
+  tint: string
+}) {
+  return (
+    <Card className='p-3 rounded-2xl border border-slate-100 shadow-sm bg-white flex items-center gap-2.5'>
+      <div className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 ${tint}`}>
+        <Icon size={15} />
+      </div>
+      <div className='min-w-0'>
+        <p className='text-lg font-black text-slate-900 leading-none tabular-nums'>{value}</p>
+        <p className='text-[8px] font-black uppercase tracking-widest text-slate-400 mt-1 truncate'>
+          {label}
+        </p>
+      </div>
+    </Card>
+  )
+}
+
+/** Live / Draft status badge — information, not an action. */
+function StatusBadge({ live }: { live: boolean }) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wide shrink-0 ${
+        live ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-500'
+      }`}
+    >
+      <Circle size={7} className='fill-current' /> {live ? 'Live' : 'Draft'}
+    </span>
   )
 }
 
