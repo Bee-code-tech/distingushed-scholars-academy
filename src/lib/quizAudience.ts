@@ -49,9 +49,30 @@ export function audienceLabel(
  * everyone; when a profile can't be resolved we don't hide anything.
  */
 export function quizMatchesProfile(
-  quiz: { track?: unknown; department?: unknown },
+  quiz: { track?: unknown; department?: unknown; assignedStudents?: unknown },
   profile: { track: ExamTrack; department: Department | null } | null,
+  userId?: string,
 ): boolean {
+  // Assigned quizzes (academic module) go only to their named students, and the
+  // assignment overrides the track/department audience.
+  const assigned = Array.isArray(quiz.assignedStudents)
+    ? (quiz.assignedStudents as unknown[])
+    : []
+  if (assigned.length) {
+    if (!userId) return false
+    return assigned.some((s) => {
+      const sid =
+        s && typeof s === 'object'
+          ? String(
+              (s as Record<string, unknown>).id ??
+                (s as Record<string, unknown>)._id ??
+                '',
+            )
+          : String(s ?? '')
+      return sid === String(userId)
+    })
+  }
+
   const qt = quiz.track ? String(quiz.track).toLowerCase() : ''
   if (!qt || qt === 'all' || qt === 'general') return true
   if (!profile) return true

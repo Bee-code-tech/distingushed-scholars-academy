@@ -25,6 +25,7 @@ import {
   Circle,
   ChevronLeft,
   ChevronRight,
+  X,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { dsaApi } from '@/lib/api'
@@ -125,6 +126,13 @@ export default function QuizBuilder() {
   // Audience: which programme (+ department) the quiz targets. 'all' = everyone.
   const [track, setTrack] = useState<ExamTrack | 'all'>('all')
   const [department, setDepartment] = useState<Department>('science')
+  // Portal audience mode: by programme, or assigned to specific students.
+  const [audienceMode, setAudienceMode] = useState<'programme' | 'students'>('programme')
+  const [assignedStudents, setAssignedStudents] = useState<string[]>([])
+  const [studentList, setStudentList] = useState<
+    { id: string; name: string; email?: string }[]
+  >([])
+  const [studentSearch, setStudentSearch] = useState('')
   // Access mode: 'portal' (enrolled students, audience-filtered) or 'free'
   // (public link, anyone with name + age). Free quizzes are always 'all'.
   const [accessMode, setAccessMode] = useState<'portal' | 'free'>('portal')
@@ -159,6 +167,32 @@ export default function QuizBuilder() {
     loadList()
   }, [loadList])
 
+  // Load the student roster once, for the "assign to selected students" picker.
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const rows = (await dsaApi.admin.listUsers('student', token)) as Record<
+          string,
+          unknown
+        >[]
+        if (cancelled) return
+        setStudentList(
+          rows.map((u) => ({
+            id: str(u.id ?? u._id),
+            name: str(u.fullname ?? u.fullName ?? u.username ?? 'Student'),
+            email: u.email ? str(u.email) : undefined,
+          })),
+        )
+      } catch {
+        /* roster unavailable — the picker just shows nothing */
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [token])
+
   const flash = (m: string) => {
     setNotice(m)
     setTimeout(() => setNotice(null), 2500)
@@ -183,6 +217,12 @@ export default function QuizBuilder() {
     // When editing, we update details only — questions aren't re-picked here.
     if (!editingId && totalQuestions === 0)
       return setError('Add at least one question.')
+    if (
+      accessMode === 'portal' &&
+      audienceMode === 'students' &&
+      assignedStudents.length === 0
+    )
+      return setError('Select at least one student to assign this quiz to.')
     setPublishing(true)
     setPublicLink(null)
     setCopied(false)
@@ -207,6 +247,16 @@ export default function QuizBuilder() {
         effectiveTrack === 'all' ? null : effectiveTrack,
         dept,
       ),
+    }
+    // Assign to specific students (portal only). Assignment overrides the
+    // programme audience, so the quiz only reaches the named students.
+    if (!isFree && audienceMode === 'students') {
+      details.assignedStudents = assignedStudents
+      details.track = 'all'
+      details.department = null
+      details.audience = `${assignedStudents.length} selected student${assignedStudents.length === 1 ? '' : 's'}`
+    } else {
+      details.assignedStudents = []
     }
     try {
       if (editingId) {
@@ -240,6 +290,9 @@ export default function QuizBuilder() {
       setDescription('')
       setTrack('all')
       setDepartment('science')
+      setAudienceMode('programme')
+      setAssignedStudents([])
+      setStudentSearch('')
       setAccessMode('portal')
       setMaxAttempts('1')
       setShowResults(true)
@@ -269,6 +322,17 @@ export default function QuizBuilder() {
     const t = str(q.track || 'all')
     setTrack((t === 'all' ? 'all' : t) as ExamTrack | 'all')
     if (q.department) setDepartment(q.department as Department)
+    // Prefill the assignment picker from the quiz's assigned students.
+    const assigned = Array.isArray(q.assignedStudents)
+      ? (q.assignedStudents as unknown[]).map((s) =>
+          s && typeof s === 'object'
+            ? str((s as Record<string, unknown>).id ?? (s as Record<string, unknown>)._id)
+            : str(s),
+        )
+      : []
+    setAssignedStudents(assigned)
+    setAudienceMode(assigned.length ? 'students' : 'programme')
+    setStudentSearch('')
     setMaxAttempts(String(q.maxAttempts ?? 1))
     setShowResults(q.showResults !== false)
     setShowCorrections(q.showCorrections !== false)
@@ -451,44 +515,87 @@ export default function QuizBuilder() {
 
         {/* Audience: which programme (+ department) sees this quiz (portal only) */}
         {accessMode === 'portal' ? (
-          <div className='rounded-2xl bg-slate-50/70 p-3 space-y-2'>
+          <div className='rounded-2xl bg-slate-50/70 p-3 space-y-2.5'>
             <p className='text-[9px] font-black uppercase text-slate-400'>
               Who sees this quiz
             </p>
-            <div className='flex flex-wrap items-center gap-2'>
-              <select
-                value={track}
-                onChange={(e) => setTrack(e.target.value as ExamTrack | 'all')}
-                className='h-9 px-2 rounded-lg bg-white border border-slate-200 outline-none text-[12px] font-black'
+            {/* By programme, or assigned to specific students */}
+            <div className='inline-flex rounded-lg bg-white border border-slate-200 p-0.5'>
+              <button
+                type='button'
+                onClick={() => setAudienceMode('programme')}
+                className={`px-3 h-7 rounded-md text-[10px] font-black uppercase tracking-wide ${
+                  audienceMode === 'programme'
+                    ? 'bg-[#002EFF] text-white'
+                    : 'text-slate-500'
+                }`}
               >
-                <option value='all'>All students</option>
-                {QUIZ_TRACKS.map((t) => (
-                  <option key={t} value={t}>
-                    {EXAM_TRACKS[t].label}
-                  </option>
-                ))}
-              </select>
-              {track !== 'all' && isDeptSplitTrack(track) && (
+                By programme
+              </button>
+              <button
+                type='button'
+                onClick={() => setAudienceMode('students')}
+                className={`px-3 h-7 rounded-md text-[10px] font-black uppercase tracking-wide ${
+                  audienceMode === 'students'
+                    ? 'bg-[#002EFF] text-white'
+                    : 'text-slate-500'
+                }`}
+              >
+                Selected students
+              </button>
+            </div>
+
+            {audienceMode === 'programme' ? (
+              <div className='flex flex-wrap items-center gap-2'>
                 <select
-                  value={department}
-                  onChange={(e) => setDepartment(e.target.value as Department)}
+                  value={track}
+                  onChange={(e) => setTrack(e.target.value as ExamTrack | 'all')}
                   className='h-9 px-2 rounded-lg bg-white border border-slate-200 outline-none text-[12px] font-black'
                 >
-                  {QUIZ_DEPARTMENTS.map((d) => (
-                    <option key={d} value={d}>
-                      {DEPARTMENT_LABELS[d]}
+                  <option value='all'>All students</option>
+                  {QUIZ_TRACKS.map((t) => (
+                    <option key={t} value={t}>
+                      {EXAM_TRACKS[t].label}
                     </option>
                   ))}
                 </select>
-              )}
-              <span className='text-[10px] font-bold text-slate-400'>
-                →{' '}
-                {audienceLabel(
-                  track === 'all' ? null : track,
-                  track !== 'all' && isDeptSplitTrack(track) ? department : null,
+                {track !== 'all' && isDeptSplitTrack(track) && (
+                  <select
+                    value={department}
+                    onChange={(e) => setDepartment(e.target.value as Department)}
+                    className='h-9 px-2 rounded-lg bg-white border border-slate-200 outline-none text-[12px] font-black'
+                  >
+                    {QUIZ_DEPARTMENTS.map((d) => (
+                      <option key={d} value={d}>
+                        {DEPARTMENT_LABELS[d]}
+                      </option>
+                    ))}
+                  </select>
                 )}
-              </span>
-            </div>
+                <span className='text-[10px] font-bold text-slate-400'>
+                  →{' '}
+                  {audienceLabel(
+                    track === 'all' ? null : track,
+                    track !== 'all' && isDeptSplitTrack(track) ? department : null,
+                  )}
+                </span>
+              </div>
+            ) : (
+              <StudentPicker
+                all={studentList}
+                selected={assignedStudents}
+                onToggle={(id) =>
+                  setAssignedStudents((prev) =>
+                    prev.includes(id)
+                      ? prev.filter((x) => x !== id)
+                      : [...prev, id],
+                  )
+                }
+                onClear={() => setAssignedStudents([])}
+                search={studentSearch}
+                setSearch={setStudentSearch}
+              />
+            )}
           </div>
         ) : (
           <p className='text-[10px] font-bold text-slate-400 px-1'>
@@ -855,6 +962,123 @@ function StatCard({
         </p>
       </div>
     </Card>
+  )
+}
+
+/** Search + multi-select roster for assigning a quiz to specific students. */
+function StudentPicker({
+  all,
+  selected,
+  onToggle,
+  onClear,
+  search,
+  setSearch,
+}: {
+  all: { id: string; name: string; email?: string }[]
+  selected: string[]
+  onToggle: (id: string) => void
+  onClear: () => void
+  search: string
+  setSearch: (v: string) => void
+}) {
+  const term = search.trim().toLowerCase()
+  const filtered = term
+    ? all.filter(
+        (s) =>
+          s.name.toLowerCase().includes(term) ||
+          (s.email ?? '').toLowerCase().includes(term),
+      )
+    : all
+  const nameFor = (id: string) => all.find((s) => s.id === id)?.name ?? 'Student'
+
+  return (
+    <div className='space-y-2'>
+      <div className='relative'>
+        <Search size={13} className='absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400' />
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder='Search students by name or email…'
+          className='w-full h-9 pl-8 pr-3 rounded-lg bg-white border border-slate-200 outline-none text-[12px] font-medium'
+        />
+      </div>
+
+      {selected.length > 0 && (
+        <div className='flex flex-wrap items-center gap-1.5'>
+          {selected.map((id) => (
+            <span
+              key={id}
+              className='inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full bg-blue-50 text-[#002EFF] text-[10px] font-bold'
+            >
+              {nameFor(id)}
+              <button
+                type='button'
+                onClick={() => onToggle(id)}
+                className='hover:text-rose-600'
+                title='Remove'
+              >
+                <X size={11} />
+              </button>
+            </span>
+          ))}
+          <button
+            type='button'
+            onClick={onClear}
+            className='text-[9px] font-black uppercase text-slate-400 hover:text-rose-500 ml-1'
+          >
+            Clear
+          </button>
+        </div>
+      )}
+
+      <div className='max-h-44 overflow-y-auto rounded-lg border border-slate-200 bg-white divide-y divide-slate-50'>
+        {all.length === 0 ? (
+          <p className='text-[11px] font-bold text-slate-400 px-3 py-3'>
+            No students found.
+          </p>
+        ) : filtered.length === 0 ? (
+          <p className='text-[11px] font-bold text-slate-400 px-3 py-3'>
+            No match for “{search}”.
+          </p>
+        ) : (
+          filtered.map((s) => {
+            const on = selected.includes(s.id)
+            return (
+              <button
+                type='button'
+                key={s.id}
+                onClick={() => onToggle(s.id)}
+                className='w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-slate-50'
+              >
+                <span
+                  className={`h-4 w-4 rounded flex items-center justify-center shrink-0 border ${
+                    on
+                      ? 'bg-[#002EFF] border-[#002EFF] text-white'
+                      : 'border-slate-300'
+                  }`}
+                >
+                  {on && <Check size={11} />}
+                </span>
+                <span className='min-w-0'>
+                  <span className='block text-[12px] font-black text-slate-700 truncate'>
+                    {s.name}
+                  </span>
+                  {s.email && (
+                    <span className='block text-[9px] font-bold text-slate-400 truncate'>
+                      {s.email}
+                    </span>
+                  )}
+                </span>
+              </button>
+            )
+          })
+        )}
+      </div>
+      <p className='text-[10px] font-bold text-slate-400'>
+        {selected.length} student{selected.length === 1 ? '' : 's'} assigned — only
+        they will see this quiz.
+      </p>
+    </div>
   )
 }
 

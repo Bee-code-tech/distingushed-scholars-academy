@@ -104,9 +104,14 @@ export default function QuizRunner() {
       // Only show quizzes for this student's programme (+ department). Untargeted
       // quizzes remain visible to everyone. The backend may already scope this;
       // filtering here keeps it correct even when it returns the full set.
-      const profile = resolveStudentProfile(getUser() ?? undefined)
+      const me = getUser()
+      const profile = resolveStudentProfile(me ?? undefined)
+      const myId = str(
+        (me as Record<string, unknown> | null)?.id ??
+          (me as Record<string, unknown> | null)?._id,
+      )
       setQuizzes(
-        rows.filter((q) => q.isActive && quizMatchesProfile(q, profile)),
+        rows.filter((q) => q.isActive && quizMatchesProfile(q, profile, myId)),
       )
       setMyResults(Array.isArray(mine) ? mine : [])
     } catch (e) {
