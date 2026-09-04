@@ -64,6 +64,7 @@ interface BankQ {
   correctOption: string
   imageUrl?: string
   mark: number
+  batchName?: string
 }
 interface SubjectBlock {
   name: string
@@ -84,6 +85,7 @@ function normalizeQ(raw: Record<string, unknown>): BankQ {
     correctOption: str(raw.correctOption || LETTERS[Number(raw.correctAnswer) || 0]),
     imageUrl: raw.imageUrl ? str(raw.imageUrl) : undefined,
     mark: typeof raw.mark === 'number' ? raw.mark : Number(raw.marks) || 1,
+    batchName: raw.batchName ? str(raw.batchName) : undefined,
   }
 }
 
@@ -1266,6 +1268,7 @@ function SubjectBlockEditor({
   const [bank, setBank] = useState<BankQ[]>([])
   const [loading, setLoading] = useState(false)
   const [open, setOpen] = useState(false)
+  const [batchFilter, setBatchFilter] = useState('')
 
   const loadBank = useCallback(
     async (subject: string) => {
@@ -1286,6 +1289,13 @@ function SubjectBlockEditor({
   )
 
   const pickedIds = new Set(block.picked.map((q) => q.id))
+  // Distinct import batches in the loaded bank, for the filter dropdown.
+  const batches = [
+    ...new Set(bank.map((q) => q.batchName).filter(Boolean) as string[]),
+  ]
+  const shown = batchFilter
+    ? bank.filter((q) => q.batchName === batchFilter)
+    : bank
   const toggle = (q: BankQ) => {
     if (pickedIds.has(q.id))
       onChange({ picked: block.picked.filter((x) => x.id !== q.id) })
@@ -1347,40 +1357,63 @@ function SubjectBlockEditor({
       </div>
 
       {open && (
-        <div className='max-h-56 overflow-y-auto rounded-xl bg-slate-50 p-2 space-y-1'>
-          {loading ? (
-            <div className='py-4 flex justify-center'>
-              <Loader2 size={16} className='animate-spin text-[#002EFF]' />
-            </div>
-          ) : bank.length === 0 ? (
-            <p className='text-[10px] font-bold text-slate-400 py-3 text-center'>
-              No questions in the bank for {block.name} yet. Tutors add them in
-              the Question Bank.
-            </p>
-          ) : (
-            bank.map((q) => (
-              <label
-                key={q.id}
-                className={`flex items-start gap-2 p-2 rounded-lg cursor-pointer ${
-                  pickedIds.has(q.id) ? 'bg-white shadow-sm' : 'hover:bg-white/60'
-                }`}
-              >
-                <input
-                  type='checkbox'
-                  checked={pickedIds.has(q.id)}
-                  onChange={() => toggle(q)}
-                  className='mt-0.5 accent-[#002EFF]'
-                />
-                <span className='text-[11px] font-medium text-slate-700'>
-                  {q.body}
-                  <span className='text-emerald-600 font-black'>
-                    {' '}
-                    ({q.correctOption})
-                  </span>
-                </span>
-              </label>
-            ))
+        <div className='rounded-xl bg-slate-50 p-2 space-y-2'>
+          {/* Filter by import batch */}
+          {batches.length > 0 && (
+            <select
+              value={batchFilter}
+              onChange={(e) => setBatchFilter(e.target.value)}
+              title='Filter by the Excel upload (batch) the questions came from'
+              className='h-8 w-full px-2 rounded-lg bg-white border border-slate-200 outline-none text-[11px] font-bold'
+            >
+              <option value=''>All batches ({bank.length})</option>
+              {batches.map((b) => (
+                <option key={b} value={b}>
+                  {b} ({bank.filter((q) => q.batchName === b).length})
+                </option>
+              ))}
+            </select>
           )}
+          <div className='max-h-56 overflow-y-auto space-y-1'>
+            {loading ? (
+              <div className='py-4 flex justify-center'>
+                <Loader2 size={16} className='animate-spin text-[#002EFF]' />
+              </div>
+            ) : bank.length === 0 ? (
+              <p className='text-[10px] font-bold text-slate-400 py-3 text-center'>
+                No questions in the bank for {block.name} yet. Tutors add them in
+                the Question Bank.
+              </p>
+            ) : (
+              shown.map((q) => (
+                <label
+                  key={q.id}
+                  className={`flex items-start gap-2 p-2 rounded-lg cursor-pointer ${
+                    pickedIds.has(q.id) ? 'bg-white shadow-sm' : 'hover:bg-white/60'
+                  }`}
+                >
+                  <input
+                    type='checkbox'
+                    checked={pickedIds.has(q.id)}
+                    onChange={() => toggle(q)}
+                    className='mt-0.5 accent-[#002EFF]'
+                  />
+                  <span className='text-[11px] font-medium text-slate-700'>
+                    {q.body}
+                    <span className='text-emerald-600 font-black'>
+                      {' '}
+                      ({q.correctOption})
+                    </span>
+                    {q.batchName && (
+                      <span className='ml-1.5 inline-block align-middle text-[8px] font-black uppercase tracking-wide text-[#002EFF] bg-blue-50 px-1.5 py-0.5 rounded'>
+                        {q.batchName}
+                      </span>
+                    )}
+                  </span>
+                </label>
+              ))
+            )}
+          </div>
         </div>
       )}
     </div>
