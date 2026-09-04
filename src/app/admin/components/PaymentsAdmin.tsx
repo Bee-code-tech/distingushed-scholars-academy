@@ -50,6 +50,21 @@ export default function PaymentsAdmin() {
 }
 
 /* ------------------------------ Plans ------------------------------ */
+// Programme a plan is for. Empty = shown to every student. Values match the
+// backend exam-track scoping (waec, jamb, postutme, undergrad, preclinical,
+// afterschool).
+const PLAN_TRACKS: { value: string; label: string }[] = [
+  { value: '', label: 'All programmes' },
+  { value: 'waec', label: 'WAEC' },
+  { value: 'jamb', label: 'JAMB' },
+  { value: 'postutme', label: 'Post-UTME' },
+  { value: 'undergrad', label: '100 Level' },
+  { value: 'preclinical', label: 'Preclinical' },
+  { value: 'afterschool', label: 'After-School' },
+]
+const trackLabel = (v?: unknown) =>
+  PLAN_TRACKS.find((t) => t.value === String(v ?? ''))?.label ?? String(v ?? '')
+
 function PlansSection({ token }: { token?: string }) {
   const [plans, setPlans] = useState<Record<string, unknown>[]>([])
   const [loading, setLoading] = useState(true)
@@ -58,6 +73,7 @@ function PlansSection({ token }: { token?: string }) {
   const [kind, setKind] = useState<'portal' | 'tutorial'>('tutorial')
   const [amount, setAmount] = useState(8000)
   const [months, setMonths] = useState(1)
+  const [track, setTrack] = useState('')
   const [busy, setBusy] = useState(false)
 
   const load = useCallback(async () => {
@@ -87,6 +103,7 @@ function PlansSection({ token }: { token?: string }) {
           amount: Number(amount) || 0,
           durationMonths: kind === 'portal' ? 0 : Number(months) || 1,
           grantsLevel: kind === 'portal' ? 'portal' : 'tutorial',
+          track: track || undefined,
           active: true,
         },
         token,
@@ -123,7 +140,7 @@ function PlansSection({ token }: { token?: string }) {
       <p className='text-[11px] font-black uppercase text-slate-500'>Payment plans</p>
       {error && <p className='text-[11px] font-bold text-amber-600'>{error}</p>}
 
-      <div className='grid grid-cols-2 sm:grid-cols-5 gap-2'>
+      <div className='grid grid-cols-2 sm:grid-cols-6 gap-2'>
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -137,6 +154,18 @@ function PlansSection({ token }: { token?: string }) {
         >
           <option value='portal'>Portal (₦2k)</option>
           <option value='tutorial'>Tutorial</option>
+        </select>
+        <select
+          value={track}
+          onChange={(e) => setTrack(e.target.value)}
+          title='Programme this plan is for'
+          className='h-10 px-2 rounded-lg bg-slate-50 outline-none text-[12px] font-bold'
+        >
+          {PLAN_TRACKS.map((t) => (
+            <option key={t.value} value={t.value}>
+              {t.label}
+            </option>
+          ))}
         </select>
         <input
           type='number'
@@ -193,6 +222,8 @@ function PlansSection({ token }: { token?: string }) {
                     {Number(p.durationMonths) > 0 && ` · ${str(p.durationMonths)} mo`}
                     {' · '}
                     {str(p.kind)}
+                    {' · '}
+                    {trackLabel(p.track)}
                   </p>
                 </div>
                 <button
