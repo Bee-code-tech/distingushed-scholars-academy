@@ -6,6 +6,7 @@
 // same browser (great for demoing the flow) until the backend persists it.
 
 import type { Course, CourseCategory, CourseMaterial } from './types'
+import type { ExamTrack } from './studentProfile'
 
 const COURSES_KEY = 'dsa_courses'
 const MATERIALS_KEY = 'dsa_materials'
@@ -29,6 +30,23 @@ export function categoryForTrack(track?: string): CourseCategory {
 
 export function categoryLabel(id: CourseCategory): string {
   return COURSE_CATEGORIES.find((c) => c.id === id)?.label ?? id
+}
+
+/**
+ * The exam tracks that fall under a course category — the inverse of
+ * {@link categoryForTrack}. Used to scope a tutor to the community channels of
+ * the tracks they actually teach.
+ */
+export function tracksForCategory(cat: CourseCategory): ExamTrack[] {
+  switch (cat) {
+    case 'waec-sss':
+      return ['waec', 'afterschool']
+    case 'higher':
+      return ['undergrad', 'preclinical']
+    case 'jamb-putme':
+    default:
+      return ['jamb', 'postutme']
+  }
 }
 
 const courseCategory = (c: Course): CourseCategory =>

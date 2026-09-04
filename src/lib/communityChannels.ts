@@ -112,6 +112,25 @@ export function channelsForProfile(
   })
 }
 
+/**
+ * Which channels a tutor may see: the General channel, any custom (track-less)
+ * channel, plus the programme channels for the tracks they teach. Pass the set
+ * of tracks derived from the tutor's assigned courses. An empty set means we
+ * couldn't resolve the tutor's courses — the caller should fail open (show all)
+ * rather than lock the tutor out.
+ */
+export function channelsForTracks(
+  channels: CommunityChannel[],
+  tracks: ExamTrack[],
+): CommunityChannel[] {
+  const allowed = new Set(tracks)
+  return channels.filter((c) => {
+    if (c.kind === 'general') return true
+    if (!c.track) return true // custom channel with no track → visible to all
+    return allowed.has(c.track)
+  })
+}
+
 // ---- Browser-local fallback store (seeded with the defaults) ----
 const KEY = 'dsa_community_channels'
 

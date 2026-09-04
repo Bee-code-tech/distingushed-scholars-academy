@@ -43,7 +43,10 @@ import {
   addLocalChannel,
   removeLocalChannel,
   channelsForProfile,
+  channelsForTracks,
 } from '@/lib/communityChannels'
+import { tracksForCategory } from '@/lib/coursesStore'
+import type { CourseCategory } from '@/lib/types'
 import {
   EXAM_TRACKS,
   DEPARTMENT_LABELS,
@@ -484,8 +487,32 @@ export default function Community({
       // the switcher still works.
       list = getLocalChannels()
     }
-    // Students only see General + their programme's channel(s).
-    const visible = mode === 'student' ? channelsForProfile(list, profile) : list
+    let visible = list
+    if (mode === 'student') {
+      // Students only see General + their programme's channel(s).
+      visible = channelsForProfile(list, profile)
+    } else if (mode === 'tutor') {
+      // Tutors are scoped to the community of the track(s) they teach — derived
+      // from their assigned courses. Fail open (show all) if we can't resolve
+      // any courses, so a tutor is never locked out of the switcher.
+      try {
+        const courses = (await dsaApi.courses.list(
+          { tutorId: 'me' },
+          token,
+        )) as Record<string, unknown>[]
+        const tracks = [
+          ...new Set(
+            courses.flatMap((c) =>
+              tracksForCategory(String(c.category ?? '') as CourseCategory),
+            ),
+          ),
+        ]
+        if (tracks.length) visible = channelsForTracks(list, tracks)
+      } catch {
+        /* keep all channels visible */
+      }
+    }
+    // Admin sees every channel (moderation).
     setChannels(visible)
     setActiveChannel((cur) =>
       visible.some((c) => c.id === cur) ? cur : 'general',
