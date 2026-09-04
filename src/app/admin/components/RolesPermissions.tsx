@@ -1350,7 +1350,7 @@ function CreateStaffModal({
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
 
@@ -1362,15 +1362,29 @@ function CreateStaffModal({
       return setError('Password must be at least 6 characters long')
 
     setLoading(true)
-    const created = addStaff({ name, email, roleId, password, now: Date.now() })
-    setLoading(false)
-
-    if (!created) {
-      setError('A staff account with that email address already exists.')
-      return
+    try {
+      // Create the real, loginable account on the backend (POST /api/admin/staff).
+      // The account is active + verified, so the staff member can sign in live.
+      await dsaApi.admin.createStaff({
+        fullname: name.trim(),
+        name: name.trim(),
+        email: email.trim().toLowerCase(),
+        password,
+        role: 'staff',
+        staffRoleId: roleId,
+      })
+      // Mirror into the local roster so it also shows on this browser immediately.
+      addStaff({ name, email, roleId, password, now: Date.now() })
+      onCreated()
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Could not create the staff account. Please try again.',
+      )
+    } finally {
+      setLoading(false)
     }
-
-    onCreated()
   }
 
   const copyCredentials = () => {
