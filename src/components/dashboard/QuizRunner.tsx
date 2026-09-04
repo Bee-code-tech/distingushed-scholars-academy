@@ -62,6 +62,45 @@ function mm(sec: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`
 }
 
+// ---- Resilient submit: persist in-progress + queue offline submissions ----
+// If the tab is closed mid-quiz, the saved "active" attempt is submitted on the
+// next open so the student can't just restart. If the network is off, the
+// submission is queued and flushed when it comes back.
+const QUIZ_ACTIVE_KEY = 'dsa-quiz-active'
+const QUIZ_PENDING_KEY = 'dsa-quiz-pending'
+type SubmitPayload = {
+  timeTaken: number
+  answers: { questionId: string; selectedOption: number }[]
+}
+type PendingSubmission = { quizId: string; payload: SubmitPayload }
+
+function readJSON<T>(key: string, fallback: T): T {
+  try {
+    const v = localStorage.getItem(key)
+    return v ? (JSON.parse(v) as T) : fallback
+  } catch {
+    return fallback
+  }
+}
+function writeJSON(key: string, val: unknown): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(val))
+  } catch {
+    /* storage unavailable — best effort */
+  }
+}
+function clearKey(key: string): void {
+  try {
+    localStorage.removeItem(key)
+  } catch {
+    /* ignore */
+  }
+}
+function isOffline(err?: unknown): boolean {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return true
+  return err instanceof TypeError // fetch network failures surface as TypeError
+}
+
 export default function QuizRunner() {
   const token = getToken() ?? undefined
   const [view, setView] = useState<'list' | 'take' | 'result' | 'history'>('list')
@@ -77,6 +116,7 @@ export default function QuizRunner() {
   const [remaining, setRemaining] = useState(0)
   const [submitting, setSubmitting] = useState(false)
   const [result, setResult] = useState<ResultData | null>(null)
+  const [savedOffline, setSavedOffline] = useState(false)
   const startedAt = useRef(0)
   const totalTime = useRef(0)
   // Anti-cheating: count times the student leaves the quiz (tab switch, minimise,
@@ -133,25 +173,39 @@ export default function QuizRunner() {
       setError(null)
       const id = str(quiz.id ?? quiz._id)
       const timeTaken = Math.max(1, Math.round((totalTime.current || 0) - remaining))
+      const payload: SubmitPayload = {
+        timeTaken,
+        answers: questions.map((q) => ({
+          questionId: q.questionId,
+          selectedOption:
+            answers[q.questionId] === undefined ? -1 : answers[q.questionId],
+        })),
+      }
       try {
         const res = (await dsaApi.quizzes.submit(
           id,
-          {
-            timeTaken,
-            answers: questions.map((q) => ({
-              questionId: q.questionId,
-              selectedOption:
-                answers[q.questionId] === undefined ? -1 : answers[q.questionId],
-            })),
-          } as never,
+          payload as never,
           token,
         )) as { data?: ResultData } | ResultData
         const data = (res as { data?: ResultData }).data ?? (res as ResultData)
+        clearKey(QUIZ_ACTIVE_KEY)
         setResult(data)
         setView('result')
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Could not submit.')
-        if (auto) setView('list')
+        if (isOffline(e)) {
+          // No network — queue the submission and finish. It's sent the moment
+          // the connection returns, so the attempt still counts.
+          const pending = readJSON<PendingSubmission[]>(QUIZ_PENDING_KEY, [])
+          pending.push({ quizId: id, payload })
+          writeJSON(QUIZ_PENDING_KEY, pending)
+          clearKey(QUIZ_ACTIVE_KEY)
+          setSavedOffline(true)
+          setResult(null)
+          setView('result')
+        } else {
+          setError(e instanceof Error ? e.message : 'Could not submit.')
+          if (auto) setView('list')
+        }
       } finally {
         setSubmitting(false)
       }
@@ -173,6 +227,63 @@ export default function QuizRunner() {
     }, 1000)
     return () => clearInterval(id)
   }, [view, submit])
+
+  // Continuously persist the in-progress attempt so a closed tab / crash doesn't
+  // lose it — it's submitted on the next open instead of letting them restart.
+  useEffect(() => {
+    if (view !== 'take' || !quiz) return
+    const id = str(quiz.id ?? quiz._id)
+    const timeTaken = Math.max(1, Math.round((totalTime.current || 0) - remaining))
+    writeJSON(QUIZ_ACTIVE_KEY, {
+      quizId: id,
+      payload: {
+        timeTaken,
+        answers: questions.map((q) => ({
+          questionId: q.questionId,
+          selectedOption:
+            answers[q.questionId] === undefined ? -1 : answers[q.questionId],
+        })),
+      },
+    })
+  }, [view, quiz, questions, answers, remaining])
+
+  // Flush any queued offline submissions, and finalise an abandoned attempt
+  // (tab closed mid-quiz) by submitting it. Runs on mount and whenever the
+  // network comes back online.
+  const flushAndFinalise = useCallback(async () => {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return
+    // 1. Retry queued offline submissions.
+    const pending = readJSON<PendingSubmission[]>(QUIZ_PENDING_KEY, [])
+    if (pending.length) {
+      const stillPending: PendingSubmission[] = []
+      for (const p of pending) {
+        try {
+          await dsaApi.quizzes.submit(p.quizId, p.payload as never, token)
+        } catch (e) {
+          if (isOffline(e)) stillPending.push(p) // keep for the next retry
+          // a non-network error (e.g. 409 already submitted) → drop it
+        }
+      }
+      writeJSON(QUIZ_PENDING_KEY, stillPending)
+    }
+    // 2. Finalise an attempt left in progress by a closed tab.
+    const active = readJSON<PendingSubmission | null>(QUIZ_ACTIVE_KEY, null)
+    if (active && active.quizId && view !== 'take') {
+      try {
+        await dsaApi.quizzes.submit(active.quizId, active.payload as never, token)
+        clearKey(QUIZ_ACTIVE_KEY)
+      } catch (e) {
+        if (!isOffline(e)) clearKey(QUIZ_ACTIVE_KEY) // already submitted / rejected
+      }
+    }
+  }, [token, view])
+
+  useEffect(() => {
+    flushAndFinalise()
+    const onOnline = () => flushAndFinalise()
+    window.addEventListener('online', onOnline)
+    return () => window.removeEventListener('online', onOnline)
+  }, [flushAndFinalise])
 
   // Register a "left the quiz" breach; auto-submits once past MAX_BREACHES.
   // Within the limit, raise a blocking warning modal so the student sees it the
@@ -214,6 +325,8 @@ export default function QuizRunner() {
 
   const start = async (q: Record<string, unknown>) => {
     setError(null)
+    setSavedOffline(false)
+    setResult(null)
     setLoading(true)
     try {
       const full = (await dsaApi.quizzes.get(str(q.id ?? q._id), token)) as Record<
@@ -268,6 +381,33 @@ export default function QuizRunner() {
   }
 
   // ---------- RESULT ----------
+  if (view === 'result' && savedOffline) {
+    return (
+      <div className='max-w-2xl mx-auto'>
+        <Card className='p-8 rounded-4xl border-none shadow-sm bg-white text-center'>
+          <AlertCircle size={40} className='mx-auto text-amber-500 mb-2' />
+          <p className='text-sm font-black text-slate-800 uppercase'>
+            Saved — you&apos;re offline
+          </p>
+          <p className='text-[12px] font-bold text-slate-400 mt-1 max-w-sm mx-auto'>
+            Your answers for “{str(quiz?.title)}” are saved on this device and
+            will be submitted automatically as soon as you&apos;re back online.
+            Don&apos;t retake it.
+          </p>
+          <button
+            onClick={() => {
+              setSavedOffline(false)
+              setView('list')
+            }}
+            className='mt-5 inline-flex items-center gap-2 text-[11px] font-black uppercase text-[#002EFF]'
+          >
+            <ArrowLeft size={14} /> Back to quizzes
+          </button>
+        </Card>
+      </div>
+    )
+  }
+
   if (view === 'result' && result) {
     // Compute from marks so it's correct regardless of how the API scales
     // `percentage` (it returns a 0–1 ratio, not 0–100).
