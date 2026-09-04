@@ -20,6 +20,8 @@ import {
   Target,
   Home,
   BarChart3,
+  History,
+  Lock,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import RichText from '@/components/ui/RichText'
@@ -62,8 +64,9 @@ function mm(sec: number): string {
 
 export default function QuizRunner() {
   const token = getToken() ?? undefined
-  const [view, setView] = useState<'list' | 'take' | 'result'>('list')
+  const [view, setView] = useState<'list' | 'take' | 'result' | 'history'>('list')
   const [quizzes, setQuizzes] = useState<Record<string, unknown>[]>([])
+  const [myResults, setMyResults] = useState<Record<string, unknown>[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -92,10 +95,12 @@ export default function QuizRunner() {
   const loadList = useCallback(async () => {
     setLoading(true)
     try {
-      const rows = (await dsaApi.quizzes.list(token)) as Record<
-        string,
-        unknown
-      >[]
+      const [rows, mine] = await Promise.all([
+        dsaApi.quizzes.list(token) as Promise<Record<string, unknown>[]>,
+        (dsaApi.quizzes.myResults(token).catch(() => [])) as Promise<
+          Record<string, unknown>[]
+        >,
+      ])
       // Only show quizzes for this student's programme (+ department). Untargeted
       // quizzes remain visible to everyone. The backend may already scope this;
       // filtering here keeps it correct even when it returns the full set.
@@ -103,6 +108,7 @@ export default function QuizRunner() {
       setQuizzes(
         rows.filter((q) => q.isActive && quizMatchesProfile(q, profile)),
       )
+      setMyResults(Array.isArray(mine) ? mine : [])
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load quizzes.')
     } finally {
@@ -715,16 +721,37 @@ export default function QuizRunner() {
     )
   }
 
+  // ---------- HISTORY ----------
+  if (view === 'history') {
+    return <QuizHistory results={myResults} onBack={() => setView('list')} />
+  }
+
   // ---------- LIST ----------
+  // Count each quiz's completed (non-withdrawn) attempts by this student.
+  const attemptsByQuiz: Record<string, number> = {}
+  myResults.forEach((r) => {
+    if (r.withdrawn) return
+    const qid = str(r.quizId)
+    attemptsByQuiz[qid] = (attemptsByQuiz[qid] || 0) + 1
+  })
+
   return (
     <div className='max-w-2xl mx-auto space-y-4'>
-      <div>
-        <h2 className='text-2xl font-black text-[#002EFF] italic uppercase'>
-          Quizzes
-        </h2>
-        <p className='text-[10px] font-bold text-gray-400 uppercase tracking-widest'>
-          Take a CBT and see your score instantly
-        </p>
+      <div className='flex items-start justify-between gap-3'>
+        <div>
+          <h2 className='text-2xl font-black text-[#002EFF] italic uppercase'>
+            Quizzes
+          </h2>
+          <p className='text-[10px] font-bold text-gray-400 uppercase tracking-widest'>
+            Take a CBT and see your score instantly
+          </p>
+        </div>
+        <button
+          onClick={() => setView('history')}
+          className='flex items-center gap-1.5 h-9 px-3 rounded-xl bg-blue-50 text-[#002EFF] font-black text-[10px] uppercase tracking-wide hover:bg-blue-100 shrink-0'
+        >
+          <History size={13} /> My History
+        </button>
       </div>
       {error && <p className='text-[11px] font-bold text-rose-600 px-1'>{error}</p>}
       {loading ? (
@@ -748,28 +775,47 @@ export default function QuizRunner() {
             (n: number, s: Record<string, unknown>) => n + (Number(s.timeLimit) || 0),
             0,
           )
+          const qid = str(q.id ?? q._id)
+          const maxAttempts = Number(q.maxAttempts) || 0
+          const used = attemptsByQuiz[qid] || 0
+          const limitReached = maxAttempts > 0 && used >= maxAttempts
           return (
             <Card
-              key={str(q.id ?? q._id)}
+              key={qid}
               className='p-4 rounded-2xl border-none shadow-sm bg-white flex items-center gap-3'
             >
               <div className='min-w-0 flex-1'>
-                <p className='text-sm font-black text-slate-800 truncate'>
+                <p className='text-sm font-black text-slate-800 truncate flex items-center gap-1.5'>
                   {str(q.title)}
+                  {used > 0 && (
+                    <span className='text-[8px] font-black uppercase text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded shrink-0'>
+                      Taken
+                    </span>
+                  )}
                 </p>
                 <p className='text-[10px] font-bold text-slate-400'>
                   {qCount} question{qCount === 1 ? '' : 's'}
                   {mins > 0 && ` · ${mins} min`}
                   {' · '}
                   {str(q.totalMarks) || 0} marks
+                  {maxAttempts > 0 && ` · ${used}/${maxAttempts} attempt${maxAttempts === 1 ? '' : 's'}`}
                 </p>
               </div>
-              <button
-                onClick={() => start(q)}
-                className='flex items-center gap-1.5 h-10 px-4 bg-[#002EFF] text-white rounded-xl font-black text-[11px] uppercase tracking-wide hover:bg-blue-700'
-              >
-                <Play size={14} /> Start
-              </button>
+              {limitReached ? (
+                <span
+                  className='flex items-center gap-1.5 h-10 px-4 bg-slate-100 text-slate-400 rounded-xl font-black text-[11px] uppercase tracking-wide cursor-not-allowed'
+                  title='You have used all your attempts for this quiz'
+                >
+                  <Lock size={14} /> Done
+                </span>
+              ) : (
+                <button
+                  onClick={() => start(q)}
+                  className='flex items-center gap-1.5 h-10 px-4 bg-[#002EFF] text-white rounded-xl font-black text-[11px] uppercase tracking-wide hover:bg-blue-700'
+                >
+                  <Play size={14} /> {used > 0 ? 'Retake' : 'Start'}
+                </button>
+              )}
             </Card>
           )
           })}
@@ -777,6 +823,100 @@ export default function QuizRunner() {
             <CapReachedCard what='free tests' cap={capFor('tests', getUser())} />
           )}
         </>
+      )}
+    </div>
+  )
+}
+
+/* ---------- Quiz history — the student's past submissions ---------- */
+function QuizHistory({
+  results,
+  onBack,
+}: {
+  results: Record<string, unknown>[]
+  onBack: () => void
+}) {
+  const fmtDate = (v: unknown) => {
+    const d = new Date(str(v))
+    return isNaN(d.getTime())
+      ? ''
+      : d.toLocaleDateString('en-NG', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric',
+        })
+  }
+  const pctOf = (v: unknown) => {
+    const n = Number(v) || 0
+    return Math.round(n <= 1 ? n * 100 : n)
+  }
+
+  return (
+    <div className='max-w-2xl mx-auto space-y-4'>
+      <div className='flex items-center gap-3'>
+        <button
+          onClick={onBack}
+          className='h-9 w-9 flex items-center justify-center rounded-xl bg-blue-50 text-[#002EFF] hover:bg-blue-100 shrink-0'
+          title='Back to quizzes'
+        >
+          <ArrowLeft size={16} />
+        </button>
+        <div>
+          <h2 className='text-2xl font-black text-[#002EFF] italic uppercase'>
+            Quiz History
+          </h2>
+          <p className='text-[10px] font-bold text-gray-400 uppercase tracking-widest'>
+            Your past quizzes and scores
+          </p>
+        </div>
+      </div>
+
+      {results.length === 0 ? (
+        <Card className='p-10 rounded-2xl border-none shadow-sm bg-white flex flex-col items-center gap-2 text-center'>
+          <History size={28} className='text-slate-300' />
+          <p className='text-sm font-black text-slate-600'>No quizzes yet</p>
+          <p className='text-[11px] font-bold text-slate-400'>
+            Quizzes you complete will show up here with your score.
+          </p>
+        </Card>
+      ) : (
+        results.map((r) => {
+          const pct = pctOf(r.percentage)
+          const good = pct >= 70
+          const withdrawn = Boolean(r.withdrawn)
+          return (
+            <Card
+              key={str(r.id)}
+              className='p-4 rounded-2xl border-none shadow-sm bg-white flex items-center gap-3'
+            >
+              <div className='min-w-0 flex-1'>
+                <p className='text-sm font-black text-slate-800 truncate flex items-center gap-1.5'>
+                  {str(r.quizTitle) || 'Quiz'}
+                  {withdrawn && (
+                    <span className='text-[8px] font-black uppercase text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded shrink-0'>
+                      Withdrawn
+                    </span>
+                  )}
+                </p>
+                <p className='text-[10px] font-bold text-slate-400'>
+                  {str(r.totalScore) || 0}/{str(r.totalMarks) || 0} marks
+                  {r.submittedAt ? ` · ${fmtDate(r.submittedAt)}` : ''}
+                </p>
+              </div>
+              <span
+                className={`text-sm font-black px-3 py-1.5 rounded-xl shrink-0 ${
+                  withdrawn
+                    ? 'bg-slate-100 text-slate-400'
+                    : good
+                      ? 'bg-emerald-50 text-emerald-600'
+                      : 'bg-rose-50 text-rose-500'
+                }`}
+              >
+                {pct}%
+              </span>
+            </Card>
+          )
+        })
       )}
     </div>
   )

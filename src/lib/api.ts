@@ -293,6 +293,17 @@ export const dsaApi = {
         headers: getHeaders(token),
       }).then((r) => handleResponse<LeaderboardEntry[]>(r)),
 
+    // GET /quizzes/results/me — the logged-in student's quiz history (all their
+    // past submissions across quizzes).
+    myResults: (token?: string) =>
+      fetch(`${BASE_URL}/quizzes/results/me`, { headers: getHeaders(token) })
+        .then((r) =>
+          handleResponse<
+            Record<string, unknown>[] | { data?: Record<string, unknown>[] }
+          >(r),
+        )
+        .then((res) => (Array.isArray(res) ? res : (res?.data ?? []))),
+
     // ---- Admin attempt analytics — docs/backend-requests-2026-09-02.md §6 ----
     // GET /quizzes/:id/attempts — every attempt (admin), for the quiz roster.
     attempts: (id: string, token?: string) =>
