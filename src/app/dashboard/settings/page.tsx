@@ -41,6 +41,10 @@ export default function SettingsView() {
   const [email, setEmail] = useState('')
   const [institution, setInstitution] = useState('')
   const [phone, setPhone] = useState('')
+  // Tutor-only professional fields.
+  const [role, setRole] = useState('')
+  const [bio, setBio] = useState('')
+  const [subjects, setSubjects] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [saveMsg, setSaveMsg] = useState('')
   const [saveErr, setSaveErr] = useState('')
@@ -65,6 +69,14 @@ export default function SettingsView() {
       setEmail((u.email as string) || '')
       setInstitution((u.institution as string) || (u.school as string) || '')
       setPhone((u.phoneNumber as string) || (u.phone as string) || '')
+      setRole((u.role as string) || '')
+      setBio((u.bio as string) || '')
+      const subs = u.subjects ?? u.subjectsOfInterest
+      setSubjects(
+        Array.isArray(subs)
+          ? (subs as string[]).join(', ')
+          : ((subs as string) || ''),
+      )
       const img =
         localStorage.getItem('user-pfp') ||
         (u.avatarUrl as string) ||
@@ -139,6 +151,15 @@ export default function SettingsView() {
         institution,
         phoneNumber: phone,
         profilePic: profileImage,
+        ...(role === 'tutor'
+          ? {
+              bio,
+              subjects: subjects
+                .split(',')
+                .map((s) => s.trim())
+                .filter(Boolean),
+            }
+          : {}),
       })
       // Refresh the cached user so the sidebar/header pick up the new name/avatar.
       const updated = (res?.data ?? res?.user) as DsaUser | undefined
@@ -263,6 +284,29 @@ export default function SettingsView() {
                   <Field label='Institution' value={institution} onChange={setInstitution} placeholder='e.g. University of Lagos' />
                   <Field label='Phone Number' value={phone} onChange={setPhone} placeholder='080…' />
                 </div>
+
+                {role === 'tutor' && (
+                  <>
+                    <Field
+                      label='Subjects (comma-separated)'
+                      value={subjects}
+                      onChange={setSubjects}
+                      placeholder='e.g. Mathematics, Physics'
+                    />
+                    <div className='space-y-1'>
+                      <label className='text-[9px] font-black text-gray-400 uppercase ml-1'>
+                        Bio
+                      </label>
+                      <textarea
+                        value={bio}
+                        onChange={(e) => setBio(e.target.value)}
+                        placeholder='A short introduction shown to your students.'
+                        rows={3}
+                        className='w-full rounded-lg border border-gray-100 bg-gray-50/50 text-[11px] font-medium focus:bg-white px-3 py-2 outline-none resize-y'
+                      />
+                    </div>
+                  </>
+                )}
 
                 <Button
                   onClick={handleSaveChanges}

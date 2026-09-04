@@ -88,6 +88,7 @@ interface BankQuestion {
   correctOption: string
   imageUrl?: string
   mark: number
+  batchName?: string
 }
 
 const str = (v: unknown) => (v == null ? '' : String(v))
@@ -106,6 +107,7 @@ function normalize(raw: Record<string, unknown>): BankQuestion {
     correctOption: str(raw.correctOption || LETTERS[Number(raw.correctAnswer) || 0]),
     imageUrl: raw.imageUrl ? str(raw.imageUrl) : undefined,
     mark: typeof raw.mark === 'number' ? raw.mark : Number(raw.marks) || 1,
+    batchName: raw.batchName ? str(raw.batchName) : undefined,
   }
 }
 
@@ -138,6 +140,9 @@ export default function QuestionBank({ token }: { token?: string }) {
   const [notice, setNotice] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [uploadingImg, setUploadingImg] = useState(false)
+  // Name for the next Excel import — stored on every question in the batch so
+  // both tutors and admin can group/see which upload a question came from.
+  const [batchName, setBatchName] = useState('')
   const [form, setForm] = useState(emptyForm)
   // Editing an existing question — the backend has no update route, so on save
   // we create the edited copy and delete the original.
@@ -283,8 +288,13 @@ export default function QuestionBank({ token }: { token?: string }) {
         )
         return
       }
-      await dsaApi.questions.createMany(payload, authToken)
-      flash(`Imported ${payload.length} question${payload.length === 1 ? '' : 's'}`)
+      await dsaApi.questions.createMany(payload, authToken, batchName.trim() || undefined)
+      flash(
+        `Imported ${payload.length} question${payload.length === 1 ? '' : 's'}${
+          batchName.trim() ? ` into “${batchName.trim()}”` : ''
+        }`,
+      )
+      setBatchName('')
       load()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not import the sheet.')
@@ -316,7 +326,14 @@ export default function QuestionBank({ token }: { token?: string }) {
             Add questions for your subjects — the admin builds quizzes from these
           </p>
         </div>
-        <div className='flex items-center gap-2'>
+        <div className='flex items-center gap-2 flex-wrap'>
+          <input
+            value={batchName}
+            onChange={(e) => setBatchName(e.target.value)}
+            placeholder='Batch name (optional)'
+            title='Names this Excel upload — shown on every question in it (tutor & admin)'
+            className='h-10 px-3 rounded-xl bg-slate-50 border border-slate-200 outline-none text-[12px] font-bold w-40'
+          />
           <button
             onClick={downloadTemplate}
             className='flex items-center gap-2 h-10 px-4 rounded-xl bg-slate-50 text-slate-600 font-black text-[11px] uppercase tracking-wide hover:bg-slate-100'
@@ -566,6 +583,20 @@ export default function QuestionBank({ token }: { token?: string }) {
                     </span>
                   ))}
                 </div>
+                {(q.batchName || q.topic) && (
+                  <div className='flex flex-wrap gap-1.5 mt-1.5'>
+                    {q.batchName && (
+                      <span className='inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wide text-[#002EFF] bg-blue-50 px-1.5 py-0.5 rounded'>
+                        <FileSpreadsheet size={9} /> {q.batchName}
+                      </span>
+                    )}
+                    {q.topic && (
+                      <span className='text-[9px] font-black uppercase tracking-wide text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded'>
+                        {q.topic}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
               <button
                 onClick={() => startEdit(q)}

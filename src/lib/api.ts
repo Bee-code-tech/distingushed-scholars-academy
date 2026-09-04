@@ -406,11 +406,17 @@ export const dsaApi = {
         .then((r) => (r as { data?: unknown }).data ?? r),
 
     // POST /questions with a bulk array.
-    createMany: (questions: Record<string, unknown>[], token?: string) =>
+    createMany: (
+      questions: Record<string, unknown>[],
+      token?: string,
+      batchName?: string,
+    ) =>
       fetch(`${BASE_URL}/questions`, {
         method: 'POST',
         headers: getHeaders(token),
-        body: JSON.stringify({ questions }),
+        body: JSON.stringify(
+          batchName ? { questions, batchName } : { questions },
+        ),
       })
         .then((r) => handleResponse<{ data?: unknown }>(r))
         .then((r) => (r as { data?: unknown }).data ?? r),
