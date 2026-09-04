@@ -1039,7 +1039,20 @@ export interface ActionSuccessResponse {
 // COURSE & MATERIAL TYPES
 // ==========================================
 
-export type CourseCategory = 'waec-sss' | 'jamb-putme' | 'higher'
+export type CourseCategory =
+  | 'ss1'
+  | 'ss2'
+  | 'ss3'
+  | 'waec'
+  | 'jamb'
+  | 'postutme'
+  | '100-level'
+  | '200-level'
+  | 'preclinical'
+  | 'afterschool'
+  | 'waec-sss'
+  | 'jamb-putme'
+  | 'higher'
 
 export interface Course {
   id: string

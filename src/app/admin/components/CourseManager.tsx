@@ -80,7 +80,7 @@ export default function CourseManager() {
 
   const [title, setTitle] = useState('')
   const [subject, setSubject] = useState('')
-  const [category, setCategory] = useState<CourseCategory>('jamb-putme')
+  const [category, setCategory] = useState<CourseCategory>('jamb')
   const [classLevel, setClassLevel] = useState('')
   const [tutorId, setTutorId] = useState('')
   const [error, setError] = useState('')

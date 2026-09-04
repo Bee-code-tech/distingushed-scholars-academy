@@ -12,20 +12,58 @@ const COURSES_KEY = 'dsa_courses'
 const MATERIALS_KEY = 'dsa_materials'
 const COMPLETE_KEY = 'dsa_material_completions' // { [studentKey]: materialId[] }
 
-// Course categories — a course is shared across every track/level in its category.
+// Course categories — the class / exam-track a course belongs to. A student
+// sees courses in any category matching their class OR their track.
 export const COURSE_CATEGORIES: { id: CourseCategory; label: string; note: string }[] = [
-  { id: 'waec-sss', label: 'WAEC & Secondary', note: 'SS1 – SS3 and WAEC' },
-  { id: 'jamb-putme', label: 'JAMB & Post-UTME', note: 'JAMB and Post-UTME — same courses' },
-  { id: 'higher', label: 'Higher Institution', note: '100 / 200 level' },
+  { id: 'ss1', label: 'SS1', note: 'Senior Secondary 1' },
+  { id: 'ss2', label: 'SS2', note: 'Senior Secondary 2' },
+  { id: 'ss3', label: 'SS3', note: 'Senior Secondary 3' },
+  { id: 'waec', label: 'WAEC', note: 'WAEC / SSCE prep' },
+  { id: 'jamb', label: 'JAMB', note: 'UTME prep' },
+  { id: 'postutme', label: 'Post-UTME', note: 'Post-UTME prep' },
+  { id: '100-level', label: '100 Level', note: 'Undergraduate 100' },
+  { id: '200-level', label: '200 Level', note: 'Undergraduate 200' },
+  { id: 'preclinical', label: 'Preclinical', note: 'Preclinical' },
+  { id: 'afterschool', label: 'After-School', note: 'After-school lessons' },
 ]
 
-/** Map a student's exam track / class level to a course category. */
+/** Normalise any legacy category or track/level string to a current category. */
 export function categoryForTrack(track?: string): CourseCategory {
   const t = (track || '').toLowerCase()
-  if (t.includes('waec') || t.includes('ss1') || t.includes('ss2') || t.includes('ss3'))
-    return 'waec-sss'
-  if (t.includes('100') || t.includes('200') || t.includes('higher')) return 'higher'
-  return 'jamb-putme' // jamb, post-utme (and default)
+  if (t.includes('ss1')) return 'ss1'
+  if (t.includes('ss2')) return 'ss2'
+  if (t.includes('ss3')) return 'ss3'
+  if (t.includes('post')) return 'postutme'
+  if (t.includes('waec')) return 'waec'
+  if (t.includes('jamb')) return 'jamb'
+  if (t.includes('100')) return '100-level'
+  if (t.includes('200') || t.includes('higher')) return '200-level'
+  if (t.includes('preclinic')) return 'preclinical'
+  if (t.includes('after') || t.includes('summer')) return 'afterschool'
+  return 'jamb'
+}
+
+/** The categories a student belongs to — their class AND their exam track. */
+export function categoriesForStudent(user?: {
+  currentLevel?: unknown
+  level?: unknown
+  examTrack?: unknown
+} | null): CourseCategory[] {
+  const out = new Set<CourseCategory>()
+  const level = String(user?.currentLevel ?? user?.level ?? '').toLowerCase()
+  const track = String(user?.examTrack ?? '').toLowerCase()
+  if (level.includes('ss1')) out.add('ss1')
+  else if (level.includes('ss2')) out.add('ss2')
+  else if (level.includes('ss3')) out.add('ss3')
+  else if (level.includes('100')) out.add('100-level')
+  else if (level.includes('200')) out.add('200-level')
+  if (track === 'waec') out.add('waec')
+  else if (track === 'jamb') out.add('jamb')
+  else if (track === 'postutme') out.add('postutme')
+  else if (track === 'preclinical') out.add('preclinical')
+  else if (track === 'afterschool') out.add('afterschool')
+  else if (track === 'undergrad') out.add('100-level')
+  return [...out]
 }
 
 export function categoryLabel(id: CourseCategory): string {
@@ -33,16 +71,27 @@ export function categoryLabel(id: CourseCategory): string {
 }
 
 /**
- * The exam tracks that fall under a course category — the inverse of
- * {@link categoryForTrack}. Used to scope a tutor to the community channels of
- * the tracks they actually teach.
+ * The exam tracks that fall under a course category — used to scope a tutor to
+ * the community channels of the categories they teach. (Community channels are
+ * still track-based; SS classes map to the WAEC community.)
  */
 export function tracksForCategory(cat: CourseCategory): ExamTrack[] {
   switch (cat) {
+    case 'ss1':
+    case 'ss2':
+    case 'ss3':
+    case 'waec':
     case 'waec-sss':
       return ['waec', 'afterschool']
+    case '100-level':
+    case '200-level':
+    case 'preclinical':
     case 'higher':
       return ['undergrad', 'preclinical']
+    case 'afterschool':
+      return ['afterschool']
+    case 'jamb':
+    case 'postutme':
     case 'jamb-putme':
     default:
       return ['jamb', 'postutme']

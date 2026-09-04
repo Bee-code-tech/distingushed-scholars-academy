@@ -115,11 +115,24 @@ export type MaterialType =
   | 'slide'
   | 'link'
 
-// Courses are grouped into categories shared across tracks:
-//  waec-sss   → WAEC + Secondary (SS1–SS3)
-//  jamb-putme → JAMB + Post-UTME (same courses)
-//  higher     → Higher Institution (100/200 level)
-export type CourseCategory = 'waec-sss' | 'jamb-putme' | 'higher'
+// Course categories are the class / exam-track a course belongs to. A student
+// sees courses in any category matching their class OR their track. The three
+// legacy ids (waec-sss / jamb-putme / higher) are kept so old data still reads.
+export type CourseCategory =
+  | 'ss1'
+  | 'ss2'
+  | 'ss3'
+  | 'waec'
+  | 'jamb'
+  | 'postutme'
+  | '100-level'
+  | '200-level'
+  | 'preclinical'
+  | 'afterschool'
+  // legacy — migrated to the above, still accepted on read
+  | 'waec-sss'
+  | 'jamb-putme'
+  | 'higher'
 
 export interface Course {
   id: string
