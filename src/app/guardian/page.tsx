@@ -15,12 +15,14 @@ import {
   BookOpen,
   Award,
   ClipboardList,
+  LifeBuoy,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import DashboardShell, {
   type NavGroup,
 } from '@/components/dashboard/DashboardShell'
+import Support from '@/components/dashboard/Support'
 import { useDashboardSession } from '@/components/dashboard/useDashboardSession'
 import { useTabState } from '@/components/dashboard/useTabState'
 import {
@@ -57,6 +59,10 @@ const NAV: NavGroup[] = [
       { key: 'countdown', label: 'Exam Countdown', icon: Timer },
       { key: 'fees', label: 'Fees', icon: Wallet },
     ],
+  },
+  {
+    group: 'Help',
+    items: [{ key: 'support', label: 'Support', icon: LifeBuoy }],
   },
 ]
 
@@ -666,6 +672,8 @@ export default function GuardianDashboard() {
           )}
         </div>
       )}
+
+      {view === 'support' && <Support />}
     </DashboardShell>
   )
 }
