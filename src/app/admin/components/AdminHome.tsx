@@ -395,6 +395,8 @@ import {
   CheckCircle2,
   X,
   Edit3,
+  CreditCard,
+  UserCheck,
 } from 'lucide-react'
 import { getAdminToken } from '@/lib/admin-auth'
 import { getStudents } from '@/lib/studentsStore'
@@ -426,6 +428,8 @@ interface StatCounts {
   courses: number
   roles: number
   programs: number
+  paidStudents: number
+  freeStudents: number
 }
 
 export interface ProgramCountdown {
@@ -458,6 +462,8 @@ export default function AdminHome({ onNavigate }: AdminHomeProps) {
     courses: 0,
     roles: 0,
     programs: 0,
+    paidStudents: 0,
+    freeStudents: 0,
   })
 
   // Fetch count for a specific user role from the API
@@ -483,6 +489,27 @@ export default function AdminHome({ onNavigate }: AdminHomeProps) {
         : data?.data?.length || 0
     } catch {
       return 0
+    }
+  }
+
+  // GET /api/admin/stats — headline counts incl. free vs paid students.
+  const fetchStats = async (
+    token: string,
+  ): Promise<{ paidStudents: number; freeStudents: number; students: number } | null> => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/admin/stats`, {
+        headers: { accept: 'application/json', Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) return null
+      const data = await res.json()
+      const d = data?.data ?? data
+      return {
+        paidStudents: Number(d?.paidStudents) || 0,
+        freeStudents: Number(d?.freeStudents) || 0,
+        students: Number(d?.students) || 0,
+      }
+    } catch {
+      return null
     }
   }
 
@@ -530,28 +557,34 @@ export default function AdminHome({ onNavigate }: AdminHomeProps) {
           courses: localCoursesCount,
           roles: localRolesCount,
           programs: fetchedPrograms.length,
+          paidStudents: 0,
+          freeStudents: 0,
         })
         setLoading(false)
         return
       }
 
-      // Fetch live role counts in parallel from /api/admin/users
-      const [studentCount, tutorCount, staffCount, parentCount] =
+      // Fetch live role counts + free/paid stats in parallel.
+      const [studentCount, tutorCount, staffCount, parentCount, stats] =
         await Promise.all([
           fetchRoleCount('student', token),
           fetchRoleCount('tutor', token),
           fetchRoleCount('staff', token),
           fetchRoleCount('parent', token),
+          fetchStats(token),
         ])
 
+      const students = stats?.students || studentCount || localStudentsCount
       setCounts({
-        students: studentCount || localStudentsCount,
+        students,
         tutors: tutorCount,
         staff: staffCount || localStaffCount,
         parents: parentCount,
         courses: localCoursesCount,
         roles: localRolesCount,
         programs: fetchedPrograms.length,
+        paidStudents: stats?.paidStudents ?? 0,
+        freeStudents: stats ? stats.freeStudents : Math.max(0, students),
       })
     } catch {
       setCounts({
@@ -562,6 +595,8 @@ export default function AdminHome({ onNavigate }: AdminHomeProps) {
         courses: localCoursesCount,
         roles: localRolesCount,
         programs: 0,
+        paidStudents: 0,
+        freeStudents: 0,
       })
     } finally {
       setLoading(false)
@@ -587,6 +622,18 @@ export default function AdminHome({ onNavigate }: AdminHomeProps) {
       value: counts.students,
       icon: Users,
       tint: 'bg-blue-50 text-blue-600',
+    },
+    {
+      label: 'Paid Students',
+      value: counts.paidStudents,
+      icon: CreditCard,
+      tint: 'bg-emerald-50 text-emerald-600',
+    },
+    {
+      label: 'Free Students',
+      value: counts.freeStudents,
+      icon: UserCheck,
+      tint: 'bg-slate-100 text-slate-500',
     },
     {
       label: 'Tutors',
