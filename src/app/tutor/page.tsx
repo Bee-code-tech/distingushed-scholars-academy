@@ -276,6 +276,14 @@ export default function TutorDashboard() {
               You have {pendingGrading} submission{pendingGrading === 1 ? '' : 's'}{' '}
               waiting to be graded.
             </p>
+            {pendingGrading > 0 && (
+              <button
+                onClick={() => setView('assignments')}
+                className='mt-4 inline-flex items-center gap-2 h-9 px-4 rounded-xl bg-[#FCB900] text-[#002EFF] font-black text-[11px] uppercase tracking-wide hover:bg-yellow-400 active:scale-[0.98] transition-all shadow-md'
+              >
+                <CheckCircle2 size={15} /> Grade now
+              </button>
+            )}
           </section>
 
           <div className='grid grid-cols-2 md:grid-cols-4 gap-4'>
