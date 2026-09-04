@@ -996,6 +996,12 @@ export interface GetUsersParams {
     | 'deleted'
     | 'all'
     | string
+  /** Filter students by an enrolled programme (e.g. "WAEC Tutorials"). */
+  programme?: string
+  /** Filter students by class / level (e.g. "SS3", "100 Level"). */
+  class?: string
+  /** Filter students by resolved exam track (jamb | waec | postutme | …). */
+  examTrack?: string
 }
 
 export interface AdminUserListItem {
@@ -1268,6 +1274,9 @@ export const adminApi = {
     if (params.limit !== undefined)
       queryParams.append('limit', params.limit.toString())
     if (params.status) queryParams.append('status', params.status)
+    if (params.programme) queryParams.append('programme', params.programme)
+    if (params.class) queryParams.append('class', params.class)
+    if (params.examTrack) queryParams.append('examTrack', params.examTrack)
 
     const queryString = queryParams.toString()
     return adminFetch<GetUsersResponse>(

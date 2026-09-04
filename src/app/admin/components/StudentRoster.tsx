@@ -1017,6 +1017,7 @@ import {
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { adminApi, type AdminUserListItem } from '@/lib/admin-api'
+import { PROGRAMMES, CLASS_LEVELS } from '@/lib/registration'
 import TrackOverride from './TrackOverride'
 
 /* ------------------------------------------------------------------ */
@@ -1075,6 +1076,9 @@ export default function StudentRoster() {
   const [students, setStudents] = useState<ExtendedStudentPerson[]>([])
   const [source, setSource] = useState<'server' | 'local'>('local')
   const [searchQuery, setSearchQuery] = useState('')
+  // Filter by programme / class (sent to the backend user filter).
+  const [programmeFilter, setProgrammeFilter] = useState('')
+  const [classFilter, setClassFilter] = useState('')
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1)
@@ -1117,12 +1121,15 @@ export default function StudentRoster() {
   }
 
   // Data Fetching logic with Pagination support
-  const fetchStudents = useCallback(async (query = '', page = 1) => {
+  const fetchStudents = useCallback(
+    async (query = '', page = 1, programme = '', cls = '') => {
     setLoading(true)
     try {
       const response = await adminApi.getUsers({
         role: 'student',
         search: query || undefined,
+        programme: programme || undefined,
+        class: cls || undefined,
         page,
         limit,
       })
@@ -1180,13 +1187,15 @@ export default function StudentRoster() {
   }, [])
 
   useEffect(() => {
-    fetchStudents(searchQuery, currentPage)
-  }, [fetchStudents, currentPage])
+    fetchStudents(searchQuery, currentPage, programmeFilter, classFilter)
+    // Re-fetch on page change or when a filter changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetchStudents, currentPage, programmeFilter, classFilter])
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
     setCurrentPage(1)
-    fetchStudents(searchQuery, 1)
+    fetchStudents(searchQuery, 1, programmeFilter, classFilter)
   }
 
   /* ------------------------------------------------------------------ */
@@ -1353,6 +1362,56 @@ export default function StudentRoster() {
           Search
         </button>
       </form>
+
+      {/* Filters — by programme and by class/level */}
+      <div className='flex flex-wrap items-center gap-2'>
+        <span className='text-[9px] font-black uppercase tracking-widest text-slate-400'>
+          Filter
+        </span>
+        <select
+          value={programmeFilter}
+          onChange={(e) => {
+            setProgrammeFilter(e.target.value)
+            setCurrentPage(1)
+          }}
+          className='h-9 px-2 bg-white border border-slate-200 rounded-lg text-[11px] font-black text-slate-700 outline-none focus:border-[#002EFF]'
+        >
+          <option value=''>All programmes</option>
+          {PROGRAMMES.map((p) => (
+            <option key={p} value={p}>
+              {p}
+            </option>
+          ))}
+        </select>
+        <select
+          value={classFilter}
+          onChange={(e) => {
+            setClassFilter(e.target.value)
+            setCurrentPage(1)
+          }}
+          className='h-9 px-2 bg-white border border-slate-200 rounded-lg text-[11px] font-black text-slate-700 outline-none focus:border-[#002EFF]'
+        >
+          <option value=''>All classes</option>
+          {CLASS_LEVELS.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
+        {(programmeFilter || classFilter) && (
+          <button
+            type='button'
+            onClick={() => {
+              setProgrammeFilter('')
+              setClassFilter('')
+              setCurrentPage(1)
+            }}
+            className='h-9 px-3 rounded-lg bg-slate-100 text-slate-500 text-[10px] font-black uppercase hover:text-[#002EFF]'
+          >
+            Clear
+          </button>
+        )}
+      </div>
 
       {/* Content View */}
       {loading ? (
