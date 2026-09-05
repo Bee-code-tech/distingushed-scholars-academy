@@ -284,7 +284,7 @@
 // Passwords are intentionally NOT part of StaffMember anymore.
 // The backend should hash passwords and should never return them to the
 // frontend.
-//
+
 // -----------------------------------------------------------------------------
 // Permission catalogue
 // -----------------------------------------------------------------------------
