@@ -42,6 +42,20 @@ import { resumePaystack } from '@/lib/paystack'
 import { addStudent } from '@/lib/studentsStore'
 import type { RegisterInitData } from '@/lib/types'
 
+const DEPARTMENTS = [
+  { value: 'science', label: 'Science' },
+  { value: 'art', label: 'Art' },
+  { value: 'commercial', label: 'Commercial' },
+] as const
+
+/** Science/Art/Commercial applies to SS1–SS3 and the WAEC/JAMB/Post-UTME tracks. */
+function needsDepartment(classLevel?: string, programmes?: string[]): boolean {
+  const cl = (classLevel || '').toLowerCase()
+  if (cl.includes('ss1') || cl.includes('ss2') || cl.includes('ss3')) return true
+  const track = deriveTrackFromProgrammes(programmes || [])
+  return ['waec', 'jamb', 'postutme'].includes(track)
+}
+
 const schema = z
   .object({
     // Step 1
@@ -67,6 +81,9 @@ const schema = z
       .array(z.string())
       .min(1, 'Select at least one programme')
       .max(2, 'You can pick up to 2 programmes'),
+    // Department (Science/Art/Commercial) — required for SS1–SS3, WAEC, JAMB,
+    // Post-UTME students; ignored for others.
+    department: z.string().optional(),
     // Step 4
     guardianName: z.string().min(2, 'Parent/Guardian name is required'),
     guardianPhone: z
@@ -84,13 +101,17 @@ const schema = z
     message: 'Passwords do not match',
     path: ['confirmPassword'],
   })
+  .refine((d) => !needsDepartment(d.classLevel, d.programmes) || !!d.department, {
+    message: 'Select your department',
+    path: ['department'],
+  })
 
 type FormValues = z.infer<typeof schema>
 
 const STEP_FIELDS: Record<number, (keyof FormValues)[]> = {
   1: ['fullname', 'email', 'whatsapp', 'password', 'confirmPassword'],
   2: ['gender', 'dob', 'state', 'school', 'classLevel', 'learningMode'],
-  3: ['programmes'],
+  3: ['programmes', 'department'],
   4: ['guardianName', 'guardianPhone', 'guardianEmail'],
   5: ['acceptTerms'],
 }
@@ -125,8 +146,8 @@ export default function StudentWizard() {
     defaultValues: {
       fullname: '', email: '', whatsapp: '', password: '', confirmPassword: '',
       gender: '', dob: '', state: '', school: '', classLevel: '', learningMode: '',
-      passport: '', programmes: [], guardianName: '', guardianPhone: '',
-      guardianEmail: '', acceptTerms: false as unknown as true,
+      passport: '', programmes: [], department: '', guardianName: '',
+      guardianPhone: '', guardianEmail: '', acceptTerms: false as unknown as true,
     },
   })
   const { register, watch, setValue, trigger, getValues, formState } = form
@@ -137,6 +158,7 @@ export default function StudentWizard() {
   const gender = watch('gender')
   const learningMode = watch('learningMode')
   const classLevel = watch('classLevel')
+  const department = watch('department')
 
   const next = async () => {
     setError('')
@@ -267,6 +289,7 @@ export default function StudentWizard() {
       currentLevel: v.classLevel,
       learningMode: mode, // 'online' | 'physical'
       programmes: v.programmes,
+      ...(v.department ? { department: v.department } : {}),
       guardianInfo: {
         fullname: v.guardianName,
         phoneNumber: v.guardianPhone,
@@ -616,6 +639,33 @@ export default function StudentWizard() {
                 {programmes.length >= 2 && ' — maximum reached'}
               </p>
               {errors.programmes && <p className='text-[10px] font-bold text-rose-500'>{errors.programmes.message as string}</p>}
+
+              {needsDepartment(classLevel, programmes) && (
+                <div className='pt-2'>
+                  <h3 className='text-sm font-black text-slate-800'>Department *</h3>
+                  <p className='text-[11px] text-slate-500 font-medium mb-2'>
+                    Pick your department so you only see your subjects &amp; timetable.
+                  </p>
+                  <div className='grid grid-cols-3 gap-2'>
+                    {DEPARTMENTS.map((d) => (
+                      <div
+                        key={d.value}
+                        onClick={() =>
+                          setValue('department', d.value, { shouldValidate: true })
+                        }
+                        className={pill(department === d.value)}
+                      >
+                        {d.label}
+                      </div>
+                    ))}
+                  </div>
+                  {errors.department && (
+                    <p className='text-[10px] font-bold text-rose-500 mt-1'>
+                      {errors.department.message as string}
+                    </p>
+                  )}
+                </div>
+              )}
             </>
           )}
 

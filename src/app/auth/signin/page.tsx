@@ -915,7 +915,6 @@ function LoginContent() {
                         disabled={loading}
                         onClick={() => {
                           form.setValue('email', s.email)
-                          form.setValue('password', s.password)
                           form.handleSubmit(onSubmit)()
                         }}
                         className='px-3 py-2.5 rounded-xl bg-amber-50/70 hover:bg-[#FCB900] hover:text-[#002EFF] text-amber-700 text-[9px] font-black uppercase tracking-wide transition-all active:scale-95 disabled:opacity-50'

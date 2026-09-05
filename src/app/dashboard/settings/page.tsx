@@ -45,6 +45,11 @@ export default function SettingsView() {
   const [role, setRole] = useState('')
   const [bio, setBio] = useState('')
   const [subjects, setSubjects] = useState('')
+  // Student department (Science/Art/Commercial) + their class/track to decide
+  // whether the department picker is relevant.
+  const [department, setDepartment] = useState('')
+  const [currentLevel, setCurrentLevel] = useState('')
+  const [examTrack, setExamTrack] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [saveMsg, setSaveMsg] = useState('')
   const [saveErr, setSaveErr] = useState('')
@@ -71,6 +76,13 @@ export default function SettingsView() {
       setPhone((u.phoneNumber as string) || (u.phone as string) || '')
       setRole((u.role as string) || '')
       setBio((u.bio as string) || '')
+      setDepartment((u.department as string) || '')
+      setCurrentLevel(
+        (u.currentLevel as string) || (u.level as string) || '',
+      )
+      setExamTrack(
+        (u.examTrack as string) || (u.examType as string) || '',
+      )
       const subs = u.subjects ?? u.subjectsOfInterest
       setSubjects(
         Array.isArray(subs)
@@ -160,6 +172,7 @@ export default function SettingsView() {
                 .filter(Boolean),
             }
           : {}),
+        ...(role === 'student' && department ? { department } : {}),
       })
       // Refresh the cached user so the sidebar/header pick up the new name/avatar.
       const updated = (res?.data ?? res?.user) as DsaUser | undefined
@@ -183,6 +196,17 @@ export default function SettingsView() {
       setIsSaving(false)
     }
   }
+
+  // SS1–SS3 / WAEC / JAMB / Post-UTME students have a department (Science / Art /
+  // Commercial); others don't.
+  const lvl = currentLevel.toLowerCase()
+  const tr = examTrack.toLowerCase()
+  const needsDept =
+    role === 'student' &&
+    (lvl.includes('ss1') ||
+      lvl.includes('ss2') ||
+      lvl.includes('ss3') ||
+      ['waec', 'jamb', 'postutme'].includes(tr))
 
   return (
     <div className='max-w-3xl mx-auto space-y-4 animate-in fade-in duration-500 pb-10'>
@@ -306,6 +330,27 @@ export default function SettingsView() {
                       />
                     </div>
                   </>
+                )}
+
+                {needsDept && (
+                  <div className='space-y-1'>
+                    <label className='text-[9px] font-black text-gray-400 uppercase ml-1'>
+                      Department
+                    </label>
+                    <select
+                      value={department}
+                      onChange={(e) => setDepartment(e.target.value)}
+                      className='w-full h-9 rounded-lg border border-gray-100 bg-gray-50/50 text-[11px] font-bold focus:bg-white px-3 outline-none'
+                    >
+                      <option value=''>Select your department…</option>
+                      <option value='science'>Science</option>
+                      <option value='art'>Art</option>
+                      <option value='commercial'>Commercial</option>
+                    </select>
+                    <p className='text-[9px] font-bold text-slate-400 ml-1'>
+                      Sets which subjects, quizzes &amp; timetable you see.
+                    </p>
+                  </div>
                 )}
 
                 <Button
