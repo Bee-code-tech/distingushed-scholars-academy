@@ -127,7 +127,7 @@ export default function QuizBuilder() {
   const [description, setDescription] = useState('')
   // Audience: which programme (+ department) the quiz targets. 'all' = everyone.
   const [track, setTrack] = useState<ExamTrack | 'all'>('all')
-  const [department, setDepartment] = useState<Department>('science')
+  const [department, setDepartment] = useState<Department | ''>('')
   // Portal audience mode: by programme, or assigned to specific students.
   const [audienceMode, setAudienceMode] = useState<'programme' | 'students'>('programme')
   const [assignedStudents, setAssignedStudents] = useState<string[]>([])
@@ -225,6 +225,18 @@ export default function QuizBuilder() {
       assignedStudents.length === 0
     )
       return setError('Select at least one student to assign this quiz to.')
+    // Dept-split programmes (WAEC / JAMB / Post-UTME) must carry a department so
+    // Science / Art / Commercial students each see only their own quizzes.
+    if (
+      accessMode === 'portal' &&
+      audienceMode === 'programme' &&
+      track !== 'all' &&
+      isDeptSplitTrack(track) &&
+      !department
+    )
+      return setError(
+        'Pick a department (Science, Art or Commercial) for this programme.',
+      )
     setPublishing(true)
     setPublicLink(null)
     setCopied(false)
@@ -233,7 +245,7 @@ export default function QuizBuilder() {
     const effectiveTrack = isFree ? 'all' : track
     const dept =
       !isFree && effectiveTrack !== 'all' && isDeptSplitTrack(effectiveTrack)
-        ? department
+        ? department || undefined
         : undefined
     // Shared detail fields (title, audience, access, attempts, result controls).
     const details: Record<string, unknown> = {
@@ -291,7 +303,7 @@ export default function QuizBuilder() {
       setTitle('')
       setDescription('')
       setTrack('all')
-      setDepartment('science')
+      setDepartment('')
       setAudienceMode('programme')
       setAssignedStudents([])
       setStudentSearch('')
@@ -323,7 +335,7 @@ export default function QuizBuilder() {
     setAccessMode(mode)
     const t = str(q.track || 'all')
     setTrack((t === 'all' ? 'all' : t) as ExamTrack | 'all')
-    if (q.department) setDepartment(q.department as Department)
+    setDepartment((q.department as Department) || '')
     // Prefill the assignment picker from the quiz's assigned students.
     const assigned = Array.isArray(q.assignedStudents)
       ? (q.assignedStudents as unknown[]).map((s) =>
@@ -564,9 +576,14 @@ export default function QuizBuilder() {
                 {track !== 'all' && isDeptSplitTrack(track) && (
                   <select
                     value={department}
-                    onChange={(e) => setDepartment(e.target.value as Department)}
-                    className='h-9 px-2 rounded-lg bg-white border border-slate-200 outline-none text-[12px] font-black'
+                    onChange={(e) =>
+                      setDepartment(e.target.value as Department | '')
+                    }
+                    className={`h-9 px-2 rounded-lg bg-white border outline-none text-[12px] font-black ${
+                      department ? 'border-slate-200' : 'border-rose-300'
+                    }`}
                   >
+                    <option value=''>Select department…</option>
                     {QUIZ_DEPARTMENTS.map((d) => (
                       <option key={d} value={d}>
                         {DEPARTMENT_LABELS[d]}
