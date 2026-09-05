@@ -184,6 +184,8 @@ export interface CreateCoursePayload {
   tutorIds?: string[]
   description?: string
   department?: string
+  /** Departments (science/art/commercial) this course serves; [] ⇒ all. */
+  departments?: string[]
   /** Target class/level (SS1, SS2, SS3, Jambite/Aspirant, 100 Level, 200 Level). Empty ⇒ all classes in the category. */
   classLevel?: string
   thumbnailUrl?: string

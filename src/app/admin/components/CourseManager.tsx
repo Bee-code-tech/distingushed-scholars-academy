@@ -25,8 +25,6 @@ const COURSE_DEPARTMENTS = [
   { value: 'art', label: 'Art' },
   { value: 'commercial', label: 'Commercial' },
 ] as const
-const deptLabel = (v?: string) =>
-  COURSE_DEPARTMENTS.find((d) => d.value === v)?.label ?? ''
 
 type UITutor = { id: string; name: string; subject?: string }
 type UICourse = {
@@ -34,8 +32,8 @@ type UICourse = {
   title: string
   subject?: string
   category: string
-  /** Science / Art / Commercial; '' ⇒ shared with all departments. */
-  department: string
+  /** Science / Art / Commercial the course serves; [] ⇒ shared with all. */
+  departments: string[]
   /** Ids of every tutor assigned to this course (one or more). */
   tutorIds: string[]
 }
@@ -90,7 +88,11 @@ export default function CourseManager() {
   const [title, setTitle] = useState('')
   const [subject, setSubject] = useState('')
   const [category, setCategory] = useState<CourseCategory>('jamb')
-  const [department, setDepartment] = useState('')
+  const [departments, setDepartments] = useState<string[]>([])
+  const toggleDept = (v: string) =>
+    setDepartments((prev) =>
+      prev.includes(v) ? prev.filter((x) => x !== v) : [...prev, v],
+    )
   const [tutorId, setTutorId] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -121,7 +123,11 @@ export default function CourseManager() {
           title: String(c.title ?? 'Course'),
           subject: c.subject ? String(c.subject) : undefined,
           category: String(c.category ?? ''),
-          department: c.department ? String(c.department) : '',
+          departments: Array.isArray(c.departments)
+            ? (c.departments as unknown[]).map(String)
+            : c.department
+              ? [String(c.department)]
+              : [],
           tutorIds: tutorIdsFromCourse(c),
         })),
       )
@@ -146,21 +152,17 @@ export default function CourseManager() {
     setError('')
     const cleanTitle = title.trim()
     if (cleanTitle.length < 2) return setError('Enter a course title')
-    // Block duplicates: same title + category + department already exists.
-    // (Same name in a different category — SS1 vs WAEC Biology — or a different
-    // department — Science vs Commercial — is allowed.)
+    // Block duplicates: same title in the same category. (Same name in a
+    // different category — SS1 vs WAEC Biology — is allowed; one course can serve
+    // several departments, so department isn't part of the key.)
     const exists = courses.some(
       (c) =>
         c.category === category &&
-        (c.department || '') === department &&
         c.title.trim().toLowerCase() === cleanTitle.toLowerCase(),
     )
     if (exists) {
-      const where = department
-        ? `${categoryLabel(category)} · ${deptLabel(department)}`
-        : categoryLabel(category)
       return setError(
-        `“${cleanTitle}” already exists in ${where}. Assign another tutor to the existing course instead of creating a new one.`,
+        `“${cleanTitle}” already exists in ${categoryLabel(category)}. Edit that course (you can assign it to more departments) instead of creating a new one.`,
       )
     }
     setBusy(true)
@@ -169,7 +171,7 @@ export default function CourseManager() {
         title: title.trim(),
         subject: subject.trim() || title.trim(),
         category,
-        department: department || undefined,
+        departments,
         // Send both: `tutorId` for the current backend and `tutorIds` for the
         // multi-tutor backend (see docs/backend-request-course-tutors.md).
         tutorId: tutorId || undefined,
@@ -214,11 +216,11 @@ export default function CourseManager() {
     [load],
   )
 
-  /** Change which department an existing course targets (PUT /courses/:id). */
-  const setCourseDepartment = useCallback(
-    async (courseId: string, newDept: string) => {
+  /** Change which departments an existing course serves (PUT /courses/:id). */
+  const setCourseDepartments = useCallback(
+    async (courseId: string, newDepts: string[]) => {
       setError('')
-      await adminApi.updateCourse(courseId, { department: newDept })
+      await adminApi.updateCourse(courseId, { departments: newDepts })
       await load()
     },
     [load],
@@ -288,23 +290,30 @@ export default function CourseManager() {
               ))}
             </select>
           </label>
-          <label className='space-y-1'>
+          <div className='space-y-1'>
             <span className='text-[9px] font-black uppercase text-slate-400'>
-              Department
+              Departments {departments.length === 0 && '(all)'}
             </span>
-            <select
-              value={department}
-              onChange={(e) => setDepartment(e.target.value)}
-              className='w-full h-11 px-3 rounded-lg bg-slate-50 border border-transparent focus:border-[#002EFF]/30 focus:bg-white outline-none text-sm font-bold'
-            >
-              <option value=''>All departments</option>
-              {COURSE_DEPARTMENTS.map((d) => (
-                <option key={d.value} value={d.value}>
-                  {d.label}
-                </option>
-              ))}
-            </select>
-          </label>
+            <div className='flex gap-1.5'>
+              {COURSE_DEPARTMENTS.map((d) => {
+                const on = departments.includes(d.value)
+                return (
+                  <button
+                    key={d.value}
+                    type='button'
+                    onClick={() => toggleDept(d.value)}
+                    className={`flex-1 h-11 rounded-lg text-[11px] font-black uppercase tracking-wide border transition-all ${
+                      on
+                        ? 'bg-[#002EFF] text-white border-[#002EFF]'
+                        : 'bg-slate-50 text-slate-500 border-transparent hover:border-slate-300'
+                    }`}
+                  >
+                    {d.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
           <label className='space-y-1'>
             <span className='text-[9px] font-black uppercase text-slate-400'>
               Assign tutor
@@ -373,7 +382,7 @@ export default function CourseManager() {
                       tutors={tutors}
                       onSetTutors={setCourseTutors}
                       onRename={renameCourse}
-                      onSetDepartment={setCourseDepartment}
+                      onSetDepartments={setCourseDepartments}
                       onRemove={remove}
                     />
                   ))}
@@ -397,14 +406,14 @@ function CourseCard({
   tutors,
   onSetTutors,
   onRename,
-  onSetDepartment,
+  onSetDepartments,
   onRemove,
 }: {
   course: UICourse
   tutors: UITutor[]
   onSetTutors: (courseId: string, ids: string[]) => Promise<void>
   onRename: (courseId: string, title: string) => Promise<void>
-  onSetDepartment: (courseId: string, department: string) => Promise<void>
+  onSetDepartments: (courseId: string, departments: string[]) => Promise<void>
   onRemove: (id: string) => void
 }) {
   const [adding, setAdding] = useState('')
@@ -489,31 +498,42 @@ function CourseCard({
               </button>
             </p>
           )}
-          <div className='flex items-center gap-2 mt-0.5'>
+          <div className='flex items-center gap-1.5 mt-1 flex-wrap'>
             <p className='text-[9px] font-black uppercase tracking-widest text-slate-400'>
               {course.tutorIds.length} tutor
               {course.tutorIds.length === 1 ? '' : 's'}
             </p>
             <span className='text-slate-300'>·</span>
-            <select
-              value={course.department}
-              disabled={busy}
-              onChange={(e) => {
-                setBusy(true)
-                onSetDepartment(course.id, e.target.value).finally(() =>
-                  setBusy(false),
-                )
-              }}
-              title='Department this course is for'
-              className='h-6 -ml-1 px-1 rounded bg-transparent hover:bg-slate-50 border border-transparent focus:border-[#002EFF]/30 outline-none text-[10px] font-black uppercase tracking-wide text-slate-500 disabled:opacity-50'
-            >
-              <option value=''>All departments</option>
-              {COURSE_DEPARTMENTS.map((d) => (
-                <option key={d.value} value={d.value}>
+            {COURSE_DEPARTMENTS.map((d) => {
+              const on = course.departments.includes(d.value)
+              return (
+                <button
+                  key={d.value}
+                  type='button'
+                  disabled={busy}
+                  onClick={() => {
+                    const next = on
+                      ? course.departments.filter((x) => x !== d.value)
+                      : [...course.departments, d.value]
+                    setBusy(true)
+                    onSetDepartments(course.id, next).finally(() => setBusy(false))
+                  }}
+                  title='Toggle this department for the course'
+                  className={`px-1.5 h-5 rounded text-[9px] font-black uppercase tracking-wide disabled:opacity-50 ${
+                    on
+                      ? 'bg-blue-50 text-[#002EFF]'
+                      : 'bg-slate-100 text-slate-400 hover:text-slate-600'
+                  }`}
+                >
                   {d.label}
-                </option>
-              ))}
-            </select>
+                </button>
+              )
+            })}
+            {course.departments.length === 0 && (
+              <span className='text-[9px] font-black uppercase text-slate-400'>
+                all depts
+              </span>
+            )}
           </div>
         </div>
         <button
