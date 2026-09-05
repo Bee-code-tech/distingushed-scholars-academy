@@ -290,10 +290,17 @@ export default function QuizBuilder() {
               })),
           } as Record<string, unknown>,
           token,
-        )) as { link?: string } | undefined
+        )) as
+          | { link?: string; publicLink?: string; data?: { publicLink?: string; link?: string } }
+          | undefined
         if (isFree) {
-          // Show the shareable public link (backend returns a `link` slug).
-          const slug = created?.link
+          // The backend returns the slug as `publicLink` (inside the response
+          // envelope's `data`). Read it robustly across shapes.
+          const slug =
+            created?.data?.publicLink ??
+            created?.data?.link ??
+            created?.publicLink ??
+            created?.link
           setPublicLink(
             slug ? `${window.location.origin}/q/${slug}` : 'link-pending',
           )
