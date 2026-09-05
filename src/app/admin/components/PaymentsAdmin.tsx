@@ -74,6 +74,7 @@ function PlansSection({ token }: { token?: string }) {
   const [amount, setAmount] = useState(8000)
   const [months, setMonths] = useState(1)
   const [track, setTrack] = useState('')
+  const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
 
   const load = useCallback(async () => {
@@ -104,11 +105,13 @@ function PlansSection({ token }: { token?: string }) {
           durationMonths: kind === 'portal' ? 0 : Number(months) || 1,
           grantsLevel: kind === 'portal' ? 'portal' : 'tutorial',
           track: track || undefined,
+          note: note.trim() || undefined,
           active: true,
         },
         token,
       )
       setName('')
+      setNote('')
       load()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not create the plan.')
@@ -189,6 +192,12 @@ function PlansSection({ token }: { token?: string }) {
           </div>
         )}
       </div>
+      <input
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        placeholder='Short description (optional) — e.g. “2 months, ₦2k discount”'
+        className='w-full h-10 px-3 rounded-lg bg-slate-50 outline-none text-sm font-medium'
+      />
       <button
         onClick={create}
         disabled={busy}
@@ -225,6 +234,11 @@ function PlansSection({ token }: { token?: string }) {
                     {' · '}
                     {trackLabel(p.track)}
                   </p>
+                  {p.note ? (
+                    <p className='text-[10px] font-medium text-slate-500 truncate'>
+                      {str(p.note)}
+                    </p>
+                  ) : null}
                 </div>
                 <button
                   onClick={() => toggle(p)}
