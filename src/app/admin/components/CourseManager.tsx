@@ -14,10 +14,19 @@ import {
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { COURSE_CATEGORIES, categoryLabel } from '@/lib/coursesStore'
-import { CLASS_LEVELS } from '@/lib/registration'
 import { dsaApi } from '@/lib/api'
 import { adminApi } from '@/lib/admin-api'
 import type { CourseCategory } from '@/lib/types'
+
+// Department scopes a course to Science / Art / Commercial students. Empty ⇒
+// shared with every department in the category.
+const COURSE_DEPARTMENTS = [
+  { value: 'science', label: 'Science' },
+  { value: 'art', label: 'Art' },
+  { value: 'commercial', label: 'Commercial' },
+] as const
+const deptLabel = (v?: string) =>
+  COURSE_DEPARTMENTS.find((d) => d.value === v)?.label ?? ''
 
 type UITutor = { id: string; name: string; subject?: string }
 type UICourse = {
@@ -25,8 +34,8 @@ type UICourse = {
   title: string
   subject?: string
   category: string
-  /** Target class/level (SS1…200 Level); '' ⇒ all classes in the category. */
-  classLevel: string
+  /** Science / Art / Commercial; '' ⇒ shared with all departments. */
+  department: string
   /** Ids of every tutor assigned to this course (one or more). */
   tutorIds: string[]
 }
@@ -81,7 +90,7 @@ export default function CourseManager() {
   const [title, setTitle] = useState('')
   const [subject, setSubject] = useState('')
   const [category, setCategory] = useState<CourseCategory>('jamb')
-  const [classLevel, setClassLevel] = useState('')
+  const [department, setDepartment] = useState('')
   const [tutorId, setTutorId] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -112,7 +121,7 @@ export default function CourseManager() {
           title: String(c.title ?? 'Course'),
           subject: c.subject ? String(c.subject) : undefined,
           category: String(c.category ?? ''),
-          classLevel: c.classLevel ? String(c.classLevel) : '',
+          department: c.department ? String(c.department) : '',
           tutorIds: tutorIdsFromCourse(c),
         })),
       )
@@ -137,18 +146,18 @@ export default function CourseManager() {
     setError('')
     const cleanTitle = title.trim()
     if (cleanTitle.length < 2) return setError('Enter a course title')
-    // Block duplicates: same title + same category + same class already exists.
-    // (Same name in a different category — JAMB vs WAEC Chemistry — or a
-    // different class — SS1 vs SS2 Biology — is allowed.)
+    // Block duplicates: same title + category + department already exists.
+    // (Same name in a different category — SS1 vs WAEC Biology — or a different
+    // department — Science vs Commercial — is allowed.)
     const exists = courses.some(
       (c) =>
         c.category === category &&
-        (c.classLevel || '') === classLevel &&
+        (c.department || '') === department &&
         c.title.trim().toLowerCase() === cleanTitle.toLowerCase(),
     )
     if (exists) {
-      const where = classLevel
-        ? `${categoryLabel(category)} · ${classLevel}`
+      const where = department
+        ? `${categoryLabel(category)} · ${deptLabel(department)}`
         : categoryLabel(category)
       return setError(
         `“${cleanTitle}” already exists in ${where}. Assign another tutor to the existing course instead of creating a new one.`,
@@ -160,7 +169,7 @@ export default function CourseManager() {
         title: title.trim(),
         subject: subject.trim() || title.trim(),
         category,
-        classLevel: classLevel || undefined,
+        department: department || undefined,
         // Send both: `tutorId` for the current backend and `tutorIds` for the
         // multi-tutor backend (see docs/backend-request-course-tutors.md).
         tutorId: tutorId || undefined,
@@ -205,11 +214,11 @@ export default function CourseManager() {
     [load],
   )
 
-  /** Change which class an existing course targets (PUT /courses/:id). */
-  const setCourseClass = useCallback(
-    async (courseId: string, newClass: string) => {
+  /** Change which department an existing course targets (PUT /courses/:id). */
+  const setCourseDepartment = useCallback(
+    async (courseId: string, newDept: string) => {
       setError('')
-      await adminApi.updateCourse(courseId, { classLevel: newClass })
+      await adminApi.updateCourse(courseId, { department: newDept })
       await load()
     },
     [load],
@@ -281,17 +290,17 @@ export default function CourseManager() {
           </label>
           <label className='space-y-1'>
             <span className='text-[9px] font-black uppercase text-slate-400'>
-              Class
+              Department
             </span>
             <select
-              value={classLevel}
-              onChange={(e) => setClassLevel(e.target.value)}
+              value={department}
+              onChange={(e) => setDepartment(e.target.value)}
               className='w-full h-11 px-3 rounded-lg bg-slate-50 border border-transparent focus:border-[#002EFF]/30 focus:bg-white outline-none text-sm font-bold'
             >
-              <option value=''>All classes</option>
-              {CLASS_LEVELS.map((c) => (
-                <option key={c} value={c}>
-                  {c}
+              <option value=''>All departments</option>
+              {COURSE_DEPARTMENTS.map((d) => (
+                <option key={d.value} value={d.value}>
+                  {d.label}
                 </option>
               ))}
             </select>
@@ -364,7 +373,7 @@ export default function CourseManager() {
                       tutors={tutors}
                       onSetTutors={setCourseTutors}
                       onRename={renameCourse}
-                      onSetClass={setCourseClass}
+                      onSetDepartment={setCourseDepartment}
                       onRemove={remove}
                     />
                   ))}
@@ -388,14 +397,14 @@ function CourseCard({
   tutors,
   onSetTutors,
   onRename,
-  onSetClass,
+  onSetDepartment,
   onRemove,
 }: {
   course: UICourse
   tutors: UITutor[]
   onSetTutors: (courseId: string, ids: string[]) => Promise<void>
   onRename: (courseId: string, title: string) => Promise<void>
-  onSetClass: (courseId: string, classLevel: string) => Promise<void>
+  onSetDepartment: (courseId: string, department: string) => Promise<void>
   onRemove: (id: string) => void
 }) {
   const [adding, setAdding] = useState('')
@@ -487,21 +496,21 @@ function CourseCard({
             </p>
             <span className='text-slate-300'>·</span>
             <select
-              value={course.classLevel}
+              value={course.department}
               disabled={busy}
               onChange={(e) => {
                 setBusy(true)
-                onSetClass(course.id, e.target.value).finally(() =>
+                onSetDepartment(course.id, e.target.value).finally(() =>
                   setBusy(false),
                 )
               }}
-              title='Class this course targets'
+              title='Department this course is for'
               className='h-6 -ml-1 px-1 rounded bg-transparent hover:bg-slate-50 border border-transparent focus:border-[#002EFF]/30 outline-none text-[10px] font-black uppercase tracking-wide text-slate-500 disabled:opacity-50'
             >
-              <option value=''>All classes</option>
-              {CLASS_LEVELS.map((c) => (
-                <option key={c} value={c}>
-                  {c}
+              <option value=''>All departments</option>
+              {COURSE_DEPARTMENTS.map((d) => (
+                <option key={d.value} value={d.value}>
+                  {d.label}
                 </option>
               ))}
             </select>
