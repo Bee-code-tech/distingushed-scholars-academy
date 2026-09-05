@@ -11,6 +11,7 @@ import {
   getEffectiveTimetable,
   gridFromApi,
   tintForSubject,
+  timetableKey,
   type TimetableGrid,
 } from '@/lib/timetable'
 import { getToken } from '@/lib/auth'
@@ -43,7 +44,7 @@ export default function Timetable({
     const t = getToken()
     if (t && !isDemoToken(t)) {
       dsaApi.timetable
-        .get(track)
+        .get(timetableKey(track, department))
         .then((res) => {
           if (cancelled) return
           const apiGrid = (res as { grid?: unknown })?.grid

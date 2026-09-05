@@ -158,9 +158,18 @@ export default function LiveClasses({
 
   if (mode === 'tutor') return <TutorLive />
 
-  const u = getUser()
+  const u = getUser() as Record<string, unknown> | null
+  const s = (v: unknown) => (v == null ? '' : String(v))
+  // Prefer the resolved exam track (what live classes are keyed by); the class
+  // level (SS2, 100 Level…) is not a track and must not win here.
   const track = (trackProp ||
-    normaliseTrack(u?.level || u?.examType || 'jamb')) as ExamTrack
+    normaliseTrack(
+      s(u?.examTrack) ||
+        s(u?.examType) ||
+        s(u?.track) ||
+        s(u?.level) ||
+        'jamb',
+    )) as ExamTrack
   return <StudentLive track={track} />
 }
 
