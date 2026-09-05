@@ -74,6 +74,18 @@ type SubmitPayload = {
 }
 type PendingSubmission = { quizId: string; payload: SubmitPayload }
 
+// A full in-progress snapshot so an accidentally-abandoned quiz can be RESUMED
+// (not restarted). The timer is wall-clock (startedAtMs), so leaving doesn't
+// pause it — resume with the real remaining time, and finish if it ran out.
+type ResumeSnapshot = {
+  quizId: string
+  quiz: Record<string, unknown>
+  questions: RunQuestion[]
+  answers: Record<string, number>
+  startedAtMs: number
+  totalTimeSec: number
+}
+
 function readJSON<T>(key: string, fallback: T): T {
   try {
     const v = localStorage.getItem(key)
@@ -117,6 +129,7 @@ export default function QuizRunner() {
   const [submitting, setSubmitting] = useState(false)
   const [result, setResult] = useState<ResultData | null>(null)
   const [savedOffline, setSavedOffline] = useState(false)
+  const [resumable, setResumable] = useState<ResumeSnapshot | null>(null)
   const startedAt = useRef(0)
   const totalTime = useRef(0)
   // Anti-cheating: count times the student leaves the quiz (tab switch, minimise,
@@ -232,58 +245,80 @@ export default function QuizRunner() {
   // lose it — it's submitted on the next open instead of letting them restart.
   useEffect(() => {
     if (view !== 'take' || !quiz) return
-    const id = str(quiz.id ?? quiz._id)
-    const timeTaken = Math.max(1, Math.round((totalTime.current || 0) - remaining))
-    writeJSON(QUIZ_ACTIVE_KEY, {
-      quizId: id,
-      payload: {
-        timeTaken,
-        answers: questions.map((q) => ({
-          questionId: q.questionId,
-          selectedOption:
-            answers[q.questionId] === undefined ? -1 : answers[q.questionId],
-        })),
+    const snap: ResumeSnapshot = {
+      quizId: str(quiz.id ?? quiz._id),
+      quiz: {
+        id: str(quiz.id ?? quiz._id),
+        title: str(quiz.title),
+        showResults: quiz.showResults !== false,
+        showCorrections: quiz.showCorrections !== false,
       },
-    })
+      questions,
+      answers,
+      startedAtMs: startedAt.current || Date.now(),
+      totalTimeSec: totalTime.current || 0,
+    }
+    writeJSON(QUIZ_ACTIVE_KEY, snap)
   }, [view, quiz, questions, answers, remaining])
 
-  // Flush any queued offline submissions, and finalise an abandoned attempt
-  // (tab closed mid-quiz) by submitting it. Runs on mount and whenever the
-  // network comes back online.
-  const flushAndFinalise = useCallback(async () => {
+  // Retry any queued offline submissions (on mount + when back online).
+  const flushPending = useCallback(async () => {
     if (typeof navigator !== 'undefined' && navigator.onLine === false) return
-    // 1. Retry queued offline submissions.
     const pending = readJSON<PendingSubmission[]>(QUIZ_PENDING_KEY, [])
-    if (pending.length) {
-      const stillPending: PendingSubmission[] = []
-      for (const p of pending) {
-        try {
-          await dsaApi.quizzes.submit(p.quizId, p.payload as never, token)
-        } catch (e) {
-          if (isOffline(e)) stillPending.push(p) // keep for the next retry
-          // a non-network error (e.g. 409 already submitted) → drop it
-        }
-      }
-      writeJSON(QUIZ_PENDING_KEY, stillPending)
-    }
-    // 2. Finalise an attempt left in progress by a closed tab.
-    const active = readJSON<PendingSubmission | null>(QUIZ_ACTIVE_KEY, null)
-    if (active && active.quizId && view !== 'take') {
+    if (!pending.length) return
+    const stillPending: PendingSubmission[] = []
+    for (const p of pending) {
       try {
-        await dsaApi.quizzes.submit(active.quizId, active.payload as never, token)
-        clearKey(QUIZ_ACTIVE_KEY)
+        await dsaApi.quizzes.submit(p.quizId, p.payload as never, token)
       } catch (e) {
-        if (!isOffline(e)) clearKey(QUIZ_ACTIVE_KEY) // already submitted / rejected
+        if (isOffline(e)) stillPending.push(p) // keep for the next retry
       }
     }
-  }, [token, view])
+    writeJSON(QUIZ_PENDING_KEY, stillPending)
+  }, [token])
 
+  // On mount: flush the offline queue, and detect an in-progress attempt left by
+  // navigating away. If its timer hasn't run out, offer to RESUME it; if it has,
+  // submit whatever was answered.
   useEffect(() => {
-    flushAndFinalise()
-    const onOnline = () => flushAndFinalise()
+    flushPending()
+    const onOnline = () => flushPending()
     window.addEventListener('online', onOnline)
+
+    const snap = readJSON<ResumeSnapshot | null>(QUIZ_ACTIVE_KEY, null)
+    if (snap && Array.isArray(snap.questions) && snap.questions.length) {
+      const elapsed = (Date.now() - (snap.startedAtMs || 0)) / 1000
+      const remain = (snap.totalTimeSec || 0) - elapsed
+      if (snap.totalTimeSec > 0 && remain <= 0) {
+        // Time ran out while away — submit what they had.
+        const payload: SubmitPayload = {
+          timeTaken: snap.totalTimeSec,
+          answers: snap.questions.map((q) => ({
+            questionId: q.questionId,
+            selectedOption:
+              snap.answers?.[q.questionId] === undefined
+                ? -1
+                : snap.answers[q.questionId],
+          })),
+        }
+        dsaApi.quizzes
+          .submit(snap.quizId, payload as never, token)
+          .catch((e) => {
+            if (isOffline(e)) {
+              const pending = readJSON<PendingSubmission[]>(QUIZ_PENDING_KEY, [])
+              pending.push({ quizId: snap.quizId, payload })
+              writeJSON(QUIZ_PENDING_KEY, pending)
+            }
+          })
+          .finally(() => clearKey(QUIZ_ACTIVE_KEY))
+      } else {
+        setResumable(snap)
+      }
+    }
     return () => window.removeEventListener('online', onOnline)
-  }, [flushAndFinalise])
+    // Runs once on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Register a "left the quiz" breach; auto-submits once past MAX_BREACHES.
   // Within the limit, raise a blocking warning modal so the student sees it the
@@ -371,13 +406,42 @@ export default function QuizRunner() {
       const secs = (minutes || Number(full.timeLimit) || 0) * 60
       totalTime.current = secs
       setRemaining(secs)
-      startedAt.current = 0
+      startedAt.current = Date.now()
+      setResumable(null)
       setView('take')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not open the quiz.')
     } finally {
       setLoading(false)
     }
+  }
+
+  // Resume an in-progress attempt left by navigating away, with the real
+  // remaining time (the clock kept running while away).
+  const resume = (snap: ResumeSnapshot) => {
+    setError(null)
+    setSavedOffline(false)
+    setResult(null)
+    setQuiz(snap.quiz)
+    setQuestions(snap.questions)
+    setAnswers(snap.answers || {})
+    breachRef.current = 0
+    setBreaches(0)
+    setShowWarning(false)
+    setShowCorrections(false)
+    setPage(0)
+    setShowCalc(false)
+    setConfirmSubmit(false)
+    totalTime.current = snap.totalTimeSec || 0
+    startedAt.current = snap.startedAtMs || Date.now()
+    const elapsed = (Date.now() - startedAt.current) / 1000
+    setRemaining(
+      snap.totalTimeSec > 0
+        ? Math.max(1, Math.round(snap.totalTimeSec - elapsed))
+        : 0,
+    )
+    setResumable(null)
+    setView('take')
   }
 
   // ---------- RESULT ----------
@@ -898,6 +962,27 @@ export default function QuizRunner() {
           <History size={13} /> My History
         </button>
       </div>
+
+      {resumable && (
+        <Card className='p-4 rounded-2xl border-none shadow-sm bg-[#002EFF] text-white flex items-center gap-3'>
+          <RotateCcw size={18} className='shrink-0' />
+          <div className='min-w-0 flex-1'>
+            <p className='text-xs font-black truncate'>
+              You have a quiz in progress
+            </p>
+            <p className='text-[10px] font-bold text-blue-100 truncate'>
+              {str(resumable.quiz?.title) || 'Quiz'} — pick up where you left off.
+            </p>
+          </div>
+          <button
+            onClick={() => resume(resumable)}
+            className='h-9 px-4 rounded-xl bg-[#FCB900] text-[#002EFF] font-black text-[10px] uppercase tracking-wide hover:bg-yellow-400 shrink-0'
+          >
+            Resume
+          </button>
+        </Card>
+      )}
+
       {error && <p className='text-[11px] font-bold text-rose-600 px-1'>{error}</p>}
       {loading ? (
         <div className='py-10 flex justify-center'>
