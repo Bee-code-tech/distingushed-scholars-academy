@@ -70,10 +70,14 @@ export default function StaffDashboard() {
   const { user, loading, logout } = useDashboardSession('staff')
   const [view, setView] = useTabState<string>('overview')
 
-  // Permissions resolved live from the staff member's role.
+  // Permissions resolved live from the staff member's role. The backend supplies
+  // them directly on /auth/me (user.permissions) — that's authoritative for a
+  // real account. The localStorage staffStore lookups are only the demo/preview
+  // fallback (and can't match a backend ObjectId staffRoleId anyway).
   const permissions = useMemo(() => {
     if (!user) return []
     return (
+      (user.permissions && user.permissions.length ? user.permissions : null) ||
       (user.staffRoleId && getRole(user.staffRoleId)?.permissions) ||
       getPermissionsForStaff(user.email) ||
       []
@@ -120,7 +124,10 @@ export default function StaffDashboard() {
     )
   }
 
-  const roleName = (user.staffRoleId && getRole(user.staffRoleId)?.name) || 'Staff'
+  const roleName =
+    user.staffRole ||
+    (user.staffRoleId && getRole(user.staffRoleId)?.name) ||
+    'Staff'
   const name = user.fullName || user.username || 'Staff'
   const firstName = name.split(' ')[0]
 
