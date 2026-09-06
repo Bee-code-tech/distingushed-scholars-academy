@@ -69,6 +69,27 @@ export function deriveTrackFromProgrammes(programmes: string[]): string {
   return 'jamb'
 }
 
+/**
+ * Every track a set of programmes covers (not just the priority one). Mirrors
+ * the backend `examTracksForProgrammes` so the portal's track switcher offers a
+ * student exactly the tracks they enrolled for (e.g. JAMB + Post-UTME).
+ */
+export function examTracksForProgrammes(programmes: string[]): string[] {
+  const has = (s: string) => programmes.some((p) => p.toLowerCase().includes(s))
+  const tracks: string[] = []
+  const add = (t: string) => {
+    if (!tracks.includes(t)) tracks.push(t)
+  }
+  if (has('preclinic')) add('preclinical')
+  if (has('100') || has('200') || has('level tutorial') || has('undergrad'))
+    add('undergrad')
+  if (has('after') || has('summer')) add('afterschool')
+  if (has('waec')) add('waec')
+  if (has('jamb')) add('jamb')
+  if (has('post-utme') || has('post utme')) add('postutme')
+  return tracks
+}
+
 /** Build a backend username from an email when the form doesn't ask for one. */
 export function usernameFromEmail(email: string): string {
   const base = (email.split('@')[0] || 'student')
