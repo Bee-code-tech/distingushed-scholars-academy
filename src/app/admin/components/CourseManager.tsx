@@ -26,6 +26,22 @@ const COURSE_DEPARTMENTS = [
   { value: 'commercial', label: 'Commercial' },
 ] as const
 
+// Categories whose students are split by department (Science/Art/Commercial).
+// A course in one of these MUST be tagged with at least one department,
+// otherwise it's treated as shared and leaks across every department. The
+// programme categories (undergrad/preclinical) have no department split.
+const DEPT_SPLIT_CATEGORIES = [
+  'ss1',
+  'ss2',
+  'ss3',
+  'waec',
+  'jamb',
+  'postutme',
+  'afterschool',
+]
+const isDeptSplitCategory = (c: string) =>
+  DEPT_SPLIT_CATEGORIES.includes(String(c).toLowerCase())
+
 type UITutor = { id: string; name: string; subject?: string }
 type UICourse = {
   id: string
@@ -165,6 +181,14 @@ export default function CourseManager() {
         `“${cleanTitle}” already exists in ${categoryLabel(category)}. Edit that course (you can assign it to more departments) instead of creating a new one.`,
       )
     }
+    // For department-split classes, force a department choice so the course
+    // doesn't silently become "shared with everyone" (the cause of subject
+    // overlap). A subject everyone takes (English, Maths) → tick all three.
+    if (isDeptSplitCategory(category) && departments.length === 0) {
+      return setError(
+        'Pick at least one department (Science / Art / Commercial). For a subject every department takes (e.g. English, Maths), tick all three.',
+      )
+    }
     setBusy(true)
     try {
       await adminApi.createCourse({
@@ -292,7 +316,12 @@ export default function CourseManager() {
           </label>
           <div className='space-y-1'>
             <span className='text-[9px] font-black uppercase text-slate-400'>
-              Departments {departments.length === 0 && '(all)'}
+              Departments{' '}
+              {isDeptSplitCategory(category) ? (
+                <span className='text-rose-500'>*required</span>
+              ) : (
+                departments.length === 0 && '(all)'
+              )}
             </span>
             <div className='flex gap-1.5'>
               {COURSE_DEPARTMENTS.map((d) => {
@@ -529,11 +558,19 @@ function CourseCard({
                 </button>
               )
             })}
-            {course.departments.length === 0 && (
-              <span className='text-[9px] font-black uppercase text-slate-400'>
-                all depts
-              </span>
-            )}
+            {course.departments.length === 0 &&
+              (isDeptSplitCategory(course.category) ? (
+                <span
+                  className='px-1.5 h-5 rounded text-[9px] font-black uppercase tracking-wide bg-amber-50 text-amber-600'
+                  title='Untagged — currently shown to every department. Tag a department to stop the overlap.'
+                >
+                  ⚠ shared — tag a dept
+                </span>
+              ) : (
+                <span className='text-[9px] font-black uppercase text-slate-400'>
+                  all depts
+                </span>
+              ))}
           </div>
         </div>
         <button
