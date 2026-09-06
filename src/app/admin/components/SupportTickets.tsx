@@ -11,6 +11,7 @@ import {
   Mail,
   CheckCircle2,
   RotateCcw,
+  Send,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { dsaApi } from '@/lib/api'
@@ -27,6 +28,13 @@ function supportToken(): string | undefined {
   )
 }
 
+type ThreadMessage = {
+  authorRole?: string
+  authorName?: string
+  body: string
+  createdAt?: string
+}
+
 type Ticket = {
   id: string
   name: string
@@ -34,8 +42,31 @@ type Ticket = {
   role?: string
   subject: string
   message: string
+  messages: ThreadMessage[]
   status: string
   createdAt?: string
+}
+
+function mapTicket(t: Record<string, unknown>): Ticket {
+  const msgs = Array.isArray(t.messages)
+    ? (t.messages as Record<string, unknown>[]).map((m) => ({
+        authorRole: m.authorRole ? str(m.authorRole) : undefined,
+        authorName: m.authorName ? str(m.authorName) : undefined,
+        body: str(m.body),
+        createdAt: m.createdAt ? str(m.createdAt) : undefined,
+      }))
+    : []
+  return {
+    id: str(t.id ?? t._id),
+    name: str(t.name),
+    email: str(t.email),
+    role: t.role ? str(t.role) : undefined,
+    subject: str(t.subject),
+    message: str(t.message),
+    messages: msgs,
+    status: str(t.status) || 'open',
+    createdAt: t.createdAt ? str(t.createdAt) : undefined,
+  }
 }
 
 export default function SupportTickets() {
@@ -44,6 +75,8 @@ export default function SupportTickets() {
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<'all' | 'open' | 'closed'>('open')
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [replyText, setReplyText] = useState<Record<string, string>>({})
+  const [replyingId, setReplyingId] = useState<string | null>(null)
 
   const u = getUser() as Record<string, unknown> | null
   const perms = Array.isArray(u?.permissions) ? (u!.permissions as string[]) : []
@@ -60,18 +93,7 @@ export default function SupportTickets() {
         filter === 'all' ? undefined : filter,
         supportToken(),
       )) as Record<string, unknown>[]
-      setTickets(
-        rows.map((t) => ({
-          id: str(t.id ?? t._id),
-          name: str(t.name),
-          email: str(t.email),
-          role: t.role ? str(t.role) : undefined,
-          subject: str(t.subject),
-          message: str(t.message),
-          status: str(t.status) || 'open',
-          createdAt: t.createdAt ? str(t.createdAt) : undefined,
-        })),
-      )
+      setTickets(rows.map(mapTicket))
     } catch (e) {
       setError(
         e instanceof Error
@@ -86,6 +108,26 @@ export default function SupportTickets() {
   useEffect(() => {
     load()
   }, [load])
+
+  const sendReply = async (id: string) => {
+    const body = (replyText[id] || '').trim()
+    if (!body) return
+    setReplyingId(id)
+    try {
+      const updated = (await dsaApi.support.reply(
+        id,
+        body,
+        supportToken(),
+      )) as Record<string, unknown>
+      const shaped = mapTicket(updated)
+      setTickets((prev) => prev.map((t) => (t.id === id ? shaped : t)))
+      setReplyText((prev) => ({ ...prev, [id]: '' }))
+    } catch {
+      /* leave the draft so the agent can retry */
+    } finally {
+      setReplyingId(null)
+    }
+  }
 
   const setStatus = async (id: string, status: 'open' | 'closed') => {
     setBusyId(id)
@@ -212,9 +254,78 @@ export default function SupportTickets() {
                     </button>
                   )}
                 </div>
-                <p className='text-[12px] font-medium text-slate-600 mt-2 whitespace-pre-wrap break-words'>
-                  {t.message}
-                </p>
+                {/* Opening message */}
+                <div className='mt-2 rounded-xl bg-slate-50 p-3'>
+                  <p className='text-[9px] font-black uppercase tracking-wide text-slate-400 mb-1'>
+                    {t.name || 'Student'}
+                  </p>
+                  <p className='text-[12px] font-medium text-slate-700 whitespace-pre-wrap break-words'>
+                    {t.message}
+                  </p>
+                </div>
+
+                {/* Reply thread */}
+                {t.messages.length > 0 && (
+                  <div className='mt-2 space-y-2'>
+                    {t.messages.map((m, i) => {
+                      const fromStaff =
+                        m.authorRole === 'admin' ||
+                        m.authorRole === 'staff' ||
+                        m.authorRole === 'moderator'
+                      return (
+                        <div
+                          key={i}
+                          className={`rounded-xl p-3 ${
+                            fromStaff
+                              ? 'bg-blue-50 ml-6'
+                              : 'bg-slate-50 mr-6'
+                          }`}
+                        >
+                          <p className='text-[9px] font-black uppercase tracking-wide text-slate-400 mb-1'>
+                            {fromStaff
+                              ? `${m.authorName || 'Support'} · Support`
+                              : m.authorName || t.name || 'Student'}
+                            {m.createdAt && (
+                              <span className='text-slate-300'>
+                                {' '}
+                                · {new Date(m.createdAt).toLocaleString()}
+                              </span>
+                            )}
+                          </p>
+                          <p className='text-[12px] font-medium text-slate-700 whitespace-pre-wrap break-words'>
+                            {m.body}
+                          </p>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {/* Reply composer */}
+                <div className='mt-3 flex items-end gap-2'>
+                  <textarea
+                    value={replyText[t.id] || ''}
+                    onChange={(e) =>
+                      setReplyText((prev) => ({ ...prev, [t.id]: e.target.value }))
+                    }
+                    placeholder='Write a reply to the student…'
+                    rows={2}
+                    className='flex-1 rounded-xl bg-slate-50 border border-slate-200 focus:border-[#002EFF] focus:bg-white outline-none text-[12px] font-medium text-slate-800 px-3 py-2 resize-y'
+                  />
+                  <button
+                    onClick={() => sendReply(t.id)}
+                    disabled={replyingId === t.id || !(replyText[t.id] || '').trim()}
+                    className='flex items-center gap-1.5 px-3 h-9 rounded-xl bg-[#002EFF] text-white font-black text-[10px] uppercase tracking-wide hover:bg-blue-700 disabled:opacity-40 shrink-0'
+                  >
+                    {replyingId === t.id ? (
+                      <Loader2 size={13} className='animate-spin' />
+                    ) : (
+                      <>
+                        <Send size={13} /> Reply
+                      </>
+                    )}
+                  </button>
+                </div>
               </Card>
             )
           })}

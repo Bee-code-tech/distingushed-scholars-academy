@@ -1406,6 +1406,36 @@ export const dsaApi = {
       })
         .then((r) => handleResponse<{ data?: unknown }>(r))
         .then((r) => (r as { data?: unknown }).data ?? r),
+
+    // POST /admin/support/:id/reply — admin / support agent replies to a ticket.
+    reply: (id: string, body: string, token?: string) =>
+      fetch(`${BASE_URL}/admin/support/${encodeURIComponent(id)}/reply`, {
+        method: 'POST',
+        headers: getHeaders(token),
+        body: JSON.stringify({ body }),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+
+    // GET /support — the signed-in user's own tickets (with the reply thread).
+    listMine: (token?: string) =>
+      fetch(`${BASE_URL}/support`, { headers: getHeaders(token) })
+        .then((r) =>
+          handleResponse<
+            Record<string, unknown>[] | { data?: Record<string, unknown>[] }
+          >(r),
+        )
+        .then((res) => (Array.isArray(res) ? res : (res?.data ?? []))),
+
+    // POST /support/:id/reply — student replies on their own ticket.
+    replyMine: (id: string, body: string, token?: string) =>
+      fetch(`${BASE_URL}/support/${encodeURIComponent(id)}/reply`, {
+        method: 'POST',
+        headers: getHeaders(token),
+        body: JSON.stringify({ body }),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
   },
 
   plans: {
