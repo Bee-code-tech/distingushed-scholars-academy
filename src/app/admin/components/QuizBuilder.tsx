@@ -275,7 +275,21 @@ export default function QuizBuilder() {
     try {
       if (editingId) {
         // Update details only — omitting `subjects` keeps the questions intact.
-        await dsaApi.quizzes.update(editingId, details, token)
+        const updated = (await dsaApi.quizzes.update(editingId, details, token)) as
+          | { link?: string; publicLink?: string; data?: { publicLink?: string; link?: string } }
+          | undefined
+        if (isFree) {
+          // The backend now mints a publicLink when a quiz is edited to free —
+          // read it (across response shapes) and show the shareable link.
+          const slug =
+            updated?.data?.publicLink ??
+            updated?.data?.link ??
+            updated?.publicLink ??
+            updated?.link
+          setPublicLink(
+            slug ? `${window.location.origin}/q/${slug}` : 'link-pending',
+          )
+        }
       } else {
         const created = (await dsaApi.quizzes.create(
           {
@@ -320,9 +334,9 @@ export default function QuizBuilder() {
       setShowCorrections(true)
       setBlocks([])
       setEditingId(null)
-      // Editing or a portal publish returns to the list; a free publish stays so
-      // the shareable link shows.
-      if (wasEditing || !isFree) setShowBuilder(false)
+      // A free quiz (created or edited) keeps the builder open so the shareable
+      // link shows; a portal publish/edit returns to the list.
+      if (!isFree) setShowBuilder(false)
       flash(wasEditing ? 'Quiz updated' : isFree ? 'Free quiz published' : 'Quiz published')
       loadList()
     } catch (e) {
@@ -358,7 +372,13 @@ export default function QuizBuilder() {
     setShowResults(q.showResults !== false)
     setShowCorrections(q.showCorrections !== false)
     setBlocks([])
-    setPublicLink(null)
+    // Show the existing shareable link when re-editing a free quiz.
+    const existingSlug = str(q.publicLink ?? q.link ?? '')
+    setPublicLink(
+      mode === 'free' && existingSlug
+        ? `${window.location.origin}/q/${existingSlug}`
+        : null,
+    )
     setError(null)
     setShowBuilder(true)
   }
