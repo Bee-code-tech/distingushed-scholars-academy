@@ -322,6 +322,9 @@ export default function CourseManager() {
               ) : (
                 departments.length === 0 && '(all)'
               )}
+              <span className='ml-1 lowercase text-slate-300'>
+                — select one or more
+              </span>
             </span>
             <div className='flex gap-1.5'>
               {COURSE_DEPARTMENTS.map((d) => {
@@ -331,17 +334,30 @@ export default function CourseManager() {
                     key={d.value}
                     type='button'
                     onClick={() => toggleDept(d.value)}
-                    className={`flex-1 h-11 rounded-lg text-[11px] font-black uppercase tracking-wide border transition-all ${
+                    aria-pressed={on}
+                    className={`flex-1 h-11 rounded-lg text-[11px] font-black uppercase tracking-wide border transition-all flex items-center justify-center gap-1 ${
                       on
                         ? 'bg-[#002EFF] text-white border-[#002EFF]'
                         : 'bg-slate-50 text-slate-500 border-transparent hover:border-slate-300'
                     }`}
                   >
+                    {on && <Check size={12} />}
                     {d.label}
                   </button>
                 )
               })}
             </div>
+            <p className='text-[9px] font-bold text-slate-400'>
+              {departments.length === 0
+                ? 'A subject taken by every department (e.g. English, Maths) → tick all three.'
+                : `Assigned to: ${departments
+                    .map(
+                      (v) =>
+                        COURSE_DEPARTMENTS.find((d) => d.value === v)?.label ??
+                        v,
+                    )
+                    .join(', ')}`}
+            </p>
           </div>
           <label className='space-y-1'>
             <span className='text-[9px] font-black uppercase text-slate-400'>
