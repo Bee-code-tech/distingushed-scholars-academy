@@ -48,8 +48,19 @@ export default function Timetable({
         .then((res) => {
           if (cancelled) return
           const apiGrid = (res as { grid?: unknown })?.grid
-          if (Array.isArray(apiGrid)) {
-            setGrid(gridFromApi(apiGrid))
+          const built = Array.isArray(apiGrid) ? gridFromApi(apiGrid) : null
+          // The backend auto-creates an EMPTY grid for any track+department key
+          // that hasn't been authored yet. Treat an all-empty grid as "no
+          // schedule" and show the department's local template instead of a
+          // blank table (otherwise a freshly-switched department looks empty).
+          const hasEntries = !!built?.some((row) =>
+            row.some(
+              (cell) =>
+                Array.isArray(cell) && cell.some((s) => s && String(s).trim()),
+            ),
+          )
+          if (built && hasEntries) {
+            setGrid(built)
             setLive(true)
           } else local()
         })

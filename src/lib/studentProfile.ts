@@ -329,12 +329,13 @@ export function resolveStudentProfile(
     (user?.currentLevel ?? remembered.classLevel ?? '').toString().trim() ||
     undefined
 
-  // WAEC carries a department (Science/Art/Commercial). The backend stores it as
-  // the single entry in subjectsOfInterest; the remembered choice is the
-  // fallback (same gap as study mode — see rememberEnrolmentChoice).
-  // Department applies to the department-split tracks (WAEC, After-School, and
-  // now JAMB & Post-UTME). It comes from the stored department (or the
-  // remembered choice); when unknown the timetable defaults to Science.
+  // Department (Science/Art/Commercial) applies to the department-split tracks
+  // (WAEC, After-School, JAMB & Post-UTME). `user.department` is the
+  // authoritative, editable field — it's what registration, Settings and the
+  // admin roster all write — so it MUST win. Only when it's absent do we fall
+  // back to the legacy subjectsOfInterest slot, then the remembered choice.
+  // (Reading subjectsOfInterest first used to mask an admin/Settings switch, so
+  // a Science→Art change never took effect on courses/timetable.)
   const DEPT_SPLIT_TRACKS: ExamTrack[] = [
     'waec',
     'afterschool',
@@ -342,8 +343,8 @@ export function resolveStudentProfile(
     'postutme',
   ]
   const department = DEPT_SPLIT_TRACKS.includes(track)
-    ? (normaliseDepartment(user?.subjectsOfInterest?.[0]) ??
-      normaliseDepartment(user?.department as string | undefined) ??
+    ? (normaliseDepartment(user?.department as string | undefined) ??
+      normaliseDepartment(user?.subjectsOfInterest?.[0]) ??
       remembered.department ??
       null)
     : null
