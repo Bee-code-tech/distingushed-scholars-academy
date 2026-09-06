@@ -144,54 +144,77 @@ function PlansSection({ token }: { token?: string }) {
       {error && <p className='text-[11px] font-bold text-amber-600'>{error}</p>}
 
       <div className='grid grid-cols-2 sm:grid-cols-6 gap-2'>
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder='Plan name'
-          className='col-span-2 h-10 px-3 rounded-lg bg-slate-50 outline-none text-sm font-bold'
-        />
-        <select
-          value={kind}
-          onChange={(e) => setKind(e.target.value as 'portal' | 'tutorial')}
-          className='h-10 px-2 rounded-lg bg-slate-50 outline-none text-[12px] font-bold'
-        >
-          <option value='portal'>Portal (₦2k)</option>
-          <option value='tutorial'>Tutorial</option>
-        </select>
-        <select
-          value={track}
-          onChange={(e) => setTrack(e.target.value)}
-          title='Programme this plan is for'
-          className='h-10 px-2 rounded-lg bg-slate-50 outline-none text-[12px] font-bold'
-        >
-          {PLAN_TRACKS.map((t) => (
-            <option key={t.value} value={t.value}>
-              {t.label}
-            </option>
-          ))}
-        </select>
-        <input
-          type='number'
-          value={amount}
-          onChange={(e) => setAmount(Number(e.target.value))}
-          placeholder='Amount ₦'
-          className='h-10 px-2 rounded-lg bg-slate-50 outline-none text-sm font-bold'
-        />
-        {kind === 'tutorial' ? (
+        <label className='col-span-2 flex flex-col gap-1'>
+          <span className='text-[9px] font-black uppercase text-slate-400'>Plan name</span>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder='e.g. Silver'
+            className='h-10 px-3 rounded-lg bg-slate-50 outline-none text-sm font-bold'
+          />
+        </label>
+        <label className='flex flex-col gap-1'>
+          <span className='text-[9px] font-black uppercase text-slate-400'>Type</span>
+          <select
+            value={kind}
+            onChange={(e) => setKind(e.target.value as 'portal' | 'tutorial')}
+            className='h-10 px-2 rounded-lg bg-slate-50 outline-none text-[12px] font-bold'
+          >
+            <option value='portal'>Portal (₦2k)</option>
+            <option value='tutorial'>Tutorial</option>
+          </select>
+        </label>
+        <label className='flex flex-col gap-1'>
+          <span className='text-[9px] font-black uppercase text-slate-400'>Programme</span>
+          <select
+            value={track}
+            onChange={(e) => setTrack(e.target.value)}
+            className='h-10 px-2 rounded-lg bg-slate-50 outline-none text-[12px] font-bold'
+          >
+            {PLAN_TRACKS.map((t) => (
+              <option key={t.value} value={t.value}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className='flex flex-col gap-1'>
+          <span className='text-[9px] font-black uppercase text-slate-400'>Amount (₦)</span>
           <input
             type='number'
-            value={months}
-            min={1}
-            onChange={(e) => setMonths(Number(e.target.value))}
-            title='Months'
+            value={amount}
+            onChange={(e) => setAmount(Number(e.target.value))}
+            placeholder='8000'
             className='h-10 px-2 rounded-lg bg-slate-50 outline-none text-sm font-bold'
           />
-        ) : (
-          <div className='h-10 flex items-center text-[10px] font-bold text-slate-400'>
-            one-time
-          </div>
-        )}
+        </label>
+        <label className='flex flex-col gap-1'>
+          <span className='text-[9px] font-black uppercase text-slate-400'>
+            Months
+          </span>
+          {kind === 'tutorial' ? (
+            <input
+              type='number'
+              value={months}
+              min={1}
+              onChange={(e) => setMonths(Number(e.target.value))}
+              placeholder='e.g. 2'
+              className='h-10 px-2 rounded-lg bg-slate-50 outline-none text-sm font-bold'
+            />
+          ) : (
+            <div className='h-10 flex items-center text-[10px] font-bold text-slate-400'>
+              one-time
+            </div>
+          )}
+        </label>
       </div>
+      {kind === 'tutorial' && (
+        <p className='text-[10px] font-bold text-slate-400 px-1'>
+          For a 2- or 3-month plan, set <b>Months</b> to 2 or 3 and enter that
+          duration&apos;s price in <b>Amount</b>. Add one plan per duration
+          (e.g. Silver 1mo, Silver 2mo, Silver 3mo).
+        </p>
+      )}
       <input
         value={note}
         onChange={(e) => setNote(e.target.value)}
