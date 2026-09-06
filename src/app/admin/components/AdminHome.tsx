@@ -429,6 +429,8 @@ interface StatCounts {
   roles: number
   programs: number
   paidStudents: number
+  portalStudents: number
+  tutorialStudents: number
   freeStudents: number
 }
 
@@ -463,6 +465,8 @@ export default function AdminHome({ onNavigate }: AdminHomeProps) {
     roles: 0,
     programs: 0,
     paidStudents: 0,
+    portalStudents: 0,
+    tutorialStudents: 0,
     freeStudents: 0,
   })
 
@@ -495,7 +499,13 @@ export default function AdminHome({ onNavigate }: AdminHomeProps) {
   // GET /api/admin/stats — headline counts incl. free vs paid students.
   const fetchStats = async (
     token: string,
-  ): Promise<{ paidStudents: number; freeStudents: number; students: number } | null> => {
+  ): Promise<{
+    paidStudents: number
+    portalStudents: number
+    tutorialStudents: number
+    freeStudents: number
+    students: number
+  } | null> => {
     try {
       const res = await fetch(`${API_BASE_URL}/api/admin/stats`, {
         headers: { accept: 'application/json', Authorization: `Bearer ${token}` },
@@ -505,6 +515,8 @@ export default function AdminHome({ onNavigate }: AdminHomeProps) {
       const d = data?.data ?? data
       return {
         paidStudents: Number(d?.paidStudents) || 0,
+        portalStudents: Number(d?.portalStudents) || 0,
+        tutorialStudents: Number(d?.tutorialStudents) || 0,
         freeStudents: Number(d?.freeStudents) || 0,
         students: Number(d?.students) || 0,
       }
@@ -558,6 +570,8 @@ export default function AdminHome({ onNavigate }: AdminHomeProps) {
           roles: localRolesCount,
           programs: fetchedPrograms.length,
           paidStudents: 0,
+          portalStudents: 0,
+          tutorialStudents: 0,
           freeStudents: 0,
         })
         setLoading(false)
@@ -584,6 +598,8 @@ export default function AdminHome({ onNavigate }: AdminHomeProps) {
         roles: localRolesCount,
         programs: fetchedPrograms.length,
         paidStudents: stats?.paidStudents ?? 0,
+        portalStudents: stats?.portalStudents ?? 0,
+        tutorialStudents: stats?.tutorialStudents ?? 0,
         freeStudents: stats ? stats.freeStudents : Math.max(0, students),
       })
     } catch {
@@ -596,6 +612,8 @@ export default function AdminHome({ onNavigate }: AdminHomeProps) {
         roles: localRolesCount,
         programs: 0,
         paidStudents: 0,
+        portalStudents: 0,
+        tutorialStudents: 0,
         freeStudents: 0,
       })
     } finally {
@@ -624,10 +642,16 @@ export default function AdminHome({ onNavigate }: AdminHomeProps) {
       tint: 'bg-blue-50 text-blue-600',
     },
     {
-      label: 'Paid Students',
-      value: counts.paidStudents,
+      label: 'Tutorial (Subscribed)',
+      value: counts.tutorialStudents,
       icon: CreditCard,
       tint: 'bg-emerald-50 text-emerald-600',
+    },
+    {
+      label: 'Portal (₦2k paid)',
+      value: counts.portalStudents,
+      icon: CreditCard,
+      tint: 'bg-blue-50 text-blue-600',
     },
     {
       label: 'Free Students',

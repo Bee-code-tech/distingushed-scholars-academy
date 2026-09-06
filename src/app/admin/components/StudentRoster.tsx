@@ -1084,9 +1084,10 @@ export default function StudentRoster() {
   const [students, setStudents] = useState<ExtendedStudentPerson[]>([])
   const [source, setSource] = useState<'server' | 'local'>('local')
   const [searchQuery, setSearchQuery] = useState('')
-  // Filter by programme / class (sent to the backend user filter).
+  // Filter by programme / class / access tier (sent to the backend user filter).
   const [programmeFilter, setProgrammeFilter] = useState('')
   const [classFilter, setClassFilter] = useState('')
+  const [accessFilter, setAccessFilter] = useState('')
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1)
@@ -1130,7 +1131,7 @@ export default function StudentRoster() {
 
   // Data Fetching logic with Pagination support
   const fetchStudents = useCallback(
-    async (query = '', page = 1, programme = '', cls = '') => {
+    async (query = '', page = 1, programme = '', cls = '', access = '') => {
     setLoading(true)
     try {
       const response = await adminApi.getUsers({
@@ -1138,6 +1139,7 @@ export default function StudentRoster() {
         search: query || undefined,
         programme: programme || undefined,
         class: cls || undefined,
+        accessLevel: access || undefined,
         page,
         limit,
       })
@@ -1195,15 +1197,15 @@ export default function StudentRoster() {
   }, [])
 
   useEffect(() => {
-    fetchStudents(searchQuery, currentPage, programmeFilter, classFilter)
+    fetchStudents(searchQuery, currentPage, programmeFilter, classFilter, accessFilter)
     // Re-fetch on page change or when a filter changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fetchStudents, currentPage, programmeFilter, classFilter])
+  }, [fetchStudents, currentPage, programmeFilter, classFilter, accessFilter])
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
     setCurrentPage(1)
-    fetchStudents(searchQuery, 1, programmeFilter, classFilter)
+    fetchStudents(searchQuery, 1, programmeFilter, classFilter, accessFilter)
   }
 
   /* ------------------------------------------------------------------ */
@@ -1406,12 +1408,28 @@ export default function StudentRoster() {
             </option>
           ))}
         </select>
-        {(programmeFilter || classFilter) && (
+        <select
+          value={accessFilter}
+          onChange={(e) => {
+            setAccessFilter(e.target.value)
+            setCurrentPage(1)
+          }}
+          title='Filter by what the student has paid for'
+          className='h-9 px-2 bg-white border border-slate-200 rounded-lg text-[11px] font-black text-slate-700 outline-none focus:border-[#002EFF]'
+        >
+          <option value=''>All access</option>
+          <option value='tutorial'>Tutorial (subscribed)</option>
+          <option value='portal'>Portal (₦2k paid)</option>
+          <option value='paid'>Paid (portal + tutorial)</option>
+          <option value='free'>Free</option>
+        </select>
+        {(programmeFilter || classFilter || accessFilter) && (
           <button
             type='button'
             onClick={() => {
               setProgrammeFilter('')
               setClassFilter('')
+              setAccessFilter('')
               setCurrentPage(1)
             }}
             className='h-9 px-3 rounded-lg bg-slate-100 text-slate-500 text-[10px] font-black uppercase hover:text-[#002EFF]'

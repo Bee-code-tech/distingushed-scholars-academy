@@ -105,6 +105,8 @@ export interface GetUsersParams {
   class?: string
   /** Filter students by resolved exam track (jamb | waec | postutme | …). */
   examTrack?: string
+  /** Filter students by access tier: free | portal | tutorial | paid. */
+  accessLevel?: string
 }
 
 export interface AdminUserListItem {
@@ -399,6 +401,8 @@ export const adminApi = {
     if (params.programme) queryParams.append('programme', params.programme)
     if (params.class) queryParams.append('class', params.class)
     if (params.examTrack) queryParams.append('examTrack', params.examTrack)
+    if (params.accessLevel)
+      queryParams.append('accessLevel', params.accessLevel)
 
     const queryString = queryParams.toString()
     return adminFetch<GetUsersResponse>(
