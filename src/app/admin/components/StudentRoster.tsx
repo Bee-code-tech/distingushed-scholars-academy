@@ -1024,6 +1024,7 @@ import {
   NIGERIAN_STATES,
 } from '@/lib/registration'
 import TrackOverride from './TrackOverride'
+import DepartmentOverride from './DepartmentOverride'
 
 /* ------------------------------------------------------------------ */
 /* Types & Interfaces                                                 */
@@ -1036,6 +1037,7 @@ export interface ExtendedStudentPerson {
   extra?: string
   status?: 'active' | 'suspended' | 'pending_payment' | 'pending_otp' | string
   examTrack?: string
+  department?: string
   learningMode?: string
   studentCode?: string
 }
@@ -1060,6 +1062,7 @@ function mapStudent(
     email: String(s.email || ''),
     extra: String(s.examTrack || s.learningMode || 'General'),
     examTrack: typeof s.examTrack === 'string' ? s.examTrack : undefined,
+    department: typeof s.department === 'string' ? s.department : undefined,
     learningMode:
       typeof s.learningMode === 'string' ? s.learningMode : undefined,
     studentCode:
@@ -1482,6 +1485,10 @@ export default function StudentRoster() {
                           studentId={p.id || p.key}
                           current={p.examTrack || p.extra}
                         />
+                        <DepartmentOverride
+                          studentId={p.id || p.key}
+                          current={p.department}
+                        />
                       </div>
                     </div>
                   </div>
@@ -1591,11 +1598,15 @@ export default function StudentRoster() {
                     <Mail size={10} /> {p.email}
                   </span>
 
-                  <span className='col-span-2 text-[10px] font-bold text-slate-500 flex items-center gap-1'>
+                  <span className='col-span-2 text-[10px] font-bold text-slate-500 flex flex-wrap items-center gap-1'>
                     <BookOpen size={10} className='text-slate-400' />
                     <TrackOverride
                       studentId={p.id || p.key}
                       current={p.examTrack || p.extra}
+                    />
+                    <DepartmentOverride
+                      studentId={p.id || p.key}
+                      current={p.department}
                     />
                   </span>
 
