@@ -321,7 +321,7 @@ export default function OverviewUI({
     <div className='space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500 max-w-6xl mx-auto'>
       <div className='grid grid-cols-1 lg:grid-cols-3 gap-6'>
         {/* --- MAIN WELCOME BANNER --- */}
-        <section className='lg:col-span-2 relative overflow-hidden bg-[#002EFF] rounded-4xl p-8 text-white shadow-lg'>
+        <section className='lg:col-span-2 relative overflow-hidden bg-[#002EFF] rounded-4xl p-6 sm:p-8 text-white shadow-lg'>
           <div className='relative z-10 space-y-4'>
             {now && (
               <div className='flex flex-wrap items-center gap-x-2 gap-y-1 text-blue-100 text-[11px] font-bold'>
@@ -336,7 +336,7 @@ export default function OverviewUI({
                 )}
               </div>
             )}
-            <div className='flex items-center gap-2'>
+            <div className='flex flex-wrap items-center gap-2'>
               {streak > 0 && (
                 <Badge className='bg-[#FCB900] text-[#002EFF] hover:bg-[#FCB900] border-none font-black px-3 py-1'>
                   <Flame size={12} className='mr-1 fill-[#002EFF]' /> {streak} DAY
@@ -371,7 +371,7 @@ export default function OverviewUI({
             <p className='text-blue-100 text-xs md:text-sm max-w-sm font-medium'>
               &ldquo;{quote}&rdquo;
             </p>
-            <div className='flex gap-3'>
+            <div className='flex flex-wrap items-center gap-3'>
               <Button
                 onClick={() => setView('attendance')}
                 className='bg-[#FCB900] text-[#002EFF] font-black rounded-xl text-[10px] px-8 h-10 shadow-lg shadow-yellow-400/20 active:scale-95 transition-transform'
@@ -438,28 +438,28 @@ export default function OverviewUI({
           ) : (
             <div className='flex items-center gap-1.5'>
               <div className='flex flex-col items-center'>
-                <span className='text-4xl font-black text-[#002EFF] tracking-tighter tabular-nums'>
+                <span className='text-3xl sm:text-4xl font-black text-[#002EFF] tracking-tighter tabular-nums'>
                   {time.days}
                 </span>
                 <span className='text-[7px] font-bold text-gray-400'>DAYS</span>
               </div>
               <span className='text-xl font-black text-gray-200 pb-4'>:</span>
               <div className='flex flex-col items-center'>
-                <span className='text-4xl font-black text-[#002EFF] tracking-tighter tabular-nums'>
+                <span className='text-3xl sm:text-4xl font-black text-[#002EFF] tracking-tighter tabular-nums'>
                   {String(time.hours).padStart(2, '0')}
                 </span>
                 <span className='text-[7px] font-bold text-gray-400'>HRS</span>
               </div>
               <span className='text-xl font-black text-gray-200 pb-4'>:</span>
               <div className='flex flex-col items-center'>
-                <span className='text-4xl font-black text-[#002EFF] tracking-tighter tabular-nums'>
+                <span className='text-3xl sm:text-4xl font-black text-[#002EFF] tracking-tighter tabular-nums'>
                   {String(time.minutes).padStart(2, '0')}
                 </span>
                 <span className='text-[7px] font-bold text-gray-400'>MIN</span>
               </div>
               <span className='text-xl font-black text-gray-200 pb-4'>:</span>
               <div className='flex flex-col items-center'>
-                <span className='text-4xl font-black text-[#FCB900] tracking-tighter tabular-nums'>
+                <span className='text-3xl sm:text-4xl font-black text-[#FCB900] tracking-tighter tabular-nums'>
                   {String(time.seconds).padStart(2, '0')}
                 </span>
                 <span className='text-[7px] font-bold text-gray-400'>SEC</span>
