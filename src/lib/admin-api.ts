@@ -442,6 +442,16 @@ export const adminApi = {
     }),
 
   /**
+   * Manually create a student account (no payment flow — starts on Free).
+   * Endpoint: POST /api/admin/students
+   */
+  createStudent: <T = ActionSuccessResponse>(data: Record<string, any>) =>
+    adminFetch<T>('/api/admin/students', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  /**
    * List staff roles & permissions
    * Endpoint: GET /api/admin/roles
    */

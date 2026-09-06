@@ -1017,7 +1017,12 @@ import {
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { adminApi, type AdminUserListItem } from '@/lib/admin-api'
-import { PROGRAMMES, CLASS_LEVELS } from '@/lib/registration'
+import {
+  PROGRAMMES,
+  CLASS_LEVELS,
+  GENDERS,
+  NIGERIAN_STATES,
+} from '@/lib/registration'
 import TrackOverride from './TrackOverride'
 
 /* ------------------------------------------------------------------ */
@@ -2110,18 +2115,50 @@ function CreateStudentModal({
   const [fullname, setFullname] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('TempPass123')
-  const [examTrack, setExamTrack] = useState('UTME')
-  const [learningMode, setLearningMode] = useState('Online')
+  const [phone, setPhone] = useState('')
+  const [gender, setGender] = useState('')
+  const [dob, setDob] = useState('')
+  const [stateOfResidence, setStateOfResidence] = useState('')
+  const [institution, setInstitution] = useState('')
+  const [classLevel, setClassLevel] = useState<string>(CLASS_LEVELS[0])
+  const [learningMode, setLearningMode] = useState<'online' | 'physical'>(
+    'online',
+  )
+  const [programmes, setProgrammes] = useState<string[]>([])
+  const [department, setDepartment] = useState('')
+  const [guardianName, setGuardianName] = useState('')
+  const [guardianPhone, setGuardianPhone] = useState('')
 
   const [submitting, setSubmitting] = useState(false)
+
+  const toggleProgramme = (p: string) =>
+    setProgrammes((prev) =>
+      prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p],
+    )
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
     if (!fullname.trim() || !email.trim() || !password.trim()) {
+      showAlert('Missing Fields', 'Full name, email and password are required.', 'error')
+      return
+    }
+    if (!gender || !dob || !stateOfResidence.trim() || !institution.trim()) {
       showAlert(
         'Missing Fields',
-        'Fullname, email, and password are required.',
+        'Gender, date of birth, state and institution are required.',
+        'error',
+      )
+      return
+    }
+    if (programmes.length === 0) {
+      showAlert('Missing Fields', 'Select at least one programme.', 'error')
+      return
+    }
+    if (!guardianName.trim() || !guardianPhone.trim()) {
+      showAlert(
+        'Missing Fields',
+        "Guardian name and phone number are required.",
         'error',
       )
       return
@@ -2133,26 +2170,27 @@ function CreateStudentModal({
         fullname: fullname.trim(),
         email: email.trim().toLowerCase(),
         password,
-        role: 'student',
-        examTrack,
+        phoneNumber: phone.trim() || undefined,
+        gender,
+        dateOfBirth: dob,
+        stateOfResidence: stateOfResidence.trim(),
+        institution: institution.trim(),
+        currentLevel: classLevel,
         learningMode,
+        programmes,
+        department: department || undefined,
+        guardianInfo: {
+          fullname: guardianName.trim(),
+          phoneNumber: guardianPhone.trim(),
+        },
       }
 
-      const api = adminApi as unknown as {
-        createStaffAccount?: (
-          data: typeof payload,
-        ) => Promise<{ success?: boolean; message?: string }>
-      }
-
-      const res =
-        typeof api.createStaffAccount === 'function'
-          ? await api.createStaffAccount(payload)
-          : null
+      const res = await adminApi.createStudent(payload)
 
       if (res?.success) {
         showAlert(
           'Success',
-          `Student account created! Credentials sent to ${email}`,
+          `Student account created on Free access. Share the login with ${email}.`,
         )
         onSuccess()
         onClose()
@@ -2183,7 +2221,7 @@ function CreateStudentModal({
                 Add New Student
               </h3>
               <p className='text-[9px] font-bold text-slate-400'>
-                POST /api/admin/staff
+                Creates an active student on Free access
               </p>
             </div>
           </div>
@@ -2195,7 +2233,10 @@ function CreateStudentModal({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className='p-6 space-y-4'>
+        <form
+          onSubmit={handleSubmit}
+          className='p-6 space-y-4 max-h-[75vh] overflow-y-auto'
+        >
           <div className='space-y-1'>
             <label className='text-[9px] font-black uppercase tracking-widest text-slate-400 block'>
               Full Name <span className='text-rose-500'>*</span>
@@ -2234,20 +2275,99 @@ function CreateStudentModal({
             />
           </div>
 
+          <div className='space-y-1'>
+            <label className='text-[9px] font-black uppercase tracking-widest text-slate-400 block'>
+              Phone Number
+            </label>
+            <input
+              type='tel'
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder='080…'
+              className='w-full h-10 px-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-[#002EFF] focus:bg-white outline-none text-xs font-bold text-slate-800 transition-all'
+            />
+          </div>
+
           <div className='grid grid-cols-2 gap-3'>
             <div className='space-y-1'>
               <label className='text-[9px] font-black uppercase tracking-widest text-slate-400 block'>
-                Exam Track
+                Gender <span className='text-rose-500'>*</span>
               </label>
               <select
-                value={examTrack}
-                onChange={(e) => setExamTrack(e.target.value)}
+                value={gender}
+                onChange={(e) => setGender(e.target.value)}
                 className='w-full h-10 px-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-[#002EFF] focus:bg-white outline-none text-xs font-bold text-slate-800 transition-all'
               >
-                <option value='UTME'>UTME / JAMB</option>
-                <option value='WAEC'>WAEC / NECO</option>
-                <option value='POST-UTME'>POST-UTME</option>
-                <option value='A-LEVELS'>JUPEB / A-LEVELS</option>
+                <option value=''>Select…</option>
+                {GENDERS.map((g) => (
+                  <option key={g} value={g}>
+                    {g}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className='space-y-1'>
+              <label className='text-[9px] font-black uppercase tracking-widest text-slate-400 block'>
+                Date of Birth <span className='text-rose-500'>*</span>
+              </label>
+              <input
+                type='date'
+                value={dob}
+                onChange={(e) => setDob(e.target.value)}
+                className='w-full h-10 px-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-[#002EFF] focus:bg-white outline-none text-xs font-bold text-slate-800 transition-all'
+              />
+            </div>
+          </div>
+
+          <div className='grid grid-cols-2 gap-3'>
+            <div className='space-y-1'>
+              <label className='text-[9px] font-black uppercase tracking-widest text-slate-400 block'>
+                State <span className='text-rose-500'>*</span>
+              </label>
+              <select
+                value={stateOfResidence}
+                onChange={(e) => setStateOfResidence(e.target.value)}
+                className='w-full h-10 px-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-[#002EFF] focus:bg-white outline-none text-xs font-bold text-slate-800 transition-all'
+              >
+                <option value=''>Select…</option>
+                {NIGERIAN_STATES.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className='space-y-1'>
+              <label className='text-[9px] font-black uppercase tracking-widest text-slate-400 block'>
+                Institution <span className='text-rose-500'>*</span>
+              </label>
+              <input
+                type='text'
+                value={institution}
+                onChange={(e) => setInstitution(e.target.value)}
+                placeholder='e.g. Test College'
+                className='w-full h-10 px-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-[#002EFF] focus:bg-white outline-none text-xs font-bold text-slate-800 transition-all'
+              />
+            </div>
+          </div>
+
+          <div className='grid grid-cols-2 gap-3'>
+            <div className='space-y-1'>
+              <label className='text-[9px] font-black uppercase tracking-widest text-slate-400 block'>
+                Class / Level
+              </label>
+              <select
+                value={classLevel}
+                onChange={(e) => setClassLevel(e.target.value)}
+                className='w-full h-10 px-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-[#002EFF] focus:bg-white outline-none text-xs font-bold text-slate-800 transition-all'
+              >
+                {CLASS_LEVELS.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -2257,13 +2377,86 @@ function CreateStudentModal({
               </label>
               <select
                 value={learningMode}
-                onChange={(e) => setLearningMode(e.target.value)}
+                onChange={(e) =>
+                  setLearningMode(e.target.value as 'online' | 'physical')
+                }
                 className='w-full h-10 px-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-[#002EFF] focus:bg-white outline-none text-xs font-bold text-slate-800 transition-all'
               >
-                <option value='Online'>Online</option>
-                <option value='Physical'>Physical Class</option>
-                <option value='Hybrid'>Hybrid</option>
+                <option value='online'>Online</option>
+                <option value='physical'>Physical Class</option>
               </select>
+            </div>
+          </div>
+
+          <div className='space-y-1.5'>
+            <label className='text-[9px] font-black uppercase tracking-widest text-slate-400 block'>
+              Programmes <span className='text-rose-500'>*</span>
+            </label>
+            <div className='flex flex-wrap gap-1.5'>
+              {PROGRAMMES.map((p) => {
+                const on = programmes.includes(p)
+                return (
+                  <button
+                    key={p}
+                    type='button'
+                    onClick={() => toggleProgramme(p)}
+                    className={`px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-all ${
+                      on
+                        ? 'bg-[#002EFF] text-white shadow-sm'
+                        : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                    }`}
+                  >
+                    {p}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          <div className='space-y-1'>
+            <label className='text-[9px] font-black uppercase tracking-widest text-slate-400 block'>
+              Department{' '}
+              <span className='text-slate-300 normal-case'>
+                (Science / Art / Commercial — optional)
+              </span>
+            </label>
+            <select
+              value={department}
+              onChange={(e) => setDepartment(e.target.value)}
+              className='w-full h-10 px-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-[#002EFF] focus:bg-white outline-none text-xs font-bold text-slate-800 transition-all'
+            >
+              <option value=''>Auto (from programmes)</option>
+              <option value='science'>Science</option>
+              <option value='art'>Art</option>
+              <option value='commercial'>Commercial</option>
+            </select>
+          </div>
+
+          <div className='grid grid-cols-2 gap-3'>
+            <div className='space-y-1'>
+              <label className='text-[9px] font-black uppercase tracking-widest text-slate-400 block'>
+                Guardian Name <span className='text-rose-500'>*</span>
+              </label>
+              <input
+                type='text'
+                value={guardianName}
+                onChange={(e) => setGuardianName(e.target.value)}
+                placeholder='Parent / guardian'
+                className='w-full h-10 px-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-[#002EFF] focus:bg-white outline-none text-xs font-bold text-slate-800 transition-all'
+              />
+            </div>
+
+            <div className='space-y-1'>
+              <label className='text-[9px] font-black uppercase tracking-widest text-slate-400 block'>
+                Guardian Phone <span className='text-rose-500'>*</span>
+              </label>
+              <input
+                type='tel'
+                value={guardianPhone}
+                onChange={(e) => setGuardianPhone(e.target.value)}
+                placeholder='080…'
+                className='w-full h-10 px-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-[#002EFF] focus:bg-white outline-none text-xs font-bold text-slate-800 transition-all'
+              />
             </div>
           </div>
 
