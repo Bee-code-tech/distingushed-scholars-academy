@@ -290,6 +290,8 @@ import {
 } from 'lucide-react'
 import { adminApi } from '@/lib/admin-api'
 import { dsaApi } from '@/lib/api'
+import { categoryLabel } from '@/lib/coursesStore'
+import type { CourseCategory } from '@/lib/types'
 
 interface AttendanceSession {
   active: boolean
@@ -350,10 +352,20 @@ export default function TakeAttendance() {
         if (!list.length)
           list = (await dsaApi.courses.list({})) as Record<string, unknown>[]
         if (cancelled) return
-        const mapped = list.map((c) => ({
-          id: String(c.id ?? c._id ?? ''),
-          title: String(c.title ?? 'Course'),
-        }))
+        const mapped = list.map((c) => {
+          const title = String(c.title ?? 'Course')
+          // Distinguish same-named subjects across classes/tracks (e.g. three
+          // "Biology" → "Biology · SS1", "Biology · JAMB") by appending the
+          // course category. classLevel is added when it adds more than the
+          // category already shows.
+          const cat = c.category ? categoryLabel(c.category as CourseCategory) : ''
+          const lvl = String(c.classLevel ?? '').trim()
+          const suffix = [cat, lvl && lvl !== cat ? lvl : ''].filter(Boolean).join(' · ')
+          return {
+            id: String(c.id ?? c._id ?? ''),
+            title: suffix ? `${title} · ${suffix}` : title,
+          }
+        })
         setCourses(mapped)
         setCourseId((p) => p || mapped[0]?.id || '')
       } catch {

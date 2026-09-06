@@ -17,6 +17,8 @@ import { formatTime } from '@/lib/attendanceStore'
 import { getUser, getToken } from '@/lib/auth'
 import { isDemoToken } from '@/lib/demoAccounts'
 import { dsaApi } from '@/lib/api'
+import { categoryLabel } from '@/lib/coursesStore'
+import type { CourseCategory } from '@/lib/types'
 
 function isLive(): boolean {
   const t = getToken()
@@ -128,9 +130,13 @@ export default function StudentAttendance() {
           } catch {
             /* leave closed */
           }
+          const baseTitle = String(c.title ?? 'Course')
+          const cat = c.category ? categoryLabel(c.category as CourseCategory) : ''
+          const lvl = String(c.classLevel ?? '').trim()
+          const suffix = [cat, lvl && lvl !== cat ? lvl : ''].filter(Boolean).join(' · ')
           return {
             courseId: id,
-            title: String(c.title ?? 'Course'),
+            title: suffix ? `${baseTitle} · ${suffix}` : baseTitle,
             subject: c.subject ? String(c.subject) : undefined,
             tutor:
               (c.tutorName as string) ||
