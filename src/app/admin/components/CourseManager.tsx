@@ -578,9 +578,9 @@ function CourseCard({
               (isDeptSplitCategory(course.category) ? (
                 <span
                   className='px-1.5 h-5 rounded text-[9px] font-black uppercase tracking-wide bg-amber-50 text-amber-600'
-                  title='Untagged — currently shown to every department. Tag a department to stop the overlap.'
+                  title='Untagged — NOT shown to any student until you tag a department. For a subject everyone takes, tick all three.'
                 >
-                  ⚠ shared — tag a dept
+                  ⚠ hidden — tag a dept
                 </span>
               ) : (
                 <span className='text-[9px] font-black uppercase text-slate-400'>
