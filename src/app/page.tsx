@@ -6,6 +6,7 @@ import Hero from '@/components/ui/Hero'
 import Features from '@/components/ui/Features'
 import Features1 from '@/components/ui/Features1'
 import Courses from '@/components/ui/Courses'
+import FreeQuizCTA from '@/components/ui/FreeQuizCTA'
 import Tutors from '@/components/ui/Tutors'
 import AboutUs from '@/components/ui/AboutUs'
 import WatchUs from '@/components/ui/WatchUs'
@@ -51,6 +52,8 @@ export default function HomePage() {
       <section id='programs'>
         <Courses />
       </section>
+
+      <FreeQuizCTA />
 
       <Features1 />
 

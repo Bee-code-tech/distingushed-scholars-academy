@@ -240,6 +240,18 @@ export const dsaApi = {
       }).then((r) => handleResponse<Quiz>(r)),
 
     // ---- Free / public quizzes (no auth) — docs/backend-requests-2026-09-02.md §2 ----
+    // GET /public/quizzes — list free quizzes anyone can take (no auth).
+    listPublic: () =>
+      fetch(`${BASE_URL}/public/quizzes`, {
+        headers: { 'Content-Type': 'application/json' },
+      })
+        .then((r) =>
+          handleResponse<
+            Record<string, unknown>[] | { data?: Record<string, unknown>[] }
+          >(r),
+        )
+        .then((res) => (Array.isArray(res) ? res : (res?.data ?? []))),
+
     // GET /public/quizzes/:link — a free quiz for an anonymous taker (answers
     // stripped). No token, no access code.
     getPublic: (link: string) =>
