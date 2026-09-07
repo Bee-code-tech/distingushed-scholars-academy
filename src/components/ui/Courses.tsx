@@ -50,6 +50,9 @@ const programs = [
     name: 'Skills Acquisition',
     img: Skills,
     desc: 'Learn tech & creative skills including coding, graphics, video editing, and more.',
+    // Skills Acquisition is run by TechUp Academy — enrol on their site.
+    href: 'https://techupacademyng.com/',
+    external: true,
   },
 ]
 
@@ -118,12 +121,23 @@ export default function Programs() {
                 </p>
 
                 <div className='mt-6 pt-5 border-t border-gray-50 flex justify-between items-center'>
-                  <Link
-                    href='/auth/signup'
-                    className='text-[#002EFF] font-bold text-sm flex items-center gap-1 hover:gap-2 transition-all'
-                  >
-                    Enrol Now <ArrowRight size={16} />
-                  </Link>
+                  {program.external && program.href ? (
+                    <a
+                      href={program.href}
+                      target='_blank'
+                      rel='noopener noreferrer'
+                      className='text-[#002EFF] font-bold text-sm flex items-center gap-1 hover:gap-2 transition-all'
+                    >
+                      Enrol Now <ArrowRight size={16} />
+                    </a>
+                  ) : (
+                    <Link
+                      href='/auth/signup'
+                      className='text-[#002EFF] font-bold text-sm flex items-center gap-1 hover:gap-2 transition-all'
+                    >
+                      Enrol Now <ArrowRight size={16} />
+                    </Link>
+                  )}
                   <span className='text-[10px] font-bold text-gray-400 uppercase tracking-tighter'>
                     Available Now
                   </span>

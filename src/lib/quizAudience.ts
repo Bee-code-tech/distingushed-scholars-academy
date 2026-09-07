@@ -77,10 +77,14 @@ export function quizMatchesProfile(
   if (!qt || qt === 'all' || qt === 'general') return true
   if (!profile) return true
   if (qt !== profile.track) return false
-  const qd = quiz.department ? String(quiz.department).toLowerCase() : ''
-  if (qd && isDeptSplitTrack(profile.track)) {
-    // If the student's department is unknown, keep the quiz visible.
-    return !profile.department || qd === profile.department
+  // Department scope (STRICT, mirrors courses): in a department-split track a
+  // student with a department sees the quiz only if it's tagged with their
+  // department — an untagged quiz is hidden until tagged. Non-split tracks
+  // ignore department; a student with no department resolved isn't locked out.
+  if (isDeptSplitTrack(profile.track)) {
+    if (!profile.department) return true
+    const qd = quiz.department ? String(quiz.department).toLowerCase() : ''
+    return qd === profile.department
   }
   return true
 }
