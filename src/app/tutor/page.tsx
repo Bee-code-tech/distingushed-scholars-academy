@@ -322,7 +322,8 @@ export default function TutorDashboard() {
               {live ? 'Live' : 'Local'}
             </Badge>
           </div>
-          <Card className='rounded-3xl border-none shadow-sm bg-white overflow-hidden'>
+          <Card className='rounded-3xl border-none shadow-sm bg-white overflow-x-auto'>
+            <div className='min-w-[640px]'>
             <div className='grid grid-cols-12 px-5 py-3 bg-slate-50 text-[9px] font-black uppercase text-gray-400'>
               <span className='col-span-4'>Student</span>
               <span className='col-span-2'>Track</span>
@@ -367,6 +368,7 @@ export default function TutorDashboard() {
                 </div>
               </div>
             ))}
+            </div>
           </Card>
         </div>
       )}
