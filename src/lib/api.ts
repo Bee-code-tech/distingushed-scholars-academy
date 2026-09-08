@@ -329,6 +329,15 @@ export const dsaApi = {
         )
         .then((res) => (Array.isArray(res) ? res : (res?.data ?? []))),
 
+    // GET /quizzes/:id/corrections/me — the student's per-subject + per-question
+    // corrections for a past quiz (options, correct index, their chosen index).
+    myCorrections: (id: string, token?: string) =>
+      fetch(`${BASE_URL}/quizzes/${encodeURIComponent(id)}/corrections/me`, {
+        headers: getHeaders(token),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+
     // ---- Admin attempt analytics — docs/backend-requests-2026-09-02.md §6 ----
     // GET /quizzes/:id/attempts — every attempt (admin), for the quiz roster.
     attempts: (id: string, token?: string) =>

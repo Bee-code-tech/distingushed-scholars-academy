@@ -22,9 +22,13 @@ import {
   BarChart3,
   History,
   Lock,
+  ListChecks,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import RichText from '@/components/ui/RichText'
+import QuizCorrections, {
+  type CorrectionsData,
+} from '@/components/dashboard/QuizCorrections'
 import { ScientificCalculator } from '@/app/rapid-quiz/components/Calculator'
 import { dsaApi } from '@/lib/api'
 import { getToken, getUser } from '@/lib/auth'
@@ -1066,6 +1070,33 @@ function QuizHistory({
   results: Record<string, unknown>[]
   onBack: () => void
 }) {
+  const [reviewing, setReviewing] = useState<CorrectionsData | null>(null)
+  const [loadingId, setLoadingId] = useState<string | null>(null)
+  const [reviewErr, setReviewErr] = useState<string | null>(null)
+
+  const openCorrections = async (quizId: string) => {
+    if (!quizId) return
+    setLoadingId(quizId)
+    setReviewErr(null)
+    try {
+      const data = (await dsaApi.quizzes.myCorrections(
+        quizId,
+        getToken() ?? undefined,
+      )) as CorrectionsData
+      setReviewing(data)
+    } catch (e) {
+      setReviewErr(
+        e instanceof Error ? e.message : 'Could not load corrections.',
+      )
+    } finally {
+      setLoadingId(null)
+    }
+  }
+
+  if (reviewing) {
+    return <QuizCorrections data={reviewing} onBack={() => setReviewing(null)} />
+  }
+
   const fmtDate = (v: unknown) => {
     const d = new Date(str(v))
     return isNaN(d.getTime())
@@ -1110,43 +1141,69 @@ function QuizHistory({
           </p>
         </Card>
       ) : (
-        results.map((r) => {
-          const pct = pctOf(r.percentage)
-          const good = pct >= 70
-          const withdrawn = Boolean(r.withdrawn)
-          return (
-            <Card
-              key={str(r.id)}
-              className='p-4 rounded-2xl border-none shadow-sm bg-white flex items-center gap-3'
-            >
-              <div className='min-w-0 flex-1'>
-                <p className='text-sm font-black text-slate-800 truncate flex items-center gap-1.5'>
-                  {str(r.quizTitle) || 'Quiz'}
-                  {withdrawn && (
-                    <span className='text-[8px] font-black uppercase text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded shrink-0'>
-                      Withdrawn
-                    </span>
-                  )}
-                </p>
-                <p className='text-[10px] font-bold text-slate-400'>
-                  {str(r.totalScore) || 0}/{str(r.totalMarks) || 0} marks
-                  {r.submittedAt ? ` · ${fmtDate(r.submittedAt)}` : ''}
-                </p>
-              </div>
-              <span
-                className={`text-sm font-black px-3 py-1.5 rounded-xl shrink-0 ${
-                  withdrawn
-                    ? 'bg-slate-100 text-slate-400'
-                    : good
-                      ? 'bg-emerald-50 text-emerald-600'
-                      : 'bg-rose-50 text-rose-500'
-                }`}
+        <>
+          {reviewErr && (
+            <p className='text-[11px] font-bold text-rose-600 px-1'>{reviewErr}</p>
+          )}
+          {results.map((r) => {
+            const pct = pctOf(r.percentage)
+            const good = pct >= 70
+            const withdrawn = Boolean(r.withdrawn)
+            const quizId = str(r.quizId)
+            // Corrections available unless the quiz owner turned them off.
+            const canReview = !withdrawn && r.showCorrections !== false && !!quizId
+            return (
+              <Card
+                key={str(r.id)}
+                className='p-4 rounded-2xl border-none shadow-sm bg-white space-y-3'
               >
-                {pct}%
-              </span>
-            </Card>
-          )
-        })
+                <div className='flex items-center gap-3'>
+                  <div className='min-w-0 flex-1'>
+                    <p className='text-sm font-black text-slate-800 truncate flex items-center gap-1.5'>
+                      {str(r.quizTitle) || 'Quiz'}
+                      {withdrawn && (
+                        <span className='text-[8px] font-black uppercase text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded shrink-0'>
+                          Withdrawn
+                        </span>
+                      )}
+                    </p>
+                    <p className='text-[10px] font-bold text-slate-400'>
+                      {str(r.totalScore) || 0}/{str(r.totalMarks) || 0} marks
+                      {r.submittedAt ? ` · ${fmtDate(r.submittedAt)}` : ''}
+                    </p>
+                  </div>
+                  <span
+                    className={`text-sm font-black px-3 py-1.5 rounded-xl shrink-0 ${
+                      withdrawn
+                        ? 'bg-slate-100 text-slate-400'
+                        : good
+                          ? 'bg-emerald-50 text-emerald-600'
+                          : 'bg-rose-50 text-rose-500'
+                    }`}
+                  >
+                    {pct}%
+                  </span>
+                </div>
+                {canReview && (
+                  <div className='pt-2 border-t border-slate-50 flex justify-end'>
+                    <button
+                      onClick={() => openCorrections(quizId)}
+                      disabled={loadingId === quizId}
+                      className='inline-flex items-center gap-1.5 h-9 px-4 rounded-xl bg-blue-50 text-[#002EFF] font-black text-[10px] uppercase tracking-wide hover:bg-blue-100 disabled:opacity-50'
+                    >
+                      {loadingId === quizId ? (
+                        <Loader2 size={13} className='animate-spin' />
+                      ) : (
+                        <ListChecks size={13} />
+                      )}
+                      View corrections
+                    </button>
+                  </div>
+                )}
+              </Card>
+            )
+          })}
+        </>
       )}
     </div>
   )
