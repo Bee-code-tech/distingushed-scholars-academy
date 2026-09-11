@@ -1,4 +1,4 @@
-// Centralized API client for the DSA / Quiz360Pro backend.
+// Centralized API client for the DSA / Scholars Drill backend.
 // Single source of truth for network access: base URL, auth headers,
 // error handling, and automatic logout on expired sessions.
 

@@ -97,7 +97,7 @@ export const SetupView = ({
               <Target size={20} />
             </div>
             <h2 className='text-lg font-black text-zinc-900 uppercase tracking-tighter'>
-              Quiz360<span className='text-blue-600'>Pro</span>
+              Scholars <span className='text-blue-600'>Drill</span>
             </h2>
           </header>
 

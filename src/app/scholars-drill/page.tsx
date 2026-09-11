@@ -134,7 +134,7 @@ const tiers = [
   },
 ]
 
-export default function Quiz360ProLanding() {
+export default function ScholarsDrillLanding() {
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
   if (!mounted) return <div className='min-h-screen bg-[#F8FAFF]' />

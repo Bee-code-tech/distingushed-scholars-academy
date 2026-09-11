@@ -42,7 +42,7 @@
 //   { text: 'sin²θ + cos²θ = 1', top: '85%', right: '12%', rotate: -10 },
 // ]
 
-// export default function Quiz360Pro() {
+// export default function ScholarsDrill() {
 //   const [showModal, setShowModal] = useState(false)
 //   const [mounted, setMounted] = useState(false)
 
@@ -54,7 +54,7 @@
 
 //   return (
 //     <section
-//       id='Quiz360Pro'
+//       id='ScholarsDrill'
 //       className='w-full py-24 bg-white relative overflow-hidden'
 //     >
 //       {/* --- ACADEMIC BACKGROUND ELEMENTS --- */}
@@ -233,7 +233,7 @@
 //                       Student
 //                     </h4>
 //                     <p className='text-sm text-gray-500 mt-1 font-medium'>
-//                       Create account & start Quiz360Pro
+//                       Create account & start Scholars Drill
 //                     </p>
 //                   </div>
 //                   <ArrowRight className='ml-auto text-gray-300 group-hover:text-[#FCB900] group-hover:translate-x-2 transition-all' />
@@ -282,7 +282,7 @@ const bgFormulas = [
   { text: 'sin²θ + cos²θ = 1', top: '85%', right: '12%', rotate: -10 },
 ]
 
-export default function Quiz360Pro() {
+export default function ScholarsDrill() {
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
@@ -293,7 +293,7 @@ export default function Quiz360Pro() {
 
   return (
     <section
-      id='Quiz360Pro'
+      id='ScholarsDrill'
       className='w-full py-24 bg-white relative overflow-hidden'
     >
       {/* --- ACADEMIC BACKGROUND ELEMENTS (static, subtle) --- */}
@@ -387,9 +387,9 @@ export default function Quiz360Pro() {
           data-aos-delay='400'
           className='mt-16 flex justify-center'
         >
-          {/* Goes to the Quiz360Pro landing page (explains the product before login) */}
+          {/* Goes to the Scholars Drill landing page (explains the product before login) */}
           <Link
-            href='/quiz360pro'
+            href='/scholars-drill'
             className='group px-12 py-5 bg-[#FCB900] text-black font-black rounded-2xl shadow-xl shadow-yellow-100 hover:bg-[#002EFF] hover:text-white transition-all duration-300 flex items-center gap-4 active:scale-95'
           >
             EXPLORE SCHOLARS DRILL

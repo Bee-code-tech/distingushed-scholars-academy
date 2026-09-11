@@ -36,7 +36,7 @@
 // // Page Components
 // import SyllabusMastery from './syllabus/page'
 // import ExamSimulator from './simulator/page'
-// import Quiz360Portal from './quiz360/page'
+// import ScholarsDrillPortal from './scholars-drill/page'
 // import GlobalRankings from './rankings/page'
 // import ExamSchedule from './schedule/page'
 // import SettingsView from './settings/page'
@@ -52,7 +52,7 @@
 //   | 'rankings'
 //   | 'schedule'
 //   | 'settings'
-//   | 'quiz360'
+//   | 'scholars-drill'
 //   | 'resources'
 //   | 'history'
 //   | 'community'
@@ -78,7 +78,7 @@
 //     { icon: Library, label: 'E-Learning', view: 'resources' as ViewState },
 //     { icon: Zap, label: 'Syllabus Mastery', view: 'syllabus' as ViewState },
 //     { icon: BookOpen, label: 'Exam Simulator', view: 'simulator' as ViewState },
-//     { icon: Rocket, label: 'Quiz360 Pro', view: 'quiz360' as ViewState },
+//     { icon: Rocket, label: 'Scholars Drill', view: 'scholars-drill' as ViewState },
 //     { icon: History, label: 'Quiz History', view: 'history' as ViewState },
 //     {
 //       icon: Users,
@@ -284,7 +284,7 @@
 //             )}
 //             {activeView === 'syllabus' && <SyllabusMastery />}
 //             {activeView === 'simulator' && <ExamSimulator />}
-//             {activeView === 'quiz360' && <Quiz360Portal />}
+//             {activeView === 'scholars-drill' && <ScholarsDrillPortal />}
 //             {activeView === 'history' && <QuizHistoryView />}
 //             {activeView === 'community' && <CommunityView />}
 //             {activeView === 'rankings' && <GlobalRankings />}

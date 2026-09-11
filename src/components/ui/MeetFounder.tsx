@@ -18,7 +18,7 @@
 //   '🎓 Medical Student, University of Ibadan',
 //   '📚 Founder & Managing Director, Distinguished Scholars Academy',
 //   '💻 Founder, TechUp Academy & Innovations',
-//   '🚀 Creator of ScholarsDrill',
+//   '🚀 Creator of Scholars Drill',
 //   '👨‍🎓 Helping students succeed since 2021',
 // ]
 
@@ -149,7 +149,7 @@ const HIGHLIGHTS = [
   },
   {
     icon: Rocket,
-    text: 'Creator of ScholarsDrill',
+    text: 'Creator of Scholars Drill',
   },
   {
     icon: Users,

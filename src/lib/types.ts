@@ -1,4 +1,4 @@
-// Shared domain types for the DSA / Quiz360Pro frontend.
+// Shared domain types for the DSA / Scholars Drill frontend.
 // These describe the shapes exchanged with the backend API so that
 // components and the API client are type-checked instead of using `any`.
 
