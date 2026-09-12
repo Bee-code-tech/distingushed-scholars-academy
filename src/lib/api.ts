@@ -429,6 +429,19 @@ export const dsaApi = {
         .then((res) => (Array.isArray(res) ? res : (res?.data ?? [])))
     },
 
+    // GET /questions/subjects — distinct subjects that actually have questions,
+    // so the quiz builder's subject picker reflects what was uploaded.
+    subjects: (token?: string, tutorId?: string) => {
+      const qs = tutorId ? `?tutorId=${encodeURIComponent(tutorId)}` : ''
+      return fetch(`${BASE_URL}/questions/subjects${qs}`, {
+        headers: getHeaders(token),
+      })
+        .then((r) =>
+          handleResponse<string[] | { data?: string[] }>(r),
+        )
+        .then((res) => (Array.isArray(res) ? res : (res?.data ?? [])))
+    },
+
     // POST /questions — one question, or many via { questions: [...] }.
     create: (body: Record<string, unknown>, token?: string) =>
       fetch(`${BASE_URL}/questions`, {

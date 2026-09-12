@@ -143,6 +143,9 @@ export default function QuizBuilder() {
   const [showResults, setShowResults] = useState(true)
   const [showCorrections, setShowCorrections] = useState(true)
   const [blocks, setBlocks] = useState<SubjectBlock[]>([])
+  // Subjects that actually have uploaded questions (any label a tutor used),
+  // merged with the standard list so nothing is invisible to the admin.
+  const [bankSubjects, setBankSubjects] = useState<string[]>([])
   const [publishing, setPublishing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
@@ -194,6 +197,31 @@ export default function QuizBuilder() {
       cancelled = true
     }
   }, [token])
+
+  // Load the subjects that actually have questions so the picker isn't limited
+  // to the fixed list (which hid questions uploaded under other labels).
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const subs = (await dsaApi.questions.subjects(token)) as string[]
+        if (!cancelled && Array.isArray(subs)) setBankSubjects(subs)
+      } catch {
+        /* fall back to the fixed list */
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [token])
+
+  // Fixed list first (familiar order), then any extra uploaded subjects,
+  // de-duplicated case-insensitively.
+  const subjectOptions = (() => {
+    const seen = new Set(JAMB_SUBJECTS.map((s) => s.toLowerCase()))
+    const extras = bankSubjects.filter((s) => !seen.has(s.toLowerCase()))
+    return [...JAMB_SUBJECTS, ...extras]
+  })()
 
   const flash = (m: string) => {
     setNotice(m)
@@ -709,6 +737,7 @@ export default function QuizBuilder() {
                 key={i}
                 block={b}
                 token={token}
+                subjectOptions={subjectOptions}
                 onChange={(patch) => patchBlock(i, patch)}
                 onRemove={() => removeBlock(i)}
               />
@@ -1425,11 +1454,13 @@ function AttemptsPanel({ quizId, token }: { quizId: string; token?: string }) {
 function SubjectBlockEditor({
   block,
   token,
+  subjectOptions,
   onChange,
   onRemove,
 }: {
   block: SubjectBlock
   token?: string
+  subjectOptions: string[]
   onChange: (patch: Partial<SubjectBlock>) => void
   onRemove: () => void
 }) {
@@ -1482,7 +1513,11 @@ function SubjectBlockEditor({
           }}
           className='h-9 px-2 rounded-lg bg-slate-50 outline-none text-[12px] font-black flex-1'
         >
-          {JAMB_SUBJECTS.map((s) => (
+          {/* Include the block's current subject even if it's not in the list */}
+          {(subjectOptions.includes(block.name)
+            ? subjectOptions
+            : [block.name, ...subjectOptions]
+          ).map((s) => (
             <option key={s} value={s}>
               {s}
             </option>
