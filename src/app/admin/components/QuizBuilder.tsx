@@ -200,14 +200,47 @@ export default function QuizBuilder() {
 
   // Load the subjects that actually have questions so the picker isn't limited
   // to the fixed list (which hid questions uploaded under other labels).
+  // Prefer the dedicated /questions/subjects endpoint; if it isn't deployed
+  // yet (or returns nothing) fall back to deriving the labels from a full
+  // question list, which the admin's plain GET /questions already returns.
+  // This keeps the picker correct without waiting on the backend deploy.
   useEffect(() => {
     let cancelled = false
+    const deriveFromAll = async () => {
+      const rows = (await dsaApi.questions.list({}, token)) as Record<
+        string,
+        unknown
+      >[]
+      const seen = new Set<string>()
+      const subs: string[] = []
+      rows.forEach((r) => {
+        const s = String(r.subject ?? '').trim()
+        if (s && !seen.has(s.toLowerCase())) {
+          seen.add(s.toLowerCase())
+          subs.push(s)
+        }
+      })
+      return subs.sort((a, b) => a.localeCompare(b))
+    }
     ;(async () => {
       try {
         const subs = (await dsaApi.questions.subjects(token)) as string[]
-        if (!cancelled && Array.isArray(subs)) setBankSubjects(subs)
+        if (cancelled) return
+        if (Array.isArray(subs) && subs.length) {
+          setBankSubjects(subs)
+          return
+        }
+        // Endpoint present but empty — still derive, in case of a stale deploy.
+        const derived = await deriveFromAll()
+        if (!cancelled) setBankSubjects(derived)
       } catch {
-        /* fall back to the fixed list */
+        // Endpoint not deployed — derive the real labels from all questions.
+        try {
+          const derived = await deriveFromAll()
+          if (!cancelled) setBankSubjects(derived)
+        } catch {
+          /* fall back to the fixed list */
+        }
       }
     })()
     return () => {
