@@ -1533,6 +1533,20 @@ function SubjectBlockEditor({
       onChange({ picked: block.picked.filter((x) => x.id !== q.id) })
     else onChange({ picked: [...block.picked, q] })
   }
+  // Select all / clear across the currently shown questions (honours the batch
+  // filter). When every shown question is already picked, the button clears them.
+  const allShownPicked =
+    shown.length > 0 && shown.every((q) => pickedIds.has(q.id))
+  const toggleAllShown = () => {
+    if (allShownPicked) {
+      const shownIds = new Set(shown.map((q) => q.id))
+      onChange({ picked: block.picked.filter((x) => !shownIds.has(x.id)) })
+    } else {
+      const have = new Set(block.picked.map((x) => x.id))
+      const additions = shown.filter((q) => !have.has(q.id))
+      onChange({ picked: [...block.picked, ...additions] })
+    }
+  }
 
   return (
     <div className='rounded-2xl border border-slate-100 p-3 space-y-2'>
@@ -1609,6 +1623,21 @@ function SubjectBlockEditor({
                 </option>
               ))}
             </select>
+          )}
+          {!loading && shown.length > 0 && (
+            <div className='flex items-center justify-between px-1'>
+              <span className='text-[10px] font-black text-slate-500'>
+                {shown.filter((q) => pickedIds.has(q.id)).length}/{shown.length}{' '}
+                selected
+              </span>
+              <button
+                type='button'
+                onClick={toggleAllShown}
+                className='text-[10px] font-black uppercase text-[#002EFF] hover:underline'
+              >
+                {allShownPicked ? 'Clear all' : 'Select all'}
+              </button>
+            </div>
           )}
           <div className='max-h-56 overflow-y-auto space-y-1'>
             {loading ? (
