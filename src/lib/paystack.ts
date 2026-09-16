@@ -6,13 +6,13 @@
 // under is the one the server tracks — the Paystack webhook reconciles it and
 // marks the student paid. The frontend never decides "paid"; the backend does.
 //
-// SECURITY: only the PUBLIC key belongs here (and it's only a fallback used by
-// newTransaction, which we don't use in the main flow). The secret key stays in
-// a backend env var and is used server-side to initialize/verify — never here.
+// SECURITY: only the PUBLIC key belongs here. No key is hardcoded — it comes
+// solely from NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY so we can never accidentally ship
+// a test key. (The main flow resumes a backend-created transaction by accessCode
+// and doesn't use this key at all.) The SECRET key stays in a backend env var
+// and decides test vs live for real charges — never here.
 
-const PUBLIC_KEY =
-  process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY ||
-  'pk_test_3e62f874550fa7d7c04e46fc341c3fcfcab8f9ad'
+const PUBLIC_KEY = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || ''
 
 // v2 Popup JS (a.k.a. @paystack/inline-js) — this is the one that exposes
 // `resumeTransaction(accessCode)`. The legacy v1 inline.js does NOT.
