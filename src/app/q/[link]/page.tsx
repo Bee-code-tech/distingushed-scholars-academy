@@ -14,6 +14,7 @@ import {
   ArrowRight,
   Sparkles,
   AlertCircle,
+  AlertTriangle,
   Calculator as CalculatorIcon,
   Target,
   BarChart3,
@@ -133,6 +134,12 @@ export default function PublicQuizPage() {
   const [showCorrections, setShowCorrections] = useState(false)
   const [showMap, setShowMap] = useState(false) // mobile question-map drawer
   const totalTime = useRef(0)
+  // Anti-cheating: count tab-switch / minimise / split-screen exits; auto-submit
+  // once past the limit, warn before that.
+  const [breaches, setBreaches] = useState(0)
+  const breachRef = useRef(0)
+  const [showWarning, setShowWarning] = useState(false)
+  const MAX_BREACHES = 5
 
   // One attempt per device: a flag (with the last result) is stored under the
   // quiz link so a revisit/reload can't retake it.
@@ -233,6 +240,41 @@ export default function PublicQuizPage() {
     [answers, email, phone, link, name, questions, remaining, submitting, takenKey],
   )
 
+  // Register a "left the quiz" breach; auto-submit once past the limit, else warn.
+  const registerBreach = useCallback(() => {
+    breachRef.current += 1
+    setBreaches(breachRef.current)
+    if (breachRef.current > MAX_BREACHES) {
+      void submit(true)
+    } else {
+      setShowWarning(true)
+    }
+  }, [submit])
+
+  // Anti-cheating: detect tab switches, minimising and split-screen (focus loss)
+  // while taking. Dedupe leave/return so one exit counts once.
+  useEffect(() => {
+    if (step !== 'quiz') return
+    let away = false
+    const leave = () => {
+      if (away) return
+      away = true
+      registerBreach()
+    }
+    const back = () => {
+      away = false
+    }
+    const onVis = () => (document.hidden ? leave() : back())
+    window.addEventListener('blur', leave)
+    window.addEventListener('focus', back)
+    document.addEventListener('visibilitychange', onVis)
+    return () => {
+      window.removeEventListener('blur', leave)
+      window.removeEventListener('focus', back)
+      document.removeEventListener('visibilitychange', onVis)
+    }
+  }, [step, registerBreach])
+
   // Countdown while taking the quiz.
   useEffect(() => {
     if (step !== 'quiz' || minutes <= 0) return
@@ -269,6 +311,9 @@ export default function PublicQuizPage() {
     setAnswers({})
     setShowCalc(false)
     setConfirmSubmit(false)
+    breachRef.current = 0
+    setBreaches(0)
+    setShowWarning(false)
     setStep('quiz')
   }
 
@@ -512,6 +557,62 @@ ${rows ? `<table border="1" cellpadding="8" cellspacing="0" style="border-collap
               </p>
               <QuestionMap questions={questions} answers={answers} />
             </aside>
+
+            {/* Anti-cheating notice */}
+            <div
+              className={`flex items-center gap-2 rounded-2xl px-4 py-2.5 ${
+                breaches > 0
+                  ? 'bg-rose-50 border border-rose-200'
+                  : 'bg-amber-50 border border-amber-100'
+              }`}
+            >
+              <AlertTriangle
+                size={15}
+                className={
+                  breaches > 0
+                    ? 'text-rose-500 shrink-0'
+                    : 'text-amber-600 shrink-0'
+                }
+              />
+              <p
+                className={`text-[11px] font-bold ${breaches > 0 ? 'text-rose-600' : 'text-amber-700'}`}
+              >
+                {breaches > 0
+                  ? `Warning ${breaches}/${MAX_BREACHES} — leaving the quiz again will auto-submit it.`
+                  : `Stay on this screen — no tab-switching, minimising or split-screen. The quiz auto-submits after ${MAX_BREACHES} warnings.`}
+              </p>
+            </div>
+
+            {/* Blocking warning the moment they return after leaving. */}
+            {showWarning && breaches > 0 && breaches <= MAX_BREACHES && (
+              <div className='fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-5'>
+                <div className='w-full max-w-sm bg-white rounded-3xl shadow-2xl p-6 text-center'>
+                  <div className='h-16 w-16 mx-auto rounded-2xl bg-rose-50 text-rose-500 flex items-center justify-center mb-3'>
+                    <AlertTriangle size={30} />
+                  </div>
+                  <p className='text-lg font-black text-slate-900'>
+                    Warning {breaches} of {MAX_BREACHES}
+                  </p>
+                  <p className='text-[12px] font-bold text-slate-500 mt-2'>
+                    You left the quiz screen. Don&apos;t switch tabs, minimise, or
+                    open another app while taking the quiz.
+                  </p>
+                  <p className='text-[11px] font-black text-rose-600 mt-3'>
+                    {MAX_BREACHES - breaches > 0
+                      ? `${MAX_BREACHES - breaches} warning${
+                          MAX_BREACHES - breaches === 1 ? '' : 's'
+                        } left — the next leave after that auto-submits.`
+                      : 'One more time and the quiz auto-submits.'}
+                  </p>
+                  <button
+                    onClick={() => setShowWarning(false)}
+                    className='mt-5 w-full h-11 bg-[#002EFF] text-white rounded-xl font-black text-[11px] uppercase tracking-wide active:scale-[0.98]'
+                  >
+                    Continue quiz
+                  </button>
+                </div>
+              </div>
+            )}
 
             {questions.map((q, i) => (
               <div
