@@ -318,6 +318,19 @@ export const dsaApi = {
         )
         .then((res) => (Array.isArray(res) ? res : (res?.data ?? []))),
 
+    // GET /quizzes/:id/public-results — attempts on a FREE/public quiz (admin),
+    // i.e. people who took it via the shareable link (name, email, score).
+    publicResults: (id: string, token?: string) =>
+      fetch(`${BASE_URL}/quizzes/${encodeURIComponent(id)}/public-results`, {
+        headers: getHeaders(token),
+      })
+        .then((r) =>
+          handleResponse<
+            Record<string, unknown>[] | { data?: Record<string, unknown>[] }
+          >(r),
+        )
+        .then((res) => (Array.isArray(res) ? res : (res?.data ?? []))),
+
     // GET /quizzes/results/me — the logged-in student's quiz history (all their
     // past submissions across quizzes).
     myResults: (token?: string) =>

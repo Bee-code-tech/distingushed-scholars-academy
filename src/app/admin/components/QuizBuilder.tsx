@@ -1208,6 +1208,8 @@ function StatusBadge({ live }: { live: boolean }) {
  *  ships the attempts routes (docs/backend-requests-2026-09-02.md §6). */
 function AttemptsPanel({ quizId, token }: { quizId: string; token?: string }) {
   const [attempts, setAttempts] = useState<Record<string, unknown>[]>([])
+  // Attempts on a FREE/public quiz — anonymous takers via the shareable link.
+  const [publicAttempts, setPublicAttempts] = useState<Record<string, unknown>[]>([])
   const [board, setBoard] = useState<Record<string, unknown>[]>([])
   const [loading, setLoading] = useState(true)
   const [ready, setReady] = useState(true)
@@ -1282,14 +1284,20 @@ function AttemptsPanel({ quizId, token }: { quizId: string; token?: string }) {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const [a, b] = await Promise.allSettled([
+    const [a, b, p] = await Promise.allSettled([
       dsaApi.quizzes.attempts(quizId, token) as Promise<Record<string, unknown>[]>,
       dsaApi.quizzes.getLeaderboard(quizId, token) as unknown as Promise<
+        Record<string, unknown>[]
+      >,
+      dsaApi.quizzes.publicResults(quizId, token) as Promise<
         Record<string, unknown>[]
       >,
     ])
     setAttempts(a.status === 'fulfilled' && Array.isArray(a.value) ? a.value : [])
     setBoard(b.status === 'fulfilled' && Array.isArray(b.value) ? b.value : [])
+    setPublicAttempts(
+      p.status === 'fulfilled' && Array.isArray(p.value) ? p.value : [],
+    )
     // If the attempts route isn't live yet, flag it so we show a hint.
     setReady(a.status === 'fulfilled')
     setLoading(false)
@@ -1338,7 +1346,9 @@ function AttemptsPanel({ quizId, token }: { quizId: string; token?: string }) {
       ) : (
         <>
           <p className='text-[9px] font-black uppercase tracking-widest text-slate-400'>
-            {attempts.length} student{attempts.length === 1 ? '' : 's'} took this quiz
+            {attempts.length + publicAttempts.length}{' '}
+            {attempts.length + publicAttempts.length === 1 ? 'person' : 'people'}{' '}
+            took this quiz
           </p>
 
           {board.length > 0 && (
@@ -1367,13 +1377,42 @@ function AttemptsPanel({ quizId, token }: { quizId: string; token?: string }) {
             </div>
           )}
 
-          {attempts.length === 0 ? (
+          {publicAttempts.length > 0 && (
+            <div>
+              <p className='text-[9px] font-black uppercase text-slate-400 mb-1'>
+                Public quiz takers ({publicAttempts.length})
+              </p>
+              <div className='space-y-1.5'>
+                {publicAttempts.map((r) => (
+                  <div
+                    key={str(r.id ?? r._id ?? r.email)}
+                    className='rounded-xl bg-white px-3 py-2 flex items-center gap-2'
+                  >
+                    <div className='min-w-0 flex-1'>
+                      <p className='text-[12px] font-black text-slate-800 truncate'>
+                        {str(r.name ?? 'Anonymous')}
+                      </p>
+                      <p className='text-[10px] font-medium text-slate-400 truncate'>
+                        {str(r.email ?? '')}
+                        {r.phone ? ` · ${str(r.phone)}` : ''}
+                      </p>
+                    </div>
+                    <span className='text-[11px] font-black text-[#002EFF] shrink-0'>
+                      {pctOf(r)}%
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {attempts.length === 0 && publicAttempts.length === 0 ? (
             <p className='text-[11px] font-bold text-slate-400'>
               {ready
                 ? 'No attempts yet.'
                 : 'Attempt list will appear here once the backend endpoint is live.'}
             </p>
-          ) : (
+          ) : attempts.length === 0 ? null : (
             <div className='space-y-1.5'>
               {attempts.map((r) => {
                 const aid = rowId(r)
