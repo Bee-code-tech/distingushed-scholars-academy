@@ -26,8 +26,13 @@ import { getMeetLink } from '@/lib/liveClass'
 import {
   getEffectiveTimetable,
   getNextClass,
+  getTodayClasses,
   gridFromApi,
+  slotsFromApi,
+  DEFAULT_SLOTS,
   type NextClass,
+  type Slot,
+  type TimetableGrid,
 } from '@/lib/timetable'
 import { getToken } from '@/lib/auth'
 import { isDemoToken } from '@/lib/demoAccounts'
@@ -78,7 +83,8 @@ function ModeCard({ student }: { student: StudentProfile }) {
   const [meetLink, setMeetLink] = useState('')
   const [canJoin, setCanJoin] = useState(false)
   const [live, setLive] = useState(false)
-  const [next, setNext] = useState<NextClass | null>(null)
+  const [grid, setGrid] = useState<TimetableGrid | null>(null)
+  const [slots, setSlots] = useState<Slot[]>(DEFAULT_SLOTS)
   useEffect(() => {
     let cancelled = false
     const local = () => {
@@ -86,9 +92,8 @@ function ModeCard({ student }: { student: StudentProfile }) {
       setMeetLink(getMeetLink(student.track))
       setCanJoin(false)
       setLive(false)
-      setNext(
-        getNextClass(getEffectiveTimetable(student.track, student.department)),
-      )
+      setGrid(getEffectiveTimetable(student.track, student.department))
+      setSlots(DEFAULT_SLOTS)
     }
     const t = getToken()
     if (t && !isDemoToken(t)) {
@@ -99,17 +104,16 @@ function ModeCard({ student }: { student: StudentProfile }) {
         .then(([tt, lc]) => {
           if (cancelled) return
           setLive(true)
-          const apiGrid =
+          const ttVal =
             tt.status === 'fulfilled'
-              ? (tt.value as { grid?: unknown })?.grid
+              ? (tt.value as { grid?: unknown; slots?: unknown })
               : undefined
-          setNext(
-            getNextClass(
-              Array.isArray(apiGrid)
-                ? gridFromApi(apiGrid)
-                : getEffectiveTimetable(student.track, student.department),
-            ),
+          setGrid(
+            Array.isArray(ttVal?.grid)
+              ? gridFromApi(ttVal.grid)
+              : getEffectiveTimetable(student.track, student.department),
           )
+          setSlots(ttVal?.slots ? slotsFromApi(ttVal.slots) : DEFAULT_SLOTS)
           const d =
             lc.status === 'fulfilled' && lc.value && typeof lc.value === 'object'
               ? (lc.value as { meetLink?: string; canJoin?: boolean })
@@ -124,6 +128,9 @@ function ModeCard({ student }: { student: StudentProfile }) {
     }
   }, [student.track, student.department])
 
+  // Today's remaining classes (both periods), else the next upcoming class.
+  const todays = grid ? getTodayClasses(grid, slots) : []
+  const next: NextClass | null = grid ? getNextClass(grid, slots) : null
   const title = next ? `${next.subject}` : 'No class scheduled'
   const timing = next ? `${next.when} · ${next.time}` : 'Check your timetable'
   // Live: the backend decides join state (status === "live" and a link exists).
@@ -183,14 +190,48 @@ function ModeCard({ student }: { student: StudentProfile }) {
           ONLINE
         </Badge>
       </div>
-      <div className='space-y-1'>
-        <h3 className='text-lg font-black text-gray-900 uppercase leading-tight'>
-          {title}
-        </h3>
-        <div className='flex items-center gap-2 text-gray-400'>
-          <CalendarClock size={13} />
-          <span className='text-[11px] font-bold'>{timing} (WAT)</span>
-        </div>
+      <div className='space-y-2'>
+        {todays.length > 0 ? (
+          <div className='space-y-2'>
+            {todays.map((c, i) => (
+              <div
+                key={c.slotIndex}
+                className='flex items-start justify-between gap-2'
+              >
+                <div className='min-w-0'>
+                  <h3 className='text-base font-black text-gray-900 uppercase leading-tight break-words'>
+                    {c.subject}
+                  </h3>
+                  <div className='flex items-center gap-1.5 text-gray-400'>
+                    <CalendarClock size={12} />
+                    <span className='text-[11px] font-bold'>
+                      Today · {c.time} (WAT)
+                    </span>
+                  </div>
+                </div>
+                {c.ongoing ? (
+                  <span className='shrink-0 text-[8px] font-black uppercase bg-rose-50 text-rose-500 px-1.5 py-0.5 rounded animate-pulse'>
+                    Live now
+                  </span>
+                ) : i === 0 ? (
+                  <span className='shrink-0 text-[8px] font-black uppercase bg-blue-50 text-[#002EFF] px-1.5 py-0.5 rounded'>
+                    Up next
+                  </span>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <>
+            <h3 className='text-lg font-black text-gray-900 uppercase leading-tight'>
+              {title}
+            </h3>
+            <div className='flex items-center gap-2 text-gray-400'>
+              <CalendarClock size={13} />
+              <span className='text-[11px] font-bold'>{timing} (WAT)</span>
+            </div>
+          </>
+        )}
         <div className='flex items-center gap-2 text-gray-400'>
           <Video size={13} />
           <span className='text-[11px] font-bold'>

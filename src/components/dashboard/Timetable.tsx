@@ -7,12 +7,15 @@ import { CalendarDays, MapPin, Video, Clock } from 'lucide-react'
 import type { ExamTrack, StudyMode, Department } from '@/lib/studentProfile'
 import {
   DAYS,
-  SLOTS,
   getEffectiveTimetable,
   gridFromApi,
   tintForSubject,
   timetableKey,
+  slotsFromApi,
+  slotTimeLabel,
+  DEFAULT_SLOTS,
   type TimetableGrid,
+  type Slot,
 } from '@/lib/timetable'
 import { getToken } from '@/lib/auth'
 import { isDemoToken } from '@/lib/demoAccounts'
@@ -33,12 +36,14 @@ export default function Timetable({
   // source of truth) and transpose to the UI's [period][day] layout; on
   // demo/offline fall back to the local store so the preview still works.
   const [grid, setGrid] = useState<TimetableGrid>([])
+  const [slots, setSlots] = useState<Slot[]>(DEFAULT_SLOTS)
   const [live, setLive] = useState(false)
   useEffect(() => {
     let cancelled = false
     const local = () => {
       if (cancelled) return
       setGrid(getEffectiveTimetable(track, department))
+      setSlots(DEFAULT_SLOTS)
       setLive(false)
     }
     const t = getToken()
@@ -61,6 +66,7 @@ export default function Timetable({
           )
           if (built && hasEntries) {
             setGrid(built)
+            setSlots(slotsFromApi((res as { slots?: unknown })?.slots))
             setLive(true)
           } else local()
         })
@@ -113,12 +119,12 @@ export default function Timetable({
             ))}
           </div>
 
-          {SLOTS.map((slot, slotIdx) => (
-            <div key={slot.label} className='grid grid-cols-7 border-t border-slate-50'>
+          {slots.map((slot, slotIdx) => (
+            <div key={slotIdx} className='grid grid-cols-7 border-t border-slate-50'>
               <div className='px-4 py-3 flex flex-col justify-center'>
                 <span className='text-[10px] font-black text-gray-700'>{slot.label}</span>
                 <span className='text-[9px] font-bold text-gray-400 flex items-center gap-1'>
-                  <Clock size={9} /> {slot.time}
+                  <Clock size={9} /> {slotTimeLabel(slot)}
                 </span>
               </div>
               {DAYS.map((d, dayIdx) => {

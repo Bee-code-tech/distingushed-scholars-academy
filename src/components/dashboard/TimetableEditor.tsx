@@ -18,13 +18,16 @@ import {
 } from '@/lib/studentProfile'
 import {
   DAYS,
-  SLOTS,
   gridFromApi,
   gridToApi,
   emptyGrid,
   timetableKey,
   tintForSubject,
+  slotsFromApi,
+  slotTimeLabel,
+  DEFAULT_SLOTS,
   type TimetableGrid,
+  type Slot,
 } from '@/lib/timetable'
 import { dsaApi } from '@/lib/api'
 
@@ -54,6 +57,7 @@ export default function TimetableEditor() {
   const [track, setTrack] = useState<ExamTrack>('jamb')
   const [department, setDepartment] = useState<Department>('science')
   const [grid, setGrid] = useState<TimetableGrid>(emptyGrid())
+  const [slots, setSlots] = useState<Slot[]>(DEFAULT_SLOTS)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -69,11 +73,14 @@ export default function TimetableEditor() {
     try {
       const res = (await dsaApi.timetable.get(key, adminToken())) as {
         grid?: unknown
+        slots?: unknown
       }
       setGrid(gridFromApi(res?.grid))
+      setSlots(slotsFromApi(res?.slots))
     } catch {
       // No timetable yet for this key (or offline) — start from an empty grid.
       setGrid(emptyGrid())
+      setSlots(DEFAULT_SLOTS)
     } finally {
       setLoading(false)
     }
@@ -101,11 +108,21 @@ export default function TimetableEditor() {
     })
   }
 
+  // Edit a period's start/end time (24h "HH:MM" from <input type="time">).
+  const setSlotTime = (period: number, field: 'start' | 'end', value: string) => {
+    setSlots((prev) => {
+      const next = prev.map((s) => ({ ...s }))
+      if (next[period]) next[period][field] = value
+      return next
+    })
+    setSaved(false)
+  }
+
   const save = async () => {
     setSaving(true)
     setError(null)
     try {
-      await dsaApi.timetable.save(key, gridToApi(grid), adminToken())
+      await dsaApi.timetable.save(key, gridToApi(grid), adminToken(), slots)
       setSaved(true)
       setTimeout(() => setSaved(false), 2500)
     } catch (e) {
@@ -226,17 +243,37 @@ export default function TimetableEditor() {
                 ))}
               </div>
               {/* Rows */}
-              {SLOTS.map((slot, period) => (
+              {slots.map((slot, period) => (
                 <div
-                  key={slot.label}
+                  key={period}
                   className='grid grid-cols-7 border-t border-slate-50'
                 >
-                  <div className='px-3 py-2 flex flex-col justify-center'>
+                  <div className='px-2 py-2 flex flex-col justify-center gap-1'>
                     <span className='text-[10px] font-black text-slate-700'>
                       {slot.label}
                     </span>
+                    <div className='flex items-center gap-1'>
+                      <input
+                        type='time'
+                        value={slot.start}
+                        onChange={(e) =>
+                          setSlotTime(period, 'start', e.target.value)
+                        }
+                        title='Start time'
+                        className='w-full min-w-0 h-7 px-1 rounded-md bg-slate-50 text-[10px] font-bold text-slate-600 outline-none border border-transparent focus:border-[#002EFF]/40 focus:bg-white'
+                      />
+                      <input
+                        type='time'
+                        value={slot.end}
+                        onChange={(e) =>
+                          setSlotTime(period, 'end', e.target.value)
+                        }
+                        title='End time'
+                        className='w-full min-w-0 h-7 px-1 rounded-md bg-slate-50 text-[10px] font-bold text-slate-600 outline-none border border-transparent focus:border-[#002EFF]/40 focus:bg-white'
+                      />
+                    </div>
                     <span className='text-[8px] font-bold text-slate-400'>
-                      {slot.time}
+                      {slotTimeLabel(slot)}
                     </span>
                   </div>
                   {DAYS.map((d, day) => {

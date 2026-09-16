@@ -787,12 +787,18 @@ export const dsaApi = {
         .then((r) => handleResponse<{ data?: unknown }>(r))
         .then((r) => (r as { data?: unknown }).data ?? r),
 
-    // PUT /timetable/:key (admin/staff) — save the grid ([day][period] arrays).
-    save: (key: string, grid: string[][][], token?: string) =>
+    // PUT /timetable/:key (admin/staff) — save the grid ([day][period] arrays)
+    // and/or the period times (`slots`: [{ label, start, end }], 24h HH:MM).
+    save: (
+      key: string,
+      grid: string[][][],
+      token?: string,
+      slots?: { label: string; start: string; end: string }[],
+    ) =>
       fetch(`${BASE_URL}/timetable/${encodeURIComponent(key)}`, {
         method: 'PUT',
         headers: getHeaders(token),
-        body: JSON.stringify({ grid }),
+        body: JSON.stringify(slots ? { grid, slots } : { grid }),
       })
         .then((r) => handleResponse<{ data?: unknown }>(r))
         .then((r) => (r as { data?: unknown }).data ?? r),

@@ -27,8 +27,58 @@ export const SLOTS = [
   { label: 'Period 4', time: '2:00 – 3:30' },
 ] as const
 
-const SLOT_START = [8 * 60, 9 * 60 + 45, 11 * 60 + 30, 14 * 60]
 const CLASS_MINUTES = 90
+
+/** A period's label + start/end times (24h "HH:MM"), editable per timetable. */
+export type Slot = { label: string; start: string; end: string }
+
+/** Frontend defaults, mirroring the backend Timetable.DEFAULT_SLOTS. */
+export const DEFAULT_SLOTS: Slot[] = [
+  { label: 'Period 1', start: '08:00', end: '09:30' },
+  { label: 'Period 2', start: '09:45', end: '11:15' },
+  { label: 'Period 3', start: '11:30', end: '13:00' },
+  { label: 'Period 4', start: '14:00', end: '15:30' },
+]
+
+/** "HH:MM" → minutes since midnight, or null if malformed. */
+export function parseHM(hm: string): number | null {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(hm ?? '').trim())
+  if (!m) return null
+  const h = Number(m[1])
+  const mm = Number(m[2])
+  if (h > 23 || mm > 59) return null
+  return h * 60 + mm
+}
+
+/** minutes-since-midnight → "4:00 PM" (12-hour, AM/PM). */
+export function fmt12(mins: number): string {
+  let h = Math.floor(mins / 60)
+  const m = mins % 60
+  const ap = h >= 12 ? 'PM' : 'AM'
+  h %= 12
+  if (h === 0) h = 12
+  return `${h}:${String(m).padStart(2, '0')} ${ap}`
+}
+
+/** A slot's time range with AM/PM, e.g. "4:00 PM – 5:30 PM". */
+export function slotTimeLabel(slot: Slot): string {
+  const s = parseHM(slot.start)
+  const e = parseHM(slot.end)
+  if (s == null || e == null) return `${slot.start} – ${slot.end}`
+  return `${fmt12(s)} – ${fmt12(e)}`
+}
+
+/** Coerce fetched slots into a clean Slot[] (defaults fill any gaps). */
+export function slotsFromApi(raw: unknown): Slot[] {
+  const src = Array.isArray(raw) ? (raw as Record<string, unknown>[]) : []
+  return DEFAULT_SLOTS.map((def, i) => {
+    const s = src[i] && typeof src[i] === 'object' ? src[i] : {}
+    const start = parseHM(String(s.start ?? '')) != null ? String(s.start) : def.start
+    const end = parseHM(String(s.end ?? '')) != null ? String(s.end) : def.end
+    const label = String(s.label ?? '').trim() || def.label
+    return { label, start, end }
+  })
+}
 
 // Programmes whose timetable is split by department (Science / Art / Commercial).
 // JAMB & Post-UTME are included so each department gets its own timetable.
@@ -174,6 +224,7 @@ export function cellLabel(cell: Cell): string {
  */
 export function getNextClass(
   grid: TimetableGrid,
+  slots: Slot[] = DEFAULT_SLOTS,
   now = new Date(),
 ): NextClass | null {
   const jsDay = now.getDay() // 0=Sun … 6=Sat
@@ -183,19 +234,64 @@ export function getNextClass(
     const weekday = (jsDay + offset) % 7
     if (weekday === 0) continue // Sunday — no classes
     const dayIdx = weekday - 1 // Mon(1)→0 … Sat(6)→5
-    for (let slot = 0; slot < SLOTS.length; slot++) {
-      if (offset === 0 && nowMins >= SLOT_START[slot] + CLASS_MINUTES) continue
+    for (let slot = 0; slot < slots.length; slot++) {
+      const start = parseHM(slots[slot].start)
+      if (start == null) continue
+      const end = parseHM(slots[slot].end) ?? start + CLASS_MINUTES
+      if (offset === 0 && nowMins >= end) continue // already finished today
       const subject = cellLabel(grid[slot]?.[dayIdx] ?? [])
       if (!subject) continue
       const when = offset === 0 ? 'Today' : offset === 1 ? 'Tomorrow' : DAYS[dayIdx]
-      const ongoing =
-        offset === 0 &&
-        nowMins >= SLOT_START[slot] &&
-        nowMins < SLOT_START[slot] + CLASS_MINUTES
-      return { subject, day: DAYS[dayIdx], time: SLOTS[slot].time, when, ongoing }
+      const ongoing = offset === 0 && nowMins >= start && nowMins < end
+      return {
+        subject,
+        day: DAYS[dayIdx],
+        time: slotTimeLabel(slots[slot]),
+        when,
+        ongoing,
+      }
     }
   }
   return null
+}
+
+export interface TodayClass {
+  subject: string
+  time: string
+  ongoing: boolean
+  slotIndex: number
+}
+
+/**
+ * Today's classes that haven't finished yet (ongoing or still upcoming today),
+ * in period order — so the card can show the first AND second period. Empty on
+ * Sundays or when today is done.
+ */
+export function getTodayClasses(
+  grid: TimetableGrid,
+  slots: Slot[] = DEFAULT_SLOTS,
+  now = new Date(),
+): TodayClass[] {
+  const jsDay = now.getDay()
+  if (jsDay === 0) return []
+  const dayIdx = jsDay - 1
+  const nowMins = now.getHours() * 60 + now.getMinutes()
+  const out: TodayClass[] = []
+  for (let slot = 0; slot < slots.length; slot++) {
+    const start = parseHM(slots[slot].start)
+    if (start == null) continue
+    const end = parseHM(slots[slot].end) ?? start + CLASS_MINUTES
+    if (nowMins >= end) continue // finished
+    const subject = cellLabel(grid[slot]?.[dayIdx] ?? [])
+    if (!subject) continue
+    out.push({
+      subject,
+      time: slotTimeLabel(slots[slot]),
+      ongoing: nowMins >= start && nowMins < end,
+      slotIndex: slot,
+    })
+  }
+  return out
 }
 
 const TINTS = [

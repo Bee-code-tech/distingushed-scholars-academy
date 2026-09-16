@@ -5,12 +5,15 @@ import { CalendarDays, Clock, Lock } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import {
   DAYS,
-  SLOTS,
   getEffectiveTimetable,
   gridFromApi,
   tintForSubject,
   timetableKey,
+  slotsFromApi,
+  slotTimeLabel,
+  DEFAULT_SLOTS,
   type TimetableGrid,
+  type Slot,
 } from '@/lib/timetable'
 import {
   EXAM_TRACKS,
@@ -46,6 +49,7 @@ export default function ReadOnlyTimetable({
   const [track, setTrack] = useState<ExamTrack>(initialTrack)
   const [department, setDepartment] = useState<Department>('science')
   const [grid, setGrid] = useState<TimetableGrid>([])
+  const [slots, setSlots] = useState<Slot[]>(DEFAULT_SLOTS)
   const [live, setLive] = useState(false)
 
   const isDeptSplit = DEPT_SPLIT.includes(track)
@@ -58,6 +62,7 @@ export default function ReadOnlyTimetable({
     const local = () => {
       if (cancelled) return
       setGrid(getEffectiveTimetable(track, isDeptSplit ? department : null))
+      setSlots(DEFAULT_SLOTS)
       setLive(false)
     }
     const t = getToken()
@@ -69,6 +74,7 @@ export default function ReadOnlyTimetable({
           const apiGrid = (res as { grid?: unknown })?.grid
           if (Array.isArray(apiGrid)) {
             setGrid(gridFromApi(apiGrid))
+            setSlots(slotsFromApi((res as { slots?: unknown })?.slots))
             setLive(true)
           } else local()
         })
@@ -138,12 +144,12 @@ export default function ReadOnlyTimetable({
             ))}
           </div>
 
-          {SLOTS.map((slot, slotIdx) => (
-            <div key={slot.label} className='grid grid-cols-7 border-t border-slate-50'>
+          {slots.map((slot, slotIdx) => (
+            <div key={slotIdx} className='grid grid-cols-7 border-t border-slate-50'>
               <div className='px-4 py-2 flex flex-col justify-center'>
                 <span className='text-[10px] font-black text-gray-700'>{slot.label}</span>
                 <span className='text-[9px] font-bold text-gray-400 flex items-center gap-1'>
-                  <Clock size={9} /> {slot.time}
+                  <Clock size={9} /> {slotTimeLabel(slot)}
                 </span>
               </div>
               {DAYS.map((d, dayIdx) => {
