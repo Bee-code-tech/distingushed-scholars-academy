@@ -557,6 +557,25 @@ export const dsaApi = {
         .then((r) => (r as { data?: unknown }).data ?? r),
   },
 
+  staff: {
+    // GET /staff/students — the LIVE student roster for staff with
+    // students.view / students.manage (admin also allowed). Same shape as the
+    // admin roster; optional filters (programme, class, examTrack, department,
+    // accessLevel, search, status) are passed straight through.
+    students: (token?: string, params?: Record<string, string>) => {
+      const qs = new URLSearchParams(params || {}).toString()
+      return fetch(`${BASE_URL}/staff/students${qs ? `?${qs}` : ''}`, {
+        headers: getHeaders(token),
+      })
+        .then((r) =>
+          handleResponse<
+            Record<string, unknown>[] | { data?: Record<string, unknown>[] }
+          >(r),
+        )
+        .then((res) => (Array.isArray(res) ? res : (res?.data ?? [])))
+    },
+  },
+
   // Attendance — per-COURSE self check-in (docs/attendance.md). A tutor opens
   // attendance for one of their courses; enrolled students mark themselves
   // present for that course. courseId is required to activate/close and scopes

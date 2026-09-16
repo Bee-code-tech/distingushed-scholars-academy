@@ -29,6 +29,8 @@ import { useTabState } from '@/components/dashboard/useTabState'
 import TakeAttendance from '@/components/dashboard/TakeAttendance'
 import TimetableEditor from '@/components/dashboard/TimetableEditor'
 import { getStudents, type StoredStudent } from '@/lib/studentsStore'
+import { dsaApi, isBackendUnreachable } from '@/lib/api'
+import { getToken } from '@/lib/auth'
 import {
   getRole,
   getPermissionsForStaff,
@@ -450,9 +452,72 @@ function PaymentsPanel({
 }
 
 /* ---------------------------------------------------------------- */
+const sstr = (v: unknown) => (v == null ? '' : String(v))
+
+type RosterStudent = {
+  key: string
+  name: string
+  track: string
+  mode: string
+  isNew: boolean
+  paid: boolean
+}
+
+/** Live student roster for staff (GET /staff/students). Falls back to the local
+ *  cache only when the backend is genuinely unreachable. */
+function useLiveStudents() {
+  const [students, setStudents] = useState<RosterStudent[]>([])
+  const [loading, setLoading] = useState(true)
+  useEffect(() => {
+    let cancelled = false
+    const WEEK = 7 * 24 * 60 * 60 * 1000
+    const normalize = (u: Record<string, unknown>): RosterStudent => {
+      const created = u.createdAt ? new Date(sstr(u.createdAt)).getTime() : 0
+      const lvl = sstr(u.accessLevel)
+      return {
+        key: sstr(u.id ?? u._id ?? u.email),
+        name: sstr(u.fullname ?? u.fullName ?? u.username ?? 'Student'),
+        track:
+          (sstr(u.examTrack ?? u.level ?? u.currentLevel) || '—').toUpperCase(),
+        mode: sstr(u.learningMode),
+        isNew: created > 0 && Date.now() - created < WEEK,
+        paid: lvl === 'portal' || lvl === 'tutorial',
+      }
+    }
+    ;(async () => {
+      try {
+        const rows = (await dsaApi.staff.students(
+          getToken() ?? undefined,
+        )) as Record<string, unknown>[]
+        if (!cancelled) setStudents(rows.map(normalize))
+      } catch (e) {
+        // Only fall back to the local cache if the backend is truly unreachable.
+        if (!cancelled && isBackendUnreachable(e)) {
+          setStudents(
+            getStudents().map((s) => ({
+              key: s.key,
+              name: s.name,
+              track: sstr(s.track),
+              mode: sstr(s.mode),
+              isNew: !!s.isNew,
+              paid: false,
+            })),
+          )
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+  return { students, loading }
+}
+
+/* ---------------------------------------------------------------- */
 function StudentsPanel({ canManage }: { canManage: boolean }) {
-  const [students, setStudents] = useState<StoredStudent[]>([])
-  useEffect(() => setStudents(getStudents()), [])
+  const { students, loading } = useLiveStudents()
   return (
     <div className='space-y-4'>
       <h2 className='text-2xl font-black text-[#002EFF] italic uppercase'>
@@ -464,33 +529,43 @@ function StudentsPanel({ canManage }: { canManage: boolean }) {
           <span className='col-span-3'>Track</span>
           <span className='col-span-3'>Mode</span>
         </div>
-        {students.map((s) => (
-          <div
-            key={s.key}
-            className='grid grid-cols-12 items-center px-5 py-4 border-t border-slate-50'
-          >
-            <span className='col-span-6 text-xs font-black text-gray-800'>
-              {s.name}
-              {s.isNew && (
-                <span className='ml-2 text-[8px] font-black uppercase text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded'>
-                  New
-                </span>
-              )}
-            </span>
-            <span className='col-span-3'>
-              <Badge className='bg-blue-50 text-[#002EFF] text-[8px] font-black'>
-                {s.track}
-              </Badge>
-            </span>
-            <span className='col-span-3 text-[10px] font-bold text-slate-500'>
-              {s.mode === 'physical'
-                ? 'On-Campus'
-                : s.mode === 'online'
-                  ? 'Online'
-                  : '—'}
-            </span>
+        {loading ? (
+          <div className='py-8 flex justify-center'>
+            <Loader2 className='animate-spin text-[#002EFF]' size={18} />
           </div>
-        ))}
+        ) : students.length === 0 ? (
+          <p className='px-5 py-8 text-center text-[11px] font-bold text-slate-400'>
+            No students yet.
+          </p>
+        ) : (
+          students.map((s) => (
+            <div
+              key={s.key}
+              className='grid grid-cols-12 items-center px-5 py-4 border-t border-slate-50'
+            >
+              <span className='col-span-6 text-xs font-black text-gray-800'>
+                {s.name}
+                {s.isNew && (
+                  <span className='ml-2 text-[8px] font-black uppercase text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded'>
+                    New
+                  </span>
+                )}
+              </span>
+              <span className='col-span-3'>
+                <Badge className='bg-blue-50 text-[#002EFF] text-[8px] font-black'>
+                  {s.track}
+                </Badge>
+              </span>
+              <span className='col-span-3 text-[10px] font-bold text-slate-500'>
+                {s.mode === 'physical'
+                  ? 'On-Campus'
+                  : s.mode === 'online'
+                    ? 'Online'
+                    : '—'}
+              </span>
+            </div>
+          ))
+        )}
       </Card>
     </div>
   )
@@ -553,18 +628,12 @@ function AnnouncementsPanel({ staffName }: { staffName: string }) {
 
 /* ---------------------------------------------------------------- */
 function ReportsPanel() {
-  const [students, setStudents] = useState<StoredStudent[]>([])
-  const [paidCount, setPaidCount] = useState(0)
-  useEffect(() => {
-    const list = getStudents()
-    setStudents(list)
-    const paid = readPayments()
-    setPaidCount(list.filter((s) => paid[s.key]).length)
-  }, [])
+  const { students } = useLiveStudents()
+  const paidCount = students.filter((s) => s.paid).length
   const tiles = [
     { label: 'Total Students', value: students.length },
-    { label: 'Payments Verified', value: paidCount },
-    { label: 'Awaiting Payment', value: students.length - paidCount },
+    { label: 'Paid (Portal/Tutorial)', value: paidCount },
+    { label: 'Free (not yet paid)', value: students.length - paidCount },
   ]
   return (
     <div className='space-y-4'>

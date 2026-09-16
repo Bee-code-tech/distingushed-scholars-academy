@@ -38,6 +38,7 @@ export function audienceLabel(
   if (!track || track === 'all' || track === 'general') return 'All students'
   const t = EXAM_TRACKS[track as ExamTrack]?.label ?? track
   if (dept && isDeptSplitTrack(track)) {
+    if (dept === 'all') return `${t} · All departments`
     return `${t} · ${DEPARTMENT_LABELS[dept as Department] ?? dept}`
   }
   return t
@@ -84,6 +85,7 @@ export function quizMatchesProfile(
   if (isDeptSplitTrack(profile.track)) {
     if (!profile.department) return true
     const qd = quiz.department ? String(quiz.department).toLowerCase() : ''
+    if (qd === 'all') return true // targeted at every department
     return qd === profile.department
   }
   return true

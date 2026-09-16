@@ -127,7 +127,7 @@ export default function QuizBuilder() {
   const [description, setDescription] = useState('')
   // Audience: which programme (+ department) the quiz targets. 'all' = everyone.
   const [track, setTrack] = useState<ExamTrack | 'all'>('all')
-  const [department, setDepartment] = useState<Department | ''>('')
+  const [department, setDepartment] = useState<Department | 'all' | ''>('')
   // Portal audience mode: by programme, or assigned to specific students.
   const [audienceMode, setAudienceMode] = useState<'programme' | 'students'>('programme')
   const [assignedStudents, setAssignedStudents] = useState<string[]>([])
@@ -417,7 +417,7 @@ export default function QuizBuilder() {
     setAccessMode(mode)
     const t = str(q.track || 'all')
     setTrack((t === 'all' ? 'all' : t) as ExamTrack | 'all')
-    setDepartment((q.department as Department) || '')
+    setDepartment((q.department as Department | 'all') || '')
     // Prefill the assignment picker from the quiz's assigned students.
     const assigned = Array.isArray(q.assignedStudents)
       ? (q.assignedStudents as unknown[]).map((s) =>
@@ -665,13 +665,14 @@ export default function QuizBuilder() {
                   <select
                     value={department}
                     onChange={(e) =>
-                      setDepartment(e.target.value as Department | '')
+                      setDepartment(e.target.value as Department | 'all' | '')
                     }
                     className={`h-9 px-2 rounded-lg bg-white border outline-none text-[12px] font-black ${
                       department ? 'border-slate-200' : 'border-rose-300'
                     }`}
                   >
                     <option value=''>Select department…</option>
+                    <option value='all'>All departments</option>
                     {QUIZ_DEPARTMENTS.map((d) => (
                       <option key={d} value={d}>
                         {DEPARTMENT_LABELS[d]}
