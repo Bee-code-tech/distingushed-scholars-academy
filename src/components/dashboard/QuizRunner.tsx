@@ -23,6 +23,8 @@ import {
   History,
   Lock,
   ListChecks,
+  LayoutGrid,
+  X,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import RichText from '@/components/ui/RichText'
@@ -147,6 +149,7 @@ export default function QuizRunner() {
   const [page, setPage] = useState(0)
   const [showCalc, setShowCalc] = useState(false)
   const [confirmSubmit, setConfirmSubmit] = useState(false)
+  const [showMap, setShowMap] = useState(false) // mobile question-map drawer
   const MAX_BREACHES = 5
 
   const loadList = useCallback(async () => {
@@ -697,6 +700,45 @@ export default function QuizRunner() {
       .slice(startIdx, startIdx + pp)
     const paginated = perPage > 0 && pageCount > 1
     const onLastPage = curPage >= pageCount - 1
+
+    // Jump to a question from the map: switch to its page (if paginated), then
+    // scroll it into view.
+    const jumpTo = (i: number) => {
+      const target = Math.floor(i / pp)
+      const changing = target !== curPage
+      if (changing) setPage(target)
+      setShowMap(false)
+      setTimeout(
+        () =>
+          document
+            .getElementById(`pq-${i}`)
+            ?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+        changing ? 90 : 0,
+      )
+    }
+
+    // The numbered palette — blue = answered, amber ring = on the current page.
+    const mapGrid = (
+      <div className='flex flex-wrap gap-1.5'>
+        {questions.map((q, i) => {
+          const done = answers[q.questionId] !== undefined
+          const onPage = i >= startIdx && i < startIdx + pp
+          return (
+            <button
+              key={q.questionId || i}
+              onClick={() => jumpTo(i)}
+              title={done ? 'Answered' : 'Not answered'}
+              className={`h-8 w-8 rounded-lg text-[11px] font-black flex items-center justify-center ${
+                done ? 'bg-[#002EFF] text-white' : 'bg-slate-100 text-slate-500'
+              } ${onPage ? 'ring-2 ring-[#FCB900]' : ''}`}
+            >
+              {i + 1}
+            </button>
+          )
+        })}
+      </div>
+    )
+
     return (
       <div className='max-w-2xl mx-auto space-y-4'>
         <div className='sticky top-0 z-10 flex items-center justify-between bg-white/90 backdrop-blur rounded-2xl px-4 py-3 shadow-sm'>
@@ -794,7 +836,11 @@ export default function QuizRunner() {
         {error && <p className='text-[11px] font-bold text-rose-600 px-1'>{error}</p>}
 
         {visible.map(({ q, i }) => (
-          <Card key={q.questionId} className='p-4 rounded-2xl border-none shadow-sm bg-white'>
+          <Card
+            key={q.questionId}
+            id={`pq-${i}`}
+            className='p-4 rounded-2xl border-none shadow-sm bg-white scroll-mt-24'
+          >
             <div className='flex items-start gap-2 mb-3'>
               <span className='text-[11px] font-black text-[#002EFF]'>{i + 1}.</span>
               <div className='flex-1'>
@@ -880,6 +926,48 @@ export default function QuizRunner() {
           <CalculatorIcon size={20} />
         </button>
         {showCalc && <ScientificCalculator onClose={() => setShowCalc(false)} />}
+
+        {/* Question map — sticky on the SIDE on wide screens. */}
+        <aside className='hidden xl:block fixed right-4 top-24 w-44 max-h-[calc(100vh-8rem)] overflow-y-auto bg-white rounded-2xl shadow-sm p-3 z-30'>
+          <p className='text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2'>
+            Question map
+          </p>
+          {mapGrid}
+        </aside>
+
+        {/* Mobile / tablet: floating toggle opens the map as a side panel. */}
+        <button
+          onClick={() => setShowMap(true)}
+          className='xl:hidden fixed bottom-6 left-6 z-40 h-12 px-4 rounded-2xl bg-white text-[#002EFF] shadow-xl flex items-center gap-2 active:scale-95'
+          title='Question map'
+        >
+          <LayoutGrid size={18} />
+          <span className='text-[10px] font-black uppercase tracking-wide tabular-nums'>
+            {answered}/{questions.length}
+          </span>
+        </button>
+        {showMap && (
+          <div className='xl:hidden fixed inset-0 z-50 flex'>
+            <div
+              className='flex-1 bg-black/40'
+              onClick={() => setShowMap(false)}
+            />
+            <div className='w-64 max-w-[80%] h-full bg-white shadow-2xl p-4 overflow-y-auto'>
+              <div className='flex items-center justify-between mb-3'>
+                <p className='text-[10px] font-black uppercase tracking-widest text-slate-400'>
+                  Question map
+                </p>
+                <button
+                  onClick={() => setShowMap(false)}
+                  className='h-8 w-8 flex items-center justify-center rounded-lg bg-slate-100 text-slate-500'
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              {mapGrid}
+            </div>
+          </div>
+        )}
 
         {/* Submit confirmation */}
         {confirmSubmit && (
