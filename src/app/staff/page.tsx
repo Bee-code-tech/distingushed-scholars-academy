@@ -17,10 +17,12 @@ import {
   Send,
   LifeBuoy,
   FileQuestion,
+  Library,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import SupportTickets from '@/app/admin/components/SupportTickets'
 import QuizBuilder from '@/app/admin/components/QuizBuilder'
+import QuestionBank from '@/components/dashboard/QuestionBank'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import DashboardShell, {
@@ -109,6 +111,8 @@ export default function StaffDashboard() {
       can('quizzes.view')
     )
       items.push({ key: 'quizzes', label: 'Quizzes', icon: FileQuestion })
+    if (can('questions.bank'))
+      items.push({ key: 'question-bank', label: 'Question Bank', icon: Library })
     if (can('announcements.send'))
       items.push({ key: 'announcements', label: 'Announcements', icon: Megaphone })
     if (can('reports.view'))
@@ -175,6 +179,8 @@ export default function StaffDashboard() {
       {view === 'students' && <StudentsPanel canManage={can('students.manage')} />}
 
       {view === 'quizzes' && <QuizBuilder />}
+
+      {view === 'question-bank' && <QuestionBank />}
 
       {view === 'announcements' && <AnnouncementsPanel staffName={firstName} />}
 

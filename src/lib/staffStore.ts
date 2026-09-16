@@ -379,6 +379,12 @@ export const PERMISSIONS: Permission[] = [
   },
 
   {
+    key: 'questions.bank',
+    label: 'Add / manage question bank',
+    module: 'Academics',
+  },
+
+  {
     key: 'library.manage',
     label: 'Manage learning library',
     module: 'Academics',

@@ -286,11 +286,11 @@ export default function Hero() {
             </Link>
 
             <Link
-              href='/auth/signup'
+              href='/quizzes'
               className='w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-4 border-2 border-gray-200 text-gray-700 bg-white rounded-2xl font-bold transition-all hover:border-[#FCB900] hover:text-black active:scale-95 text-sm'
             >
               <Play size={16} fill='currentColor' />
-              Book a Free Class
+              Take a Free Test
             </Link>
           </div>
         </div>
