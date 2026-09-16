@@ -18,11 +18,15 @@ import {
   Target,
   BarChart3,
   Download,
+  BookOpenCheck,
 } from 'lucide-react'
 import { dsaApi } from '@/lib/api'
 import RichText from '@/components/ui/RichText'
 import { ScientificCalculator } from '@/app/rapid-quiz/components/Calculator'
 import type { PublicQuizResult } from '@/lib/types'
+import QuizCorrections, {
+  type CorrectionsData,
+} from '@/components/dashboard/QuizCorrections'
 
 const LETTERS = ['A', 'B', 'C', 'D', 'E'] as const
 
@@ -92,6 +96,7 @@ export default function PublicQuizPage() {
   const [showCalc, setShowCalc] = useState(false)
   const [confirmSubmit, setConfirmSubmit] = useState(false)
   const [alreadyTaken, setAlreadyTaken] = useState(false)
+  const [showCorrections, setShowCorrections] = useState(false)
   const totalTime = useRef(0)
 
   // One attempt per device: a flag (with the last result) is stored under the
@@ -273,6 +278,59 @@ export default function PublicQuizPage() {
   })
   const perSubject = breakdown.length ? [...subjMap.entries()] : []
 
+  // Full corrections (options with correct/green, wrong/red, explanations, a
+  // question map + per-subject) — same component the portal quiz uses. Built by
+  // joining the loaded questions with the submit breakdown.
+  const canShowCorrections = breakdown.length > 0
+  const correctionsData: CorrectionsData = {
+    quizTitle: title,
+    totalScore: result?.totalScore ?? 0,
+    totalMarks: result?.totalMarks ?? 0,
+    percentage: pct,
+    perSubject: (() => {
+      const m = new Map<
+        string,
+        { earned: number; total: number; correct: number; count: number }
+      >()
+      questions.forEach((q) => {
+        const subj = q.subject || 'General'
+        const row = m.get(subj) ?? { earned: 0, total: 0, correct: 0, count: 0 }
+        row.total += q.marks || 1
+        row.count += 1
+        const b = byId.get(q.questionId)
+        if (b) {
+          row.earned += Number(b.marksEarned) || 0
+          if (b.isCorrect) row.correct += 1
+        }
+        m.set(subj, row)
+      })
+      return [...m.entries()].map(([subject, v]) => ({
+        subject,
+        earned: v.earned,
+        total: v.total,
+        correct: v.correct,
+        count: v.count,
+        percentage: v.total ? (v.earned / v.total) * 100 : 0,
+      }))
+    })(),
+    questions: questions.map((q) => {
+      const b = byId.get(q.questionId)
+      const sel = b && b.selectedOption != null ? Number(b.selectedOption) : -1
+      return {
+        questionId: q.questionId,
+        subject: q.subject,
+        questionText: q.questionText,
+        options: q.options,
+        correctIndex: b && b.correctAnswer != null ? Number(b.correctAnswer) : null,
+        selectedIndex: sel >= 0 ? sel : null,
+        isCorrect: b ? !!b.isCorrect : false,
+        marks: q.marks,
+        marksEarned: b ? Number(b.marksEarned) || 0 : 0,
+        explanation: b ? str(b.explanation) : '',
+      }
+    }),
+  }
+
   const downloadResult = () => {
     const rows = perSubject
       .map(([s, v]) => {
@@ -411,10 +469,38 @@ ${rows ? `<table border="1" cellpadding="8" cellspacing="0" style="border-collap
             <p className='text-[11px] font-black uppercase tracking-widest text-slate-400'>
               {answered}/{questions.length} answered
             </p>
+
+            {/* Question map — jump to any question; blue = answered */}
+            <div className='bg-white rounded-2xl shadow-sm p-3'>
+              <p className='text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2'>
+                Question map
+              </p>
+              <div className='flex flex-wrap gap-1.5'>
+                {questions.map((q, i) => {
+                  const done = answers[q.questionId] !== undefined
+                  return (
+                    <a
+                      key={q.questionId || i}
+                      href={`#pq-${i}`}
+                      title={done ? 'Answered' : 'Not answered'}
+                      className={`h-8 w-8 rounded-lg text-[11px] font-black flex items-center justify-center ${
+                        done
+                          ? 'bg-[#002EFF] text-white'
+                          : 'bg-slate-100 text-slate-500'
+                      }`}
+                    >
+                      {i + 1}
+                    </a>
+                  )
+                })}
+              </div>
+            </div>
+
             {questions.map((q, i) => (
               <div
                 key={q.questionId || i}
-                className='bg-white rounded-2xl shadow-sm p-4'
+                id={`pq-${i}`}
+                className='bg-white rounded-2xl shadow-sm p-4 scroll-mt-20'
               >
                 <div className='flex items-start gap-2 mb-3'>
                   <span className='text-[11px] font-black text-[#002EFF]'>
@@ -525,7 +611,16 @@ ${rows ? `<table border="1" cellpadding="8" cellspacing="0" style="border-collap
           </div>
         )}
 
-        {step === 'result' && result && (
+        {step === 'result' && result && showCorrections && (
+          <div className='mt-6'>
+            <QuizCorrections
+              data={correctionsData}
+              onBack={() => setShowCorrections(false)}
+            />
+          </div>
+        )}
+
+        {step === 'result' && result && !showCorrections && (
           <div className='mt-8 space-y-4'>
             <div className='rounded-2xl bg-emerald-50 border border-emerald-100 px-4 py-2.5 text-center'>
               <p className='text-[11px] font-bold text-emerald-700'>
@@ -583,6 +678,15 @@ ${rows ? `<table border="1" cellpadding="8" cellspacing="0" style="border-collap
                 </div>
               )}
             </div>
+
+            {canShowCorrections && (
+              <button
+                onClick={() => setShowCorrections(true)}
+                className='w-full flex items-center justify-center gap-2 h-12 rounded-2xl bg-[#002EFF] text-white font-black text-[11px] uppercase tracking-wide hover:bg-blue-700 active:scale-[0.98] transition-all'
+              >
+                <BookOpenCheck size={15} /> View corrections
+              </button>
+            )}
 
             <button
               onClick={downloadResult}
