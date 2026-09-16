@@ -173,11 +173,14 @@ export default function QuizBuilder() {
   }, [loadList])
 
   // Load the student roster once, for the "assign to selected students" picker.
+  // Uses the staff/students endpoint (admin passes the gate too), so this panel
+  // works for both admins and quiz-permitted staff without needing admin-only
+  // /admin/users access.
   useEffect(() => {
     let cancelled = false
     ;(async () => {
       try {
-        const rows = (await dsaApi.admin.listUsers('student', token)) as Record<
+        const rows = (await dsaApi.staff.students(token)) as Record<
           string,
           unknown
         >[]
