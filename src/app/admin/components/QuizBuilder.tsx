@@ -1226,6 +1226,8 @@ function AttemptsPanel({ quizId, token }: { quizId: string; token?: string }) {
     Record<string, { subject: string }>
   >({})
   const [detailLoading, setDetailLoading] = useState(false)
+  // Which public (free-quiz) taker's breakdown is expanded.
+  const [openPublic, setOpenPublic] = useState<string | null>(null)
 
   // Load the per-question results + the quiz's question→subject map, once.
   const loadDetailData = useCallback(async () => {
@@ -1284,6 +1286,33 @@ function AttemptsPanel({ quizId, token }: { quizId: string; token?: string }) {
     })
     const correct = answers.filter((a) => a.isCorrect).length
     return { bySubject, correct, total: answers.length, answers }
+  }
+
+  // Per-subject breakdown for a public (free-quiz) taker, from their stored
+  // answers joined onto the quiz's question→subject map.
+  const publicBreakdownFor = (r: Record<string, unknown>) => {
+    const answers = Array.isArray(r.answers)
+      ? (r.answers as Record<string, unknown>[])
+      : []
+    if (!answers.length) return null
+    const bySubject: Record<string, { correct: number; total: number }> = {}
+    answers.forEach((a) => {
+      const subj = questionMap[str(a.questionId)]?.subject || 'General'
+      if (!bySubject[subj]) bySubject[subj] = { correct: 0, total: 0 }
+      bySubject[subj].total += 1
+      if (a.isCorrect) bySubject[subj].correct += 1
+    })
+    const correct = answers.filter((a) => a.isCorrect).length
+    return { bySubject, correct, total: answers.length }
+  }
+
+  const openPublicTaker = (id: string) => {
+    if (openPublic === id) {
+      setOpenPublic(null)
+      return
+    }
+    setOpenPublic(id)
+    loadDetailData() // ensures the question→subject map is loaded
   }
 
   const load = useCallback(async () => {
@@ -1387,25 +1416,85 @@ function AttemptsPanel({ quizId, token }: { quizId: string; token?: string }) {
                 Public quiz takers ({publicAttempts.length})
               </p>
               <div className='space-y-1.5'>
-                {publicAttempts.map((r) => (
-                  <div
-                    key={str(r.id ?? r._id ?? r.email)}
-                    className='rounded-xl bg-white px-3 py-2 flex items-center gap-2'
-                  >
-                    <div className='min-w-0 flex-1'>
-                      <p className='text-[12px] font-black text-slate-800 truncate'>
-                        {str(r.name ?? 'Anonymous')}
-                      </p>
-                      <p className='text-[10px] font-medium text-slate-400 truncate'>
-                        {str(r.email ?? '')}
-                        {r.phone ? ` · ${str(r.phone)}` : ''}
-                      </p>
+                {publicAttempts.map((r) => {
+                  const id = str(r.id ?? r._id ?? r.email)
+                  const isOpen = openPublic === id
+                  const hasAnswers =
+                    Array.isArray(r.answers) && (r.answers as unknown[]).length > 0
+                  const bd = isOpen ? publicBreakdownFor(r) : null
+                  return (
+                    <div
+                      key={id}
+                      className='rounded-xl bg-white overflow-hidden'
+                    >
+                      <div className='px-3 py-2 flex items-center gap-2'>
+                        <div className='min-w-0 flex-1'>
+                          <p className='text-[12px] font-black text-slate-800 truncate'>
+                            {str(r.name ?? 'Anonymous')}
+                          </p>
+                          <p className='text-[10px] font-medium text-slate-400 truncate'>
+                            {str(r.email ?? '')}
+                            {r.phone ? ` · ${str(r.phone)}` : ''}
+                          </p>
+                        </div>
+                        <span className='text-[11px] font-black text-[#002EFF] shrink-0'>
+                          {pctOf(r)}%
+                        </span>
+                        {hasAnswers && (
+                          <button
+                            onClick={() => openPublicTaker(id)}
+                            className='shrink-0 text-[9px] font-black uppercase text-[#002EFF] hover:underline'
+                          >
+                            {isOpen ? 'Hide' : 'View'}
+                          </button>
+                        )}
+                      </div>
+                      {isOpen && (
+                        <div className='px-3 pb-3 pt-1 bg-slate-50 space-y-2'>
+                          {detailLoading && !bd ? (
+                            <div className='py-2 flex justify-center'>
+                              <Loader2
+                                className='animate-spin text-[#002EFF]'
+                                size={14}
+                              />
+                            </div>
+                          ) : bd ? (
+                            <>
+                              <p className='text-[9px] font-black uppercase tracking-widest text-slate-400'>
+                                {bd.correct}/{bd.total} correct
+                              </p>
+                              {Object.entries(bd.bySubject).map(([subj, v]) => {
+                                const sp = v.total
+                                  ? Math.round((v.correct / v.total) * 100)
+                                  : 0
+                                return (
+                                  <div key={subj}>
+                                    <div className='flex items-center justify-between text-[10px] font-bold'>
+                                      <span className='text-slate-600'>{subj}</span>
+                                      <span className='text-slate-400'>
+                                        {v.correct}/{v.total} · {sp}%
+                                      </span>
+                                    </div>
+                                    <div className='h-1.5 bg-slate-200 rounded-full overflow-hidden'>
+                                      <div
+                                        className={`h-full rounded-full ${sp >= 50 ? 'bg-emerald-500' : 'bg-rose-400'}`}
+                                        style={{ width: `${sp}%` }}
+                                      />
+                                    </div>
+                                  </div>
+                                )
+                              })}
+                            </>
+                          ) : (
+                            <p className='text-[10px] font-bold text-slate-400'>
+                              No per-question detail for this attempt.
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </div>
-                    <span className='text-[11px] font-black text-[#002EFF] shrink-0'>
-                      {pctOf(r)}%
-                    </span>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           )}
