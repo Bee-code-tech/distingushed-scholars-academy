@@ -19,6 +19,8 @@ import {
   BarChart3,
   Download,
   BookOpenCheck,
+  LayoutGrid,
+  X,
 } from 'lucide-react'
 import { dsaApi } from '@/lib/api'
 import RichText from '@/components/ui/RichText'
@@ -73,6 +75,38 @@ function fmt(sec: number): string {
   return `${m}:${String(s).padStart(2, '0')}`
 }
 
+/** The numbered question palette — jump to any question; blue = answered. */
+function QuestionMap({
+  questions,
+  answers,
+  onPick,
+}: {
+  questions: RunQuestion[]
+  answers: Record<string, number>
+  onPick?: () => void
+}) {
+  return (
+    <div className='flex flex-wrap gap-1.5'>
+      {questions.map((q, i) => {
+        const done = answers[q.questionId] !== undefined
+        return (
+          <a
+            key={q.questionId || i}
+            href={`#pq-${i}`}
+            onClick={onPick}
+            title={done ? 'Answered' : 'Not answered'}
+            className={`h-8 w-8 rounded-lg text-[11px] font-black flex items-center justify-center ${
+              done ? 'bg-[#002EFF] text-white' : 'bg-slate-100 text-slate-500'
+            }`}
+          >
+            {i + 1}
+          </a>
+        )
+      })}
+    </div>
+  )
+}
+
 export default function PublicQuizPage() {
   const params = useParams()
   const router = useRouter()
@@ -97,6 +131,7 @@ export default function PublicQuizPage() {
   const [confirmSubmit, setConfirmSubmit] = useState(false)
   const [alreadyTaken, setAlreadyTaken] = useState(false)
   const [showCorrections, setShowCorrections] = useState(false)
+  const [showMap, setShowMap] = useState(false) // mobile question-map drawer
   const totalTime = useRef(0)
 
   // One attempt per device: a flag (with the last result) is stored under the
@@ -470,31 +505,13 @@ ${rows ? `<table border="1" cellpadding="8" cellspacing="0" style="border-collap
               {answered}/{questions.length} answered
             </p>
 
-            {/* Question map — jump to any question; blue = answered */}
-            <div className='bg-white rounded-2xl shadow-sm p-3'>
+            {/* Question map — sticky on the SIDE (right) on wide screens. */}
+            <aside className='hidden xl:block fixed right-4 top-24 w-44 max-h-[calc(100vh-8rem)] overflow-y-auto bg-white rounded-2xl shadow-sm p-3 z-30'>
               <p className='text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2'>
                 Question map
               </p>
-              <div className='flex flex-wrap gap-1.5'>
-                {questions.map((q, i) => {
-                  const done = answers[q.questionId] !== undefined
-                  return (
-                    <a
-                      key={q.questionId || i}
-                      href={`#pq-${i}`}
-                      title={done ? 'Answered' : 'Not answered'}
-                      className={`h-8 w-8 rounded-lg text-[11px] font-black flex items-center justify-center ${
-                        done
-                          ? 'bg-[#002EFF] text-white'
-                          : 'bg-slate-100 text-slate-500'
-                      }`}
-                    >
-                      {i + 1}
-                    </a>
-                  )
-                })}
-              </div>
-            </div>
+              <QuestionMap questions={questions} answers={answers} />
+            </aside>
 
             {questions.map((q, i) => (
               <div
@@ -555,6 +572,46 @@ ${rows ? `<table border="1" cellpadding="8" cellspacing="0" style="border-collap
             </button>
             {showCalc && (
               <ScientificCalculator onClose={() => setShowCalc(false)} />
+            )}
+
+            {/* Mobile / tablet: floating toggle opens the question map as a
+                side panel (kept off the top). Hidden on xl where the sticky
+                sidebar is always visible. */}
+            <button
+              onClick={() => setShowMap(true)}
+              className='xl:hidden fixed bottom-6 left-6 z-40 h-12 px-4 rounded-2xl bg-white text-[#002EFF] shadow-xl flex items-center gap-2 active:scale-95'
+              title='Question map'
+            >
+              <LayoutGrid size={18} />
+              <span className='text-[10px] font-black uppercase tracking-wide tabular-nums'>
+                {answered}/{questions.length}
+              </span>
+            </button>
+            {showMap && (
+              <div className='xl:hidden fixed inset-0 z-50 flex'>
+                <div
+                  className='flex-1 bg-black/40'
+                  onClick={() => setShowMap(false)}
+                />
+                <div className='w-64 max-w-[80%] h-full bg-white shadow-2xl p-4 overflow-y-auto'>
+                  <div className='flex items-center justify-between mb-3'>
+                    <p className='text-[10px] font-black uppercase tracking-widest text-slate-400'>
+                      Question map
+                    </p>
+                    <button
+                      onClick={() => setShowMap(false)}
+                      className='h-8 w-8 flex items-center justify-center rounded-lg bg-slate-100 text-slate-500'
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                  <QuestionMap
+                    questions={questions}
+                    answers={answers}
+                    onPick={() => setShowMap(false)}
+                  />
+                </div>
+              </div>
             )}
 
             {/* Submit confirmation */}
