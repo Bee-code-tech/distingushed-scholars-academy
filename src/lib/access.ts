@@ -4,8 +4,9 @@
 //   portal   — paid the ₦2,000 portal-access fee
 //   tutorial — active tutorial student (paid tutorial fee, until expiry)
 //
-// BETA: `PAYWALL_ENABLED` is OFF, so every gate below returns "allowed" and the
-// whole portal stays open while people test. Flip it on at launch to enforce.
+// `PAYWALL_ENABLED` is ON by default: free accounts see locked features until
+// they pay to unlock a track/tier (from the dashboard's Unlock plans). Set
+// NEXT_PUBLIC_PAYWALL_ENABLED=false to reopen the whole portal (e.g. for a beta).
 
 import type { User } from './types'
 
@@ -18,11 +19,11 @@ export type GatedFeature =
   | 'materials'
 
 /**
- * Master paywall switch. OFF during beta so nothing is blocked. Turn on with
- * NEXT_PUBLIC_PAYWALL_ENABLED=true at launch.
+ * Master paywall switch. ON by default so free accounts are gated until they
+ * pay to unlock. Set NEXT_PUBLIC_PAYWALL_ENABLED=false to open the whole portal.
  */
 export const PAYWALL_ENABLED =
-  process.env.NEXT_PUBLIC_PAYWALL_ENABLED === 'true'
+  process.env.NEXT_PUBLIC_PAYWALL_ENABLED !== 'false'
 
 /** Admin-editable caps for how much L1/L2 can access (L3 is unlimited). */
 export interface AccessCaps {
