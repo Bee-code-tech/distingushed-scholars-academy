@@ -212,8 +212,9 @@ export default function VerifyOTP() {
         <p className='text-[10px] font-bold text-gray-400 mt-2 uppercase tracking-[0.2em]'>
           We sent a code to <span className='text-[#002EFF]'>{email}</span>
         </p>
-        <p className='text-[10px] font-black text-[#FCB900] mt-1 uppercase tracking-widest'>
-          Demo code: 1111
+        <p className='text-[10px] font-bold text-gray-400 mt-1 tracking-wide normal-case'>
+          Enter the 4-digit code from your email. Check spam if you don&apos;t see
+          it, or tap “Request New Code”.
         </p>
       </div>
 

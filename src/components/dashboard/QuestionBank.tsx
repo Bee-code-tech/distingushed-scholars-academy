@@ -260,31 +260,63 @@ export default function QuestionBank({ token }: { token?: string }) {
     try {
       const buf = await file.arrayBuffer()
       const wb = XLSX.read(buf, { type: 'array' })
-      const rows = XLSX.utils.sheet_to_json(
-        wb.Sheets[wb.SheetNames[0]],
-      ) as Record<string, unknown>[]
       const cell = (v: unknown) => (v == null ? '' : String(v))
+      // Match headers loosely: ignore case, spaces and punctuation, and accept
+      // common variants — so "QUESTION", "Questions", "Option A", "Correct
+      // Answer", "Marks" etc. all work, not just the exact template names.
+      const norm = (k: unknown) =>
+        String(k).toLowerCase().replace(/[^a-z0-9]/g, '')
+      const get = (row: Record<string, unknown>, aliases: string[]) => {
+        const map: Record<string, unknown> = {}
+        for (const k of Object.keys(row)) map[norm(k)] = row[k]
+        for (const a of aliases) {
+          const v = map[norm(a)]
+          if (v != null && String(v).trim() !== '') return cell(v)
+        }
+        return ''
+      }
+      const Q = ['question', 'questions', 'q', 'body', 'item', 'stem']
+      const SUB = ['subject', 'subjects', 'course']
+      const TOP = ['topic', 'topics', 'subtopic']
+      const PAS = ['passage', 'comprehension', 'instruction']
+      const ANS = ['answer', 'correct', 'correctanswer', 'correctoption', 'ans', 'key']
+      const EXP = ['explanation', 'explain', 'reason', 'solution']
+      const MK = ['mark', 'marks', 'score', 'point', 'points', 'weight']
+      const opt = (L: string) => [L, `option${L}`, `opt${L}`, `choice${L}`, `${L})`]
+
+      // Read from whichever sheet actually has a Question column (fall back to
+      // the first sheet so the error still shows if none do).
+      let rows: Record<string, unknown>[] = []
+      for (const name of wb.SheetNames) {
+        const r = XLSX.utils.sheet_to_json(wb.Sheets[name]) as Record<
+          string,
+          unknown
+        >[]
+        if (!rows.length) rows = r
+        if (r.some((x) => get(x, Q).trim())) {
+          rows = r
+          break
+        }
+      }
+
       const payload = rows
-        .filter((r) => cell(r.Question ?? r.Body ?? r.body).trim().length > 0)
+        .filter((r) => get(r, Q).trim().length > 0)
         .map((r) => ({
-          subject: cell(r.Subject ?? r.subject) || 'General',
-          topic: cell(r.Topic ?? r.topic) || undefined,
-          body: withPassage(
-            cell(r.Passage ?? r.passage),
-            cell(r.Question ?? r.Body ?? r.body).trim(),
-          ),
-          A: cell(r.A),
-          B: cell(r.B),
-          C: cell(r.C),
-          D: cell(r.D),
-          E: cell(r.E) || undefined,
-          Answer: (cell(r.Answer) || 'A').toUpperCase(),
-          explanation: cell(r.Explanation ?? r.explanation) || undefined,
-          mark: Number(r.Mark) || 1,
+          subject: get(r, SUB) || 'General',
+          topic: get(r, TOP) || undefined,
+          body: withPassage(get(r, PAS), get(r, Q).trim()),
+          A: get(r, opt('A')),
+          B: get(r, opt('B')),
+          C: get(r, opt('C')),
+          D: get(r, opt('D')),
+          E: get(r, opt('E')) || undefined,
+          Answer: (get(r, ANS) || 'A').toUpperCase().trim(),
+          explanation: get(r, EXP) || undefined,
+          mark: Number(get(r, MK)) || 1,
         }))
       if (!payload.length) {
         setError(
-          'No questions found. Use columns: Subject, Topic, Passage, Question, A, B, C, D, E, Answer, Explanation, Mark.',
+          'No questions found. Your sheet needs a "Question" column (plus A, B, C, D and Answer). The header row must be the first row; column names are flexible (any case) — e.g. Question/Questions, "Option A" or A, Answer/Correct.',
         )
         return
       }
@@ -373,17 +405,19 @@ export default function QuestionBank({ token }: { token?: string }) {
           <Plus size={14} /> Add a question
         </p>
         <div className='grid grid-cols-1 sm:grid-cols-3 gap-2'>
-          <select
+          {/* Pick a standard subject OR type your own (e.g. CRS, IRS). */}
+          <input
+            list='dsa-subject-options'
             value={form.subject}
             onChange={(e) => setForm((f) => ({ ...f, subject: e.target.value }))}
+            placeholder='Subject — pick or type your own'
             className='h-10 px-3 rounded-lg bg-slate-50 outline-none text-sm font-bold sm:col-span-2'
-          >
+          />
+          <datalist id='dsa-subject-options'>
             {JAMB_SUBJECTS.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
+              <option key={s} value={s} />
             ))}
-          </select>
+          </datalist>
           <input
             value={form.topic}
             onChange={(e) => setForm((f) => ({ ...f, topic: e.target.value }))}
