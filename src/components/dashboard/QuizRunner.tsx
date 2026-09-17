@@ -369,9 +369,35 @@ export default function QuizRunner() {
     setError(null)
     setSavedOffline(false)
     setResult(null)
+    const qid = str(q.id ?? q._id)
+    const maxA = Number(q.maxAttempts) || 0
+    // Enforce the attempt limit BEFORE loading any questions — re-check a fresh
+    // count (the list can be stale right after a submit), so a student who's
+    // used all attempts can't reopen the quiz only to be blocked at submit.
+    if (maxA > 0) {
+      try {
+        const mine = (await dsaApi.quizzes.myResults(token)) as Record<
+          string,
+          unknown
+        >[]
+        const used = (Array.isArray(mine) ? mine : []).filter(
+          (r) => !r.withdrawn && str(r.quizId) === qid,
+        ).length
+        if (used >= maxA) {
+          setMyResults(Array.isArray(mine) ? mine : [])
+          setError(
+            'You have already used all your attempts for this quiz. Open "My History" to view your last attempt’s corrections.',
+          )
+          setView('list')
+          return
+        }
+      } catch {
+        /* couldn't check — the backend still blocks over-limit at submit */
+      }
+    }
     setLoading(true)
     try {
-      const full = (await dsaApi.quizzes.get(str(q.id ?? q._id), token)) as Record<
+      const full = (await dsaApi.quizzes.get(qid, token)) as Record<
         string,
         unknown
       >
@@ -717,25 +743,48 @@ export default function QuizRunner() {
       )
     }
 
-    // The numbered palette — blue = answered, amber ring = on the current page.
+    // Group question numbers by subject (JAMB-style subject navigation).
+    const bySubject: { subject: string; items: number[] }[] = []
+    questions.forEach((q, i) => {
+      const subj = q.subject || 'General'
+      let g = bySubject.find((x) => x.subject === subj)
+      if (!g) {
+        g = { subject: subj, items: [] }
+        bySubject.push(g)
+      }
+      g.items.push(i)
+    })
+    // The palette — blue = answered, amber ring = on the current page.
     const mapGrid = (
-      <div className='flex flex-wrap gap-1.5'>
-        {questions.map((q, i) => {
-          const done = answers[q.questionId] !== undefined
-          const onPage = i >= startIdx && i < startIdx + pp
-          return (
-            <button
-              key={q.questionId || i}
-              onClick={() => jumpTo(i)}
-              title={done ? 'Answered' : 'Not answered'}
-              className={`h-8 w-8 rounded-lg text-[11px] font-black flex items-center justify-center ${
-                done ? 'bg-[#002EFF] text-white' : 'bg-slate-100 text-slate-500'
-              } ${onPage ? 'ring-2 ring-[#FCB900]' : ''}`}
-            >
-              {i + 1}
-            </button>
-          )
-        })}
+      <div className='space-y-2.5'>
+        {bySubject.map((g) => (
+          <div key={g.subject}>
+            {bySubject.length > 1 && (
+              <p className='text-[9px] font-black uppercase tracking-wide text-[#002EFF] mb-1'>
+                {g.subject}
+              </p>
+            )}
+            <div className='flex flex-wrap gap-1.5'>
+              {g.items.map((i) => {
+                const q = questions[i]
+                const done = answers[q.questionId] !== undefined
+                const onPage = i >= startIdx && i < startIdx + pp
+                return (
+                  <button
+                    key={q.questionId || i}
+                    onClick={() => jumpTo(i)}
+                    title={done ? 'Answered' : 'Not answered'}
+                    className={`h-8 w-8 rounded-lg text-[11px] font-black flex items-center justify-center ${
+                      done ? 'bg-[#002EFF] text-white' : 'bg-slate-100 text-slate-500'
+                    } ${onPage ? 'ring-2 ring-[#FCB900]' : ''}`}
+                  >
+                    {i + 1}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        ))}
       </div>
     )
 
@@ -844,6 +893,11 @@ export default function QuizRunner() {
             <div className='flex items-start gap-2 mb-3'>
               <span className='text-[11px] font-black text-[#002EFF]'>{i + 1}.</span>
               <div className='flex-1'>
+                {q.subject && (
+                  <span className='inline-block mb-1.5 text-[8px] font-black uppercase tracking-wide bg-blue-50 text-[#002EFF] px-1.5 py-0.5 rounded'>
+                    {q.subject}
+                  </span>
+                )}
                 <RichText className='text-[13px] font-bold text-slate-800'>
                   {q.questionText}
                 </RichText>
