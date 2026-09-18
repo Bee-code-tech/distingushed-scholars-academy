@@ -195,11 +195,16 @@ export default function ForgotPassword() {
                   <CheckCircle2 size={40} />
                 </div>
                 <h2 className='text-2xl font-black text-zinc-900 uppercase mb-3'>
-                  Email Sent!
+                  Check your inbox
                 </h2>
+                {/* The API answers the same way for an address it does not
+                    know, so it cannot be used to discover who has an account.
+                    The wording has to match that. */}
                 <p className='text-gray-500 text-sm font-medium mb-6 px-4'>
-                  We've sent a link to{' '}
-                  <span className='text-[#002EFF] font-bold'>{userEmail}</span>.
+                  If{' '}
+                  <span className='text-[#002EFF] font-bold'>{userEmail}</span>{' '}
+                  belongs to an account, a reset link is on its way. Check spam
+                  if it does not arrive shortly.
                 </p>
 
                 <div className='space-y-4 mb-10'>

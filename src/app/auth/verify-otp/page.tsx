@@ -41,10 +41,13 @@ const formSchema = z.object({
     .regex(/^\d{4}$|^\d{6}$/, 'Enter the full code from your email'),
 })
 
-// Demo verification code. The real flow will verify against the backend; for
-// now any account activates with this code. Keep in sync with the hint shown.
-
 const RESEND_COOLDOWN = 180
+
+const slotClass =
+  'w-10 h-14 sm:w-12 sm:h-16 text-xl sm:text-2xl font-black rounded-2xl ' +
+  'border-none bg-gray-50 data-[active=true]:bg-white ' +
+  'data-[active=true]:ring-2 data-[active=true]:ring-[#002EFF] ' +
+  'transition-colors'
 
 export default function VerifyOTP() {
   const [email, setEmail] = useState<string | null>(null)
@@ -53,6 +56,9 @@ export default function VerifyOTP() {
   const [countdown, setCountdown] = useState(0)
   const [apiError, setApiError] = useState<string | null>(null)
   const [apiSuccess, setApiSuccess] = useState<string | null>(null)
+  // The server throws a code away after too many wrong guesses. When that
+  // happens the only way forward is a new one, so say exactly that.
+  const [needsNewCode, setNeedsNewCode] = useState(false)
   const router = useRouter()
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -108,6 +114,8 @@ export default function VerifyOTP() {
       const res = await dsaApi.auth.sendOtp(email)
 
       setApiSuccess(res?.message || 'A fresh verification code has been sent.')
+      setNeedsNewCode(false)
+      form.setValue('otp', '')
       startCooldown()
     } catch (error) {
       setApiError(
@@ -149,11 +157,19 @@ export default function VerifyOTP() {
           'We could not reach the server just now. Wait a moment and press Verify again — your code is still valid.',
         )
       } else {
-        setApiError(
+        const message =
           err instanceof Error
             ? err.message
-            : 'Invalid or expired code. Please try again.',
-        )
+            : 'Invalid or expired code. Please try again.'
+
+        // Five wrong guesses and the server discards the code. Free the resend
+        // button immediately — waiting out the cooldown would be pointless.
+        if (/too many incorrect/i.test(message)) {
+          setNeedsNewCode(true)
+          setCountdown(0)
+          localStorage.removeItem('otp_expiry')
+        }
+        setApiError(message)
         form.setValue('otp', '')
       }
     } finally {
@@ -188,7 +204,7 @@ export default function VerifyOTP() {
       <Card className='w-full max-w-md rounded-[48px] shadow-2xl border-none overflow-hidden bg-white'>
         <div className='h-2 bg-[#002EFF]' />
 
-        <CardContent className='p-8 md:p-12'>
+        <CardContent className='px-5 py-8 sm:p-10 md:p-12'>
           <AnimatePresence mode='wait'>
             {(apiError || apiSuccess) && (
               <motion.div
@@ -222,24 +238,45 @@ export default function VerifyOTP() {
                       Enter Security Code
                     </FormLabel>
                     <FormControl>
-                      {/* FIXED: Using direct child pattern to prevent the 'undefined (reading 0)' crash */}
+                      {/* Direct-child pattern — the wrapper form of this
+                          component crashes on 'undefined (reading 0)'. */}
                       <InputOTP
                         maxLength={6}
                         {...field}
                         onComplete={() => form.handleSubmit(onSubmit)()}
+                        containerClassName={needsNewCode ? 'opacity-40' : ''}
                       >
-                        <InputOTPGroup className='gap-1.5 md:gap-2'>
-                          {[0, 1, 2, 3, 4, 5].map((idx) => (
+                        {/* Two groups of three: a six-digit code is far easier
+                            to read back from an email in halves, and it still
+                            fits a 320px screen. */}
+                        <InputOTPGroup className='gap-1.5 sm:gap-2.5'>
+                          {[0, 1, 2].map((idx) => (
                             <InputOTPSlot
                               key={idx}
                               index={idx}
-                              className='w-9 h-12 md:w-11 md:h-14 text-xl md:text-2xl font-black rounded-xl border-none bg-gray-50 focus-visible:ring-2 focus-visible:ring-[#002EFF]'
+                              className={slotClass}
+                            />
+                          ))}
+                        </InputOTPGroup>
+                        <span
+                          aria-hidden
+                          className='mx-1.5 sm:mx-2 h-0.5 w-2.5 sm:w-3 rounded-full bg-gray-200'
+                        />
+                        <InputOTPGroup className='gap-1.5 sm:gap-2.5'>
+                          {[3, 4, 5].map((idx) => (
+                            <InputOTPSlot
+                              key={idx}
+                              index={idx}
+                              className={slotClass}
                             />
                           ))}
                         </InputOTPGroup>
                       </InputOTP>
                     </FormControl>
-                    <FormMessage className='text-[10px] text-center font-bold mt-4 uppercase' />
+                    <p className='mt-4 text-[10px] font-bold text-gray-400 text-center'>
+                      Six digits, and it expires ten minutes after it was sent.
+                    </p>
+                    <FormMessage className='text-[10px] text-center font-bold mt-2 uppercase' />
                   </FormItem>
                 )}
               />
@@ -247,7 +284,7 @@ export default function VerifyOTP() {
               <div className='space-y-4'>
                 <Button
                   type='submit'
-                  disabled={isLoading || otpValue.length < 4}
+                  disabled={isLoading || needsNewCode || otpValue.length < 4}
                   className='w-full bg-[#002EFF] hover:bg-blue-700 h-16 rounded-[24px] font-black uppercase tracking-widest text-xs shadow-xl shadow-blue-100 transition-transform active:scale-95'
                 >
                   {isLoading ? (
@@ -260,7 +297,21 @@ export default function VerifyOTP() {
                 </Button>
 
                 <div className='text-center'>
-                  {countdown > 0 ? (
+                  {needsNewCode ? (
+                    <button
+                      type='button'
+                      onClick={handleResendOTP}
+                      disabled={isResending}
+                      className='w-full flex items-center justify-center gap-2 h-14 rounded-[20px] bg-[#FCB900] text-zinc-900 text-[11px] font-black uppercase tracking-widest hover:brightness-95 active:scale-95 transition-all'
+                    >
+                      {isResending ? (
+                        <Loader2 className='animate-spin' size={16} />
+                      ) : (
+                        <RefreshCcw size={16} />
+                      )}
+                      Send me a new code
+                    </button>
+                  ) : countdown > 0 ? (
                     <p className='text-[10px] font-black uppercase text-gray-300 py-3'>
                       Resend available in{' '}
                       <span className='text-zinc-900'>
