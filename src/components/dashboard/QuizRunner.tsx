@@ -1211,15 +1211,17 @@ export default function QuizRunner() {
               className='p-4 rounded-2xl border-none shadow-sm bg-white flex items-center gap-3'
             >
               <div className='min-w-0 flex-1'>
-                <p className='text-sm font-black text-slate-800 truncate flex items-center gap-1.5'>
-                  {str(q.title)}
+                <p className='text-sm font-black text-slate-800 flex items-center gap-1.5 min-w-0'>
+                  {/* truncate must sit on the text itself — a flex parent can't
+                      truncate, which pushed long titles past the viewport. */}
+                  <span className='truncate'>{str(q.title)}</span>
                   {used > 0 && (
                     <span className='text-[8px] font-black uppercase text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded shrink-0'>
                       Taken
                     </span>
                   )}
                 </p>
-                <p className='text-[10px] font-bold text-slate-400'>
+                <p className='text-[10px] font-bold text-slate-400 break-words'>
                   {qCount} question{qCount === 1 ? '' : 's'}
                   {mins > 0 && ` · ${mins} min`}
                   {' · '}
@@ -1229,7 +1231,7 @@ export default function QuizRunner() {
               </div>
               {limitReached ? (
                 <span
-                  className='flex items-center gap-1.5 h-10 px-4 bg-slate-100 text-slate-400 rounded-xl font-black text-[11px] uppercase tracking-wide cursor-not-allowed'
+                  className='shrink-0 flex items-center gap-1.5 h-10 px-4 bg-slate-100 text-slate-400 rounded-xl font-black text-[11px] uppercase tracking-wide cursor-not-allowed'
                   title='You have used all your attempts for this quiz'
                 >
                   <Lock size={14} /> Done
@@ -1237,7 +1239,7 @@ export default function QuizRunner() {
               ) : (
                 <button
                   onClick={() => start(q)}
-                  className='flex items-center gap-1.5 h-10 px-4 bg-[#002EFF] text-white rounded-xl font-black text-[11px] uppercase tracking-wide hover:bg-blue-700'
+                  className='shrink-0 flex items-center gap-1.5 h-10 px-4 bg-[#002EFF] text-white rounded-xl font-black text-[11px] uppercase tracking-wide hover:bg-blue-700 transition-colors'
                 >
                   <Play size={14} /> {used > 0 ? 'Retake' : 'Start'}
                 </button>
