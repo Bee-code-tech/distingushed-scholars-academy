@@ -36,6 +36,7 @@ import {
   Reply,
   SmilePlus,
   ChevronDown,
+  Search,
 } from 'lucide-react'
 import { dsaApi } from '@/lib/api'
 import { getUser } from '@/lib/auth'
@@ -211,6 +212,13 @@ export default function Community({
   const [attachOpen, setAttachOpen] = useState(false)
   // The message the next send will answer (cleared once it goes out).
   const [replyTarget, setReplyTarget] = useState<Msg | null>(null)
+  // Search across the channels this person can open.
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [searchScope, setSearchScope] = useState<'all' | 'files' | 'links'>('all')
+  const [searchHits, setSearchHits] = useState<Msg[] | null>(null)
+  const [searchChannel, setSearchChannel] = useState<Record<string, string>>({})
+  const [searching, setSearching] = useState(false)
   // Everything newer than this was posted since you last had the channel open.
   const [newSince, setNewSince] = useState(0)
   // Only follow new messages when you are already at the bottom — nobody wants
@@ -436,6 +444,34 @@ export default function Community({
     // `atBottom` is a condition here, not a trigger.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages.length])
+
+  const runSearch = useCallback(async () => {
+    const q = searchTerm.trim()
+    if (q.length < 2) return
+    setSearching(true)
+    try {
+      const rows = (await dsaApi.community.search(
+        { q, type: searchScope },
+        token,
+      )) as Record<string, unknown>[]
+      const channelOf: Record<string, string> = {}
+      rows.forEach((r) => {
+        channelOf[str(r.id ?? r._id)] = str(r.channelId || 'general')
+      })
+      setSearchChannel(channelOf)
+      setSearchHits(rows.map(normalize))
+    } catch {
+      setSearchHits([])
+    } finally {
+      setSearching(false)
+    }
+  }, [searchTerm, searchScope, token, normalize])
+
+  const closeSearch = useCallback(() => {
+    setSearchOpen(false)
+    setSearchTerm('')
+    setSearchHits(null)
+  }, [])
 
   const jumpToLatest = useCallback(() => {
     const el = scrollRef.current
@@ -846,8 +882,12 @@ export default function Community({
     )
   }, [mode, token])
 
+  // Unread counts ride along with the channel list, so refresh it on the same
+  // beat as the messages (slower — it is only a badge).
   useEffect(() => {
     loadChannels()
+    const poll = setInterval(loadChannels, 15000)
+    return () => clearInterval(poll)
   }, [loadChannels])
 
   const createChannel = useCallback(async () => {
@@ -1015,6 +1055,17 @@ export default function Community({
               {locked ? 'Locked' : 'Lock'}
             </button>
           )}
+          <button
+            onClick={() => (searchOpen ? closeSearch() : setSearchOpen(true))}
+            className={`inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded-full ${
+              searchOpen
+                ? 'bg-[#002EFF] text-white'
+                : 'bg-slate-100 text-slate-500 hover:text-[#002EFF]'
+            }`}
+            title='Search the community'
+          >
+            <Search size={11} /> Search
+          </button>
           <span className='text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded-full bg-emerald-50 text-emerald-600'>
             {messages.length} message{messages.length === 1 ? '' : 's'}
           </span>
@@ -1038,6 +1089,19 @@ export default function Community({
               >
                 <Hash size={11} className={on ? 'text-white/80' : 'text-slate-400'} />
                 {c.name}
+                {/* What's waiting in the channels you aren't looking at */}
+                {!on && !!c.unread && (
+                  <span
+                    className='ml-0.5 min-w-[18px] rounded-full bg-[#002EFF] px-1.5 py-0.5 text-[9px] font-black text-white tabular-nums'
+                    title={
+                      c.lastMessageSender && c.lastMessageText
+                        ? `${c.lastMessageSender}: ${c.lastMessageText}`
+                        : undefined
+                    }
+                  >
+                    {c.unread > 99 ? '99+' : c.unread}
+                  </span>
+                )}
                 {isAdmin && c.id !== 'general' && (
                   <span
                     role='button'
@@ -1261,6 +1325,104 @@ export default function Community({
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Search — results replace the feed until it is closed */}
+      {searchOpen && (
+        <div className='mb-3 rounded-2xl border border-slate-200 bg-white p-3 space-y-2'>
+          <div className='flex items-center gap-2'>
+            <div className='relative flex-1'>
+              <Search
+                size={13}
+                className='absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400'
+              />
+              <input
+                autoFocus
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') runSearch()
+                  if (e.key === 'Escape') closeSearch()
+                }}
+                placeholder='Search messages, files and links…'
+                className='w-full h-9 pl-8 pr-3 rounded-xl bg-zinc-50 text-[13px] font-medium outline-none focus:bg-white focus:ring-1 focus:ring-[#002EFF]/30'
+              />
+            </div>
+            <button
+              onClick={runSearch}
+              disabled={searchTerm.trim().length < 2 || searching}
+              className='h-9 px-3 rounded-xl bg-[#002EFF] text-white text-[10px] font-black uppercase tracking-wide disabled:opacity-40'
+            >
+              {searching ? <Loader2 size={13} className='animate-spin' /> : 'Find'}
+            </button>
+            <button
+              onClick={closeSearch}
+              className='h-9 w-9 grid place-items-center rounded-xl text-zinc-400 hover:bg-zinc-100'
+              aria-label='Close search'
+            >
+              <X size={14} />
+            </button>
+          </div>
+          <div className='flex items-center gap-1'>
+            {(['all', 'files', 'links'] as const).map((s) => (
+              <button
+                key={s}
+                onClick={() => setSearchScope(s)}
+                className={`px-2.5 h-7 rounded-lg text-[10px] font-black uppercase tracking-wide ${
+                  searchScope === s
+                    ? 'bg-blue-50 text-[#002EFF]'
+                    : 'text-zinc-400 hover:text-zinc-600'
+                }`}
+              >
+                {s === 'all' ? 'Messages' : s}
+              </button>
+            ))}
+          </div>
+
+          {searchHits && (
+            <div className='max-h-72 overflow-y-auto space-y-1.5 custom-scrollbar'>
+              {searchHits.length === 0 ? (
+                <p className='py-4 text-center text-[11px] font-bold text-zinc-400'>
+                  Nothing matched “{searchTerm.trim()}”.
+                </p>
+              ) : (
+                <>
+                  <p className='text-[9px] font-black uppercase tracking-widest text-zinc-400'>
+                    {searchHits.length} result
+                    {searchHits.length === 1 ? '' : 's'}
+                  </p>
+                  {searchHits.map((h) => {
+                    const where = searchChannel[h.id] || 'general'
+                    const channelName =
+                      channels.find((c) => c.id === where)?.name || where
+                    return (
+                      <button
+                        key={h.id}
+                        onClick={() => {
+                          setActiveChannel(where)
+                          closeSearch()
+                        }}
+                        className='w-full text-left rounded-xl bg-zinc-50 px-3 py-2 hover:bg-blue-50/60'
+                      >
+                        <span className='flex items-center gap-1.5 text-[10px] font-black text-[#002EFF]'>
+                          <Hash size={10} />
+                          {channelName}
+                          <span className='font-bold text-zinc-400'>
+                            · {h.senderName} ·{' '}
+                            {new Date(h.createdAt).toLocaleDateString()}
+                          </span>
+                        </span>
+                        <span className='mt-0.5 block text-[12px] font-medium text-zinc-700 line-clamp-2'>
+                          {previewText(h)}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </>
+              )}
+            </div>
+          )}
         </div>
       )}
 

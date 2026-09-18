@@ -1475,6 +1475,31 @@ export const dsaApi = {
         .then((r) => handleResponse<{ data?: unknown }>(r))
         .then((r) => (r as { data?: unknown }).data ?? r),
 
+    // GET /community/search?q=&channelId=&type= — look through the channels
+    // this person can see. `type` narrows to files or links.
+    search: (
+      params: {
+        q: string
+        channelId?: string
+        type?: 'all' | 'messages' | 'files' | 'links'
+      },
+      token?: string,
+    ) => {
+      const qs = new URLSearchParams({ q: params.q })
+      if (params.channelId && params.channelId !== 'general')
+        qs.set('channelId', params.channelId)
+      if (params.type && params.type !== 'all') qs.set('type', params.type)
+      return fetch(`${BASE_URL}/community/search?${qs.toString()}`, {
+        headers: getHeaders(token),
+      })
+        .then((r) =>
+          handleResponse<
+            Record<string, unknown>[] | { data?: Record<string, unknown>[] }
+          >(r),
+        )
+        .then((res) => (Array.isArray(res) ? res : (res?.data ?? [])))
+    },
+
     // POST /community/messages/:id/react — toggle an emoji (tap again removes
     // it). Returns the message with fresh { emoji, count, mine } reactions.
     react: (messageId: string, emoji: string, token?: string) =>

@@ -16,6 +16,12 @@ export interface CommunityChannel {
   kind: 'general' | 'program' | 'custom'
   /** System channels (General) can't be deleted. */
   system?: boolean
+  /** How many messages in here you haven't read (backend-supplied). */
+  unread?: number
+  /** A one-line summary of the last message, for the channel list. */
+  lastMessageText?: string | null
+  lastMessageSender?: string | null
+  lastMessageAt?: number | null
 }
 
 export const GENERAL_CHANNEL: CommunityChannel = {
@@ -66,6 +72,14 @@ export function toChannel(raw: Record<string, unknown>): CommunityChannel {
     category,
     kind,
     system: !!raw.system || raw.id === 'general',
+    unread: typeof raw.unread === 'number' ? raw.unread : 0,
+    lastMessageText: raw.lastMessageText ? String(raw.lastMessageText) : null,
+    lastMessageSender: raw.lastMessageSender
+      ? String(raw.lastMessageSender)
+      : null,
+    lastMessageAt: raw.lastMessageAt
+      ? Date.parse(String(raw.lastMessageAt)) || null
+      : null,
   }
 }
 
