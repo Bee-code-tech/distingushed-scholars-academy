@@ -755,6 +755,7 @@ import {
   CalendarCheck,
   HelpCircle,
   HardDrive,
+  FileSpreadsheet,
 } from 'lucide-react'
 
 // UI Components
@@ -776,6 +777,7 @@ import TakeAttendance from '@/components/dashboard/TakeAttendance'
 import TimetableEditor from '@/components/dashboard/TimetableEditor'
 import Announcements from '@/components/dashboard/Announcements'
 import QuizBuilder from './components/QuizBuilder'
+import QuestionBank from '@/components/dashboard/QuestionBank'
 import CommunityModeration from './components/CommunityModeration'
 import PaymentsAdmin from './components/PaymentsAdmin'
 import RolesPermissions from './components/RolesPermissions'
@@ -793,6 +795,7 @@ type AdminTab =
   | 'view-guardians'
   | 'courses'
   | 'quizzes'
+  | 'question-bank'
   | 'library'
   | 'attendance'
   | 'timetable'
@@ -874,6 +877,11 @@ export default function AdminAdmin() {
       items: [
         { id: 'courses' as AdminTab, label: 'Courses', icon: BookOpen },
         { id: 'quizzes' as AdminTab, label: 'Quizzes', icon: HelpCircle },
+        {
+          id: 'question-bank' as AdminTab,
+          label: 'Question Bank',
+          icon: FileSpreadsheet,
+        },
         { id: 'library' as AdminTab, label: 'Library Pro', icon: HardDrive },
         {
           id: 'attendance' as AdminTab,
@@ -930,6 +938,8 @@ export default function AdminAdmin() {
         return <CourseManager />
       case 'quizzes':
         return <QuizBuilder />
+      case 'question-bank':
+        return <QuestionBank />
       case 'library':
         return <Library />
       case 'create-tutor':

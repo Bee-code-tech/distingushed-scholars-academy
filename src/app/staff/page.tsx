@@ -414,7 +414,7 @@ function PaymentsPanel({
                 Verify Payment
               </h3>
               <p className='text-[11px] font-bold text-slate-400'>
-                {target.name} — ₦2,000 Portal Access Fee
+                {target.name} — confirm the payment you received
               </p>
             </div>
             <label className='space-y-1.5 block'>

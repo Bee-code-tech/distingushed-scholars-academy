@@ -29,6 +29,9 @@ import {
   RotateCcw,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
+import QuizLeaderboard, {
+  type LeaderboardRow,
+} from '@/components/dashboard/QuizLeaderboard'
 import { dsaApi } from '@/lib/api'
 import { canCreateQuiz, canDeleteQuiz } from '@/lib/quizPermissions'
 import { JAMB_SUBJECTS } from '../constants/quiz'
@@ -143,6 +146,7 @@ export default function QuizBuilder() {
   const [maxAttempts, setMaxAttempts] = useState('1')
   const [showResults, setShowResults] = useState(true)
   const [showCorrections, setShowCorrections] = useState(true)
+  const [showLeaderboard, setShowLeaderboard] = useState(true)
   const [blocks, setBlocks] = useState<SubjectBlock[]>([])
   // Subjects that actually have uploaded questions (any label a tutor used),
   // merged with the standard list so nothing is invisible to the admin.
@@ -320,6 +324,7 @@ export default function QuizBuilder() {
       maxAttempts: Math.max(0, parseInt(maxAttempts, 10) || 0),
       showResults,
       showCorrections,
+      showLeaderboard,
       track: effectiveTrack === 'all' ? 'all' : effectiveTrack,
       department: dept,
       audience: audienceLabel(
@@ -436,6 +441,7 @@ export default function QuizBuilder() {
     setMaxAttempts(String(q.maxAttempts ?? 1))
     setShowResults(q.showResults !== false)
     setShowCorrections(q.showCorrections !== false)
+    setShowLeaderboard(q.showLeaderboard !== false)
     setBlocks([])
     // Show the existing shareable link when re-editing a free quiz.
     const existingSlug = str(q.publicLink ?? q.link ?? '')
@@ -773,6 +779,17 @@ export default function QuizBuilder() {
               checked={showCorrections && showResults}
               disabled={!showResults}
               onChange={(e) => setShowCorrections(e.target.checked)}
+              className='h-4 w-4 accent-[#002EFF]'
+            />
+          </label>
+          <label className='flex items-center justify-between gap-3 cursor-pointer'>
+            <span className='text-[11px] font-bold text-slate-600'>
+              Show leaderboard
+            </span>
+            <input
+              type='checkbox'
+              checked={showLeaderboard}
+              onChange={(e) => setShowLeaderboard(e.target.checked)}
               className='h-4 w-4 accent-[#002EFF]'
             />
           </label>
@@ -1444,29 +1461,10 @@ function AttemptsPanel({ quizId, token }: { quizId: string; token?: string }) {
           )}
 
           {board.length > 0 && (
-            <div>
-              <p className='text-[9px] font-black uppercase text-slate-400 mb-1'>
-                Leaderboard
-              </p>
-              <div className='space-y-1'>
-                {board.slice(0, 5).map((r, i) => (
-                  <div
-                    key={str(r.userId ?? r.username ?? i)}
-                    className='flex items-center gap-2 text-[11px] font-bold text-slate-600'
-                  >
-                    <span className='w-5 text-[#FCB900] font-black'>
-                      #{Number(r.rank) || i + 1}
-                    </span>
-                    <span className='flex-1 truncate'>
-                      {str(r.username ?? r.studentName ?? 'Student')}
-                    </span>
-                    <span className='font-black text-[#002EFF]'>
-                      {str(r.score)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <QuizLeaderboard
+              entries={board as unknown as LeaderboardRow[]}
+              subtitle='Top scores on this quiz'
+            />
           )}
 
           {publicAttempts.length > 0 && (

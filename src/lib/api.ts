@@ -299,11 +299,17 @@ export const dsaApi = {
         body: JSON.stringify(payload),
       }).then((r) => handleResponse<{ score: number; total: number }>(r)),
 
+    // GET /quizzes/:id/leaderboard — the API wraps rows in { data }, so unwrap
+    // (returning the envelope made every leaderboard render empty).
     getLeaderboard: (id: string, token?: string) =>
       fetch(`${BASE_URL}/quizzes/${id}/leaderboard`, {
         method: 'GET',
         headers: getHeaders(token),
-      }).then((r) => handleResponse<LeaderboardEntry[]>(r)),
+      })
+        .then((r) =>
+          handleResponse<LeaderboardEntry[] | { data?: LeaderboardEntry[] }>(r),
+        )
+        .then((res) => (Array.isArray(res) ? res : (res?.data ?? []))),
 
     // POST /quizzes/:id/rescore — re-grade all results against current answers
     // (after fixing a wrong correct-answer). Returns { updated }.

@@ -31,6 +31,9 @@ import RichText from '@/components/ui/RichText'
 import QuizCorrections, {
   type CorrectionsData,
 } from '@/components/dashboard/QuizCorrections'
+import QuizLeaderboard, {
+  type LeaderboardRow,
+} from '@/components/dashboard/QuizLeaderboard'
 import { ScientificCalculator } from '@/app/rapid-quiz/components/Calculator'
 import { dsaApi } from '@/lib/api'
 import { getToken, getUser } from '@/lib/auth'
@@ -150,6 +153,9 @@ export default function QuizRunner() {
   const [showCalc, setShowCalc] = useState(false)
   const [confirmSubmit, setConfirmSubmit] = useState(false)
   const [showMap, setShowMap] = useState(false) // mobile question-map drawer
+  // Leaderboard shown on the result screen (when the admin allows it).
+  const [board, setBoard] = useState<LeaderboardRow[]>([])
+  const [boardLoading, setBoardLoading] = useState(false)
   const MAX_BREACHES = 5
 
   const loadList = useCallback(async () => {
@@ -365,6 +371,33 @@ export default function QuizRunner() {
     }
   }, [view, registerBreach])
 
+  // Leaderboard for the result screen — only when the admin left it enabled.
+  useEffect(() => {
+    if (view !== 'result' || !quiz) return
+    if (quiz.showLeaderboard === false) {
+      setBoard([])
+      return
+    }
+    let cancelled = false
+    setBoardLoading(true)
+    ;(async () => {
+      try {
+        const rows = (await dsaApi.quizzes.getLeaderboard(
+          str(quiz.id ?? quiz._id),
+          token,
+        )) as unknown as LeaderboardRow[]
+        if (!cancelled) setBoard(Array.isArray(rows) ? rows : [])
+      } catch {
+        if (!cancelled) setBoard([]) // disabled or unavailable — just hide it
+      } finally {
+        if (!cancelled) setBoardLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [view, quiz, token])
+
   const start = async (q: Record<string, unknown>) => {
     setError(null)
     setSavedOffline(false)
@@ -513,9 +546,15 @@ export default function QuizRunner() {
         ? Math.round((result.totalScore / result.totalMarks) * 100)
         : 0
 
-    // Admin can hide the score and/or corrections for a quiz.
+    // Admin can hide the score, corrections and/or leaderboard for a quiz.
     const canSeeResults = quiz?.showResults !== false
     const canSeeCorrections = quiz?.showCorrections !== false && canSeeResults
+    const canSeeBoard = quiz?.showLeaderboard !== false
+    const meUser = getUser() as
+      | (Record<string, unknown> & { fullName?: string; username?: string })
+      | null
+    const meId = meUser ? str(meUser.id ?? meUser._id) : null
+    const meName = meUser?.fullName || meUser?.username || null
 
     // When results are hidden, just confirm the submission.
     if (!canSeeResults) {
@@ -686,6 +725,17 @@ export default function QuizRunner() {
             <Home size={14} /> Dashboard
           </button>
         </div>
+
+        {/* Leaderboard — hidden when the admin turns it off for this quiz */}
+        {canSeeBoard && (boardLoading || board.length > 0) && (
+          <QuizLeaderboard
+            entries={board}
+            meId={meId}
+            meName={meName}
+            loading={boardLoading}
+            subtitle='How you rank on this quiz'
+          />
+        )}
 
         {/* Corrections — only when allowed and the student chooses to view them */}
         {canSeeCorrections && showCorrections && (

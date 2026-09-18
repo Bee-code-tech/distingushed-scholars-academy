@@ -34,17 +34,10 @@ interface Plan {
   note?: string
 }
 
-// Shown until the admin creates plans on the backend.
+// Shown until the admin creates plans on the backend. The old ₦2,000 "Portal
+// Access" tier is retired — signup is free and Community is open to everyone,
+// so only the tutorial plans are sold.
 const DEFAULT_PLANS: Plan[] = [
-  {
-    id: 'portal',
-    name: 'Portal Access',
-    kind: 'portal',
-    amount: 2000,
-    durationMonths: 0,
-    grantsLevel: 'portal',
-    note: 'One-time — unlocks Community & more of the portal',
-  },
   {
     id: 'silver',
     name: 'Silver — Essential Prep',
@@ -118,7 +111,10 @@ export default function UnlockPlans() {
     setLoading(true)
     try {
       const rows = (await dsaApi.plans.list(token)) as Record<string, unknown>[]
-      setPlans(rows.length ? rows.map(normalizePlan) : DEFAULT_PLANS)
+      // Retired: never show the old one-time "Portal Access" tier, even if a
+      // legacy portal plan is still seeded on the backend.
+      const live = rows.map(normalizePlan).filter((p) => p.kind !== 'portal')
+      setPlans(live.length ? live : DEFAULT_PLANS)
     } catch {
       setPlans(DEFAULT_PLANS) // backend plans not live yet — show defaults
     } finally {

@@ -37,9 +37,6 @@ export const NIGERIAN_STATES = [
   'Osun', 'Oyo', 'Plateau', 'Rivers', 'Sokoto', 'Taraba', 'Yobe', 'Zamfara',
 ] as const
 
-/** The portal-access fee charged once at registration (Naira). */
-export const PORTAL_ACCESS_FEE = 2000
-
 /**
  * Map the chosen programmes onto the dashboard track. Every programme maps to a
  * track now — exam tracks (jamb | waec | postutme) and programme tracks
