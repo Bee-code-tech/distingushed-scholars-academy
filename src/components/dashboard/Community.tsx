@@ -10,7 +10,7 @@
 // only the hosted URL is sent to the API. Messages sync by polling the channel.
 // Role rules are also enforced server-side — this component only shapes the UI.
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import {
   Send,
   Image as ImageIcon,
@@ -35,6 +35,7 @@ import {
   Eye,
   Reply,
   SmilePlus,
+  ChevronDown,
 } from 'lucide-react'
 import { dsaApi } from '@/lib/api'
 import { getUser } from '@/lib/auth'
@@ -145,6 +146,26 @@ function previewText(m: {
   return m.text || ''
 }
 
+/** Messages are grouped under the day they were sent. */
+const dayKey = (ms: number) => new Date(ms).toDateString()
+
+function dayLabel(ms: number): string {
+  const d = new Date(ms)
+  const today = new Date()
+  const yesterday = new Date(today)
+  yesterday.setDate(today.getDate() - 1)
+  if (dayKey(ms) === today.toDateString()) return 'Today'
+  if (dayKey(ms) === yesterday.toDateString()) return 'Yesterday'
+  return d.toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'long',
+    ...(d.getFullYear() === today.getFullYear() ? {} : { year: 'numeric' }),
+  })
+}
+
+/** Where this browser last left each channel, so "New messages" lands right. */
+const seenKey = (channelId: string) => `dsa_community_seen_${channelId}`
+
 function clock(ms: number): string {
   const d = new Date(ms)
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -190,6 +211,12 @@ export default function Community({
   const [attachOpen, setAttachOpen] = useState(false)
   // The message the next send will answer (cleared once it goes out).
   const [replyTarget, setReplyTarget] = useState<Msg | null>(null)
+  // Everything newer than this was posted since you last had the channel open.
+  const [newSince, setNewSince] = useState(0)
+  // Only follow new messages when you are already at the bottom — nobody wants
+  // to be yanked away from something they are reading.
+  const [atBottom, setAtBottom] = useState(true)
+  const msgChannelRef = useRef('')
   // Poll composer (tutors / admins).
   const [pollOpen, setPollOpen] = useState(false)
   const [pollQuestion, setPollQuestion] = useState('')
@@ -334,6 +361,7 @@ export default function Community({
         )) as Record<string, unknown>[]
         const mapped = rows.map(normalize).sort((a, b) => a.createdAt - b.createdAt)
         setMessages(mapped)
+        msgChannelRef.current = activeChannel
         setNotReady(false)
       } catch {
         // The channel endpoint may not be live yet — show a soft notice rather
@@ -376,11 +404,44 @@ export default function Community({
     }
   }, [load, loadSettings])
 
-  // Keep the newest message in view.
+  // Opening a channel: remember where this browser left it, so anything newer
+  // gets the "New messages" line.
+  useEffect(() => {
+    setAtBottom(true)
+    try {
+      setNewSince(Number(localStorage.getItem(seenKey(activeChannel))) || 0)
+    } catch {
+      setNewSince(0)
+    }
+  }, [activeChannel])
+
+  // Move the mark forward as messages arrive (the divider itself stays put
+  // until you leave the channel, so it doesn't vanish while you read).
+  useEffect(() => {
+    if (!messages.length || msgChannelRef.current !== activeChannel) return
+    try {
+      localStorage.setItem(
+        seenKey(activeChannel),
+        String(messages[messages.length - 1].createdAt),
+      )
+    } catch {
+      /* private mode — the divider just won't survive a reload */
+    }
+  }, [messages, activeChannel])
+
+  // Keep the newest message in view, unless you have scrolled up to read.
   useEffect(() => {
     const el = scrollRef.current
-    if (el) el.scrollTop = el.scrollHeight
+    if (el && atBottom) el.scrollTop = el.scrollHeight
+    // `atBottom` is a condition here, not a trigger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages.length])
+
+  const jumpToLatest = useCallback(() => {
+    const el = scrollRef.current
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+    setAtBottom(true)
+  }, [])
 
   const post = useCallback(
     async (body: Parameters<typeof dsaApi.community.send>[0]) => {
@@ -1204,9 +1265,14 @@ export default function Community({
       )}
 
       {/* Message list */}
+      <div className='relative flex-1 min-h-0'>
       <div
         ref={scrollRef}
-        className='flex-1 overflow-y-auto rounded-3xl border border-zinc-200 bg-white p-4 space-y-3 custom-scrollbar'
+        onScroll={(e) => {
+          const el = e.currentTarget
+          setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 80)
+        }}
+        className='h-full overflow-y-auto rounded-3xl border border-zinc-200 bg-white p-4 space-y-3 custom-scrollbar'
       >
         {loading ? (
           <div className='h-full flex items-center justify-center'>
@@ -1225,24 +1291,74 @@ export default function Community({
             </p>
           </div>
         ) : (
-          messages.map((m) => (
-            <MessageBubble
-              key={m.id}
-              m={m}
-              showDelete={isModerator || m.own}
-              canEdit={m.own && m.type === 'text'}
-              canPin={canManage}
-              onDelete={() => remove(m.id)}
-              onEdit={(newText) => editMessage(m.id, newText)}
-              onPin={() => togglePin(m)}
-              onVote={(option) => votePoll(m.id, option)}
-              onSeen={() => loadReads(m.id)}
-              canReply={canCompose && !postingBlocked}
-              onReply={() => setReplyTarget(m)}
-              onReact={(emoji) => react(m.id, emoji)}
-            />
-          ))
+          (() => {
+            let lastDay = ''
+            let dividerPlaced = false
+            return messages.map((m, i) => {
+              const day = dayKey(m.createdAt)
+              const newDay = day !== lastDay
+              lastDay = day
+              const prev = messages[i - 1]
+              // A run of messages from one person within five minutes reads as
+              // one block, the way a phone chat does.
+              const grouped =
+                !newDay &&
+                !!prev &&
+                prev.senderId === m.senderId &&
+                !m.replyTo &&
+                m.createdAt - prev.createdAt < 5 * 60 * 1000
+              const firstUnread =
+                !dividerPlaced && !!newSince && m.createdAt > newSince && !m.own
+              if (firstUnread) dividerPlaced = true
+              return (
+                <Fragment key={m.id}>
+                  {newDay && (
+                    <div className='flex items-center justify-center py-1'>
+                      <span className='sticky top-0 rounded-full bg-zinc-100 px-3 py-1 text-[10px] font-black uppercase tracking-wide text-zinc-500'>
+                        {dayLabel(m.createdAt)}
+                      </span>
+                    </div>
+                  )}
+                  {firstUnread && (
+                    <div className='flex items-center gap-2 py-0.5'>
+                      <span className='h-px flex-1 bg-[#002EFF]/30' />
+                      <span className='text-[9px] font-black uppercase tracking-widest text-[#002EFF]'>
+                        New messages
+                      </span>
+                      <span className='h-px flex-1 bg-[#002EFF]/30' />
+                    </div>
+                  )}
+                  <MessageBubble
+                    m={m}
+                    grouped={grouped}
+                    showDelete={isModerator || m.own}
+                    canEdit={m.own && m.type === 'text'}
+                    canPin={canManage}
+                    onDelete={() => remove(m.id)}
+                    onEdit={(newText) => editMessage(m.id, newText)}
+                    onPin={() => togglePin(m)}
+                    onVote={(option) => votePoll(m.id, option)}
+                    onSeen={() => loadReads(m.id)}
+                    canReply={canCompose && !postingBlocked}
+                    onReply={() => setReplyTarget(m)}
+                    onReact={(emoji) => react(m.id, emoji)}
+                  />
+                </Fragment>
+              )
+            })
+          })()
         )}
+      </div>
+
+      {/* Jump back down — only while you are reading further up */}
+      {!atBottom && messages.length > 0 && (
+        <button
+          onClick={jumpToLatest}
+          className='absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 rounded-full bg-[#002EFF] px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-white shadow-lg hover:bg-blue-700'
+        >
+          <ChevronDown size={13} /> Latest
+        </button>
+      )}
       </div>
 
       {error && (
@@ -1549,6 +1665,7 @@ function AttachItem({
 
 function MessageBubble({
   m,
+  grouped,
   showDelete,
   canEdit,
   canPin,
@@ -1562,6 +1679,8 @@ function MessageBubble({
   onReact,
 }: {
   m: Msg
+  /** Follows another message from the same person, moments earlier. */
+  grouped: boolean
   showDelete: boolean
   canEdit: boolean
   canPin: boolean
@@ -1606,23 +1725,35 @@ function MessageBubble({
   }
 
   return (
-    <div className={`flex gap-2.5 group ${m.own ? 'flex-row-reverse' : ''}`}>
-      <div className='h-8 w-8 shrink-0 rounded-xl bg-zinc-100 border border-zinc-200 flex items-center justify-center text-[10px] font-black text-zinc-600'>
-        {initials || '?'}
-      </div>
+    <div
+      className={`flex gap-2.5 group ${m.own ? 'flex-row-reverse' : ''} ${
+        grouped ? '-mt-2' : ''
+      }`}
+    >
+      {grouped ? (
+        <div className='h-8 w-8 shrink-0' aria-hidden />
+      ) : (
+        <div className='h-8 w-8 shrink-0 rounded-xl bg-zinc-100 border border-zinc-200 flex items-center justify-center text-[10px] font-black text-zinc-600'>
+          {initials || '?'}
+        </div>
+      )}
 
       <div className={`max-w-[76%] ${m.own ? 'items-end' : 'items-start'} flex flex-col`}>
         <div className='flex items-center gap-2 mb-1 px-1'>
-          <span className='text-[11px] font-black text-zinc-700'>
-            {m.own ? 'You' : m.senderName}
-          </span>
-          <span
-            className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded ${roleTint(
-              m.senderRole,
-            )}`}
-          >
-            {roleLabel(m.senderRole)}
-          </span>
+          {!grouped && (
+            <>
+              <span className='text-[11px] font-black text-zinc-700'>
+                {m.own ? 'You' : m.senderName}
+              </span>
+              <span
+                className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded ${roleTint(
+                  m.senderRole,
+                )}`}
+              >
+                {roleLabel(m.senderRole)}
+              </span>
+            </>
+          )}
           <span className='text-[9px] font-medium text-zinc-400'>
             {clock(m.createdAt)}
           </span>
