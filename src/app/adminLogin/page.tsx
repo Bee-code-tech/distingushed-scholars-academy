@@ -1,7 +1,6 @@
 'use client'
 
 import React, { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import {
   ShieldCheck,
   Lock,
@@ -18,11 +17,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
 import { adminApi } from '@/lib/admin-api'
-import {
-  setAdminSession,
-  ADMIN_BYPASS_ENABLED,
-  DEV_ADMIN_EMAIL,
-} from '@/lib/admin-auth'
+import { setAdminSession } from '@/lib/admin-auth'
 
 interface InputFieldProps {
   label: string
@@ -34,7 +29,6 @@ interface InputFieldProps {
 }
 
 export default function AdminLogin() {
-  const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [isSuccess, setIsSuccess] = useState(false)
   const [error, setError] = useState('')
@@ -71,7 +65,6 @@ export default function AdminLogin() {
         setIsSuccess(true)
 
         setTimeout(() => {
-          // router.push('/admin')
           window.location.href = '/admin'
         }, 800)
         return
@@ -82,24 +75,6 @@ export default function AdminLogin() {
       }
     } catch (err: any) {
       console.error('Admin authentication error:', err)
-
-      // Fallback for development bypass if enabled and credentials match
-      if (
-        ADMIN_BYPASS_ENABLED &&
-        values.email === DEV_ADMIN_EMAIL &&
-        values.password === 'dsaadminpass'
-      ) {
-        setAdminSession({
-          token: 'admin-session-active',
-          role: 'super_admin',
-        })
-        setIsSuccess(true)
-
-        setTimeout(() => {
-          router.push('/admin')
-        }, 800)
-        return
-      }
 
       // Extract specific backend error message or fall back to standard alert
       const apiMessage =

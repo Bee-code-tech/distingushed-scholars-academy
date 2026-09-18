@@ -52,16 +52,13 @@ This project uses [`next/font`](https://nextjs.org/docs/app/building-your-applic
 The admin panel is at **`/adminLogin`** (a discreet "Staff Login" link is also in
 the site footer).
 
-| Field       | Value           |
-| ----------- | --------------- |
-| Username    | `admin`         |
-| Email       | `admin@dsa.com` |
-| Access Key  | `dsaadminpass`  |
+Sign in with a real admin account. The backend authenticates it and decides who
+is an admin — `routes/adminRoutes.js` puts `authorize('admin')` in front of the
+admin API — so nothing in this repo can grant admin access on its own.
 
-> ⚠️ **Temporary bypass.** These credentials are hardcoded in the frontend and
-> work everywhere (local and live) while there is no backend admin auth yet.
-> You can switch it off without a code change by setting
-> `NEXT_PUBLIC_ENABLE_ADMIN_BYPASS=false` on the host and redeploying.
+> There used to be a hardcoded bypass here, with its credentials printed in this
+> file. It has been removed. If you need an admin account, ask the backend team
+> to create one; never reintroduce a credential that ships in the browser bundle.
 >
 > This is **not** real security — anyone can read these from the source. Once the
 > database-backed admin login is integrated, **remove this bypass entirely.**

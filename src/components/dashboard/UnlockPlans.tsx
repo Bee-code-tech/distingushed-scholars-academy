@@ -144,9 +144,10 @@ export default function UnlockPlans() {
     try {
       const res = (await dsaApi.payments.initOnline(
         {
+          // The price comes from the plan, server-side. The browser naming a
+          // figure here is how a ₦100 payment buys a ₦20,000 tier.
           planId: selected.id,
           months: isTutorial ? months : selected.durationMonths || undefined,
-          amount: effectiveAmount,
         },
         token,
       )) as { accessCode?: string }
@@ -196,7 +197,6 @@ export default function UnlockPlans() {
         {
           planId: selected.id,
           months: isTutorial ? months : selected.durationMonths || undefined,
-          amount: amountPaid || effectiveAmount,
           method: 'offline',
           reference: reference || undefined,
           proofUrl,

@@ -101,8 +101,12 @@ export function setSession(params: {
   if (user) localStorage.setItem(USER_KEY, JSON.stringify(user))
   const resolvedRole = role || user?.role || 'student'
   localStorage.setItem(ROLE_KEY, resolvedRole)
-  // Cookie is what middleware.ts checks for route protection.
-  document.cookie = `${ADMIN_COOKIE}=true; path=/; max-age=${SESSION_MAX_AGE}; SameSite=Lax`
+  // Cookie is what middleware.ts checks for route protection. It carries the
+  // role too — a student session must not read as an admin one. Secure so it
+  // never travels over plain HTTP.
+  const secure = window.location.protocol === 'https:' ? '; Secure' : ''
+  document.cookie = `${ADMIN_COOKIE}=true; path=/; max-age=${SESSION_MAX_AGE}; SameSite=Lax${secure}`
+  document.cookie = `admin_role=${encodeURIComponent(resolvedRole)}; path=/; max-age=${SESSION_MAX_AGE}; SameSite=Lax${secure}`
 }
 
 /** Clear all session state (logout, or an invalid/expired token). */
@@ -132,16 +136,7 @@ export function getRememberedEmail(): string | null {
   return localStorage.getItem(REMEMBER_EMAIL_KEY)
 }
 
-/**
- * Temporary admin bypass so the panel is reachable everywhere (including the
- * live site) while there is no backend admin auth yet.
- *
- * ⚠️ TEMPORARY: enabled by default. Once the database-backed admin login is
- * integrated, REMOVE this bypass entirely (the credentials are readable in the
- * source, so this is not real security). Until then it can be switched OFF
- * without a code change by setting NEXT_PUBLIC_ENABLE_ADMIN_BYPASS=false.
- */
-export const ADMIN_BYPASS_ENABLED =
-  process.env.NEXT_PUBLIC_ENABLE_ADMIN_BYPASS !== 'false'
-
-export const DEV_ADMIN_EMAIL = 'admin@dsa.com'
+// The hardcoded admin bypass that used to live here has been removed. Admin
+// access is a real login against /api/auth/login; the backend decides who is an
+// admin (routes/adminRoutes.js applies authorize('admin')), and no credential
+// in this bundle can stand in for that.

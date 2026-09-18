@@ -112,17 +112,6 @@
 //   // tutor/guardian/staff/admin login yet; the live API is always tried first.
 //   // Returns true if it handled the sign-in. Remove as those backend endpoints
 //   // ship (demoAccounts.ts, staffStore auth, and the admin bypass).
-//   const tryPreviewLogin = (values: z.infer<typeof loginSchema>): boolean => {
-//     if (
-//       ADMIN_BYPASS_ENABLED &&
-//       values.email === DEV_ADMIN_EMAIL &&
-//       values.password === 'dsaadminpass'
-//     ) {
-//       setSession({ token: 'admin-session-active', role: 'super_admin' })
-//       setSuccessMsg('ADMIN ACCESS GRANTED. REDIRECTING...')
-//       setTimeout(() => router.replace('/admin'), 800)
-//       return true
-//     }
 
 //     const demo = findDemoAccount(values.email, values.password)
 //     if (demo) {
@@ -505,8 +494,6 @@ import {
   rememberEmail,
   getRememberedEmail,
   dashboardPathForRole,
-  ADMIN_BYPASS_ENABLED,
-  DEV_ADMIN_EMAIL,
   getToken,
   getRole,
 } from '@/lib/auth'
@@ -569,22 +556,6 @@ function LoginContent() {
 
   // Local client-side auth fallback handling (Admin Bypass, Demo Accounts, Staff Accounts)
   const tryPreviewLogin = (values: z.infer<typeof loginSchema>): boolean => {
-    if (
-      ADMIN_BYPASS_ENABLED &&
-      values.email === DEV_ADMIN_EMAIL &&
-      values.password === 'dsaadminpass'
-    ) {
-      const adminSessionPayload = {
-        token: 'admin-session-active',
-        role: 'super_admin' as const,
-      }
-      setSession(adminSessionPayload)
-      setAdminSession(adminSessionPayload)
-      setSuccessMsg('ADMIN ACCESS GRANTED. REDIRECTING...')
-      setTimeout(() => router.replace('/admin'), 800)
-      return true
-    }
-
     const demo = findDemoAccount(values.email, values.password)
     if (demo) {
       const role = demo.profile.role || 'student'

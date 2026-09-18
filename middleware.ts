@@ -59,8 +59,10 @@ export function middleware(request: NextRequest) {
       )
     }
 
-    // 2. If cookie contains a role and it's invalid, redirect to unauthorized
-    if (adminRole && !ALLOWED_ADMIN_ROLES.includes(adminRole)) {
+    // 2. A missing role is not a pass — /admin needs an admin role, and only
+    //    the admin sign-in writes one. (This is a convenience gate; the real
+    //    enforcement is authorize('admin') on the API.)
+    if (!adminRole || !ALLOWED_ADMIN_ROLES.includes(adminRole)) {
       console.warn(
         `[Middleware] Access denied for role: "${adminRole}" on ${pathname}`,
       )

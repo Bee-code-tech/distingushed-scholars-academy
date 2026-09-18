@@ -79,11 +79,7 @@ const TOKEN_KEY = 'admin_token'
 const USER_KEY = 'admin_user'
 const ROLE_KEY = 'admin_role'
 
-export const ADMIN_BYPASS_ENABLED =
-  process.env.NEXT_PUBLIC_ENABLE_ADMIN_BYPASS === 'true'
-
-export const DEV_ADMIN_EMAIL =
-  process.env.NEXT_PUBLIC_DEV_ADMIN_EMAIL || 'fawwasolajide@gmail.com'
+// No bypass lives here any more — see the note in lib/auth.ts.
 
 /**
  * List of roles allowed to access /admin routes
@@ -204,8 +200,6 @@ export const clearSession = clearAdminSession
  * Helper to check if user has an authorized admin role
  */
 export function isAdminAuthenticated(): boolean {
-  if (ADMIN_BYPASS_ENABLED) return true
-
   const session = getAdminSession()
   if (!session?.token) return false
 
