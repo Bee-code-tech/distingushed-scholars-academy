@@ -21,6 +21,23 @@ export type LeaderboardRow = {
   timeTaken?: number
 }
 
+/** What this attempt says about where the student is. */
+const BANDS = [
+  { min: 70, label: 'Excellent', tone: 'text-emerald-600', bar: 'bg-emerald-500',
+    note: 'Strong work. Keep this pace and the real thing will feel familiar.' },
+  { min: 60, label: 'Very good', tone: 'text-emerald-600', bar: 'bg-emerald-500',
+    note: 'Nearly there. Tighten the weak topics and you are in the top band.' },
+  { min: 50, label: 'Good', tone: 'text-[#002EFF]', bar: 'bg-[#002EFF]',
+    note: 'A solid base. More practice on the subjects that cost you marks.' },
+  { min: 40, label: 'Fair', tone: 'text-amber-600', bar: 'bg-[#FCB900]',
+    note: 'Half way. Work through the corrections before your next attempt.' },
+  { min: 0, label: 'Practice required', tone: 'text-rose-500', bar: 'bg-rose-500',
+    note: 'Keep practising. Complete more questions to improve your score.' },
+]
+
+const bandFor = (score: number) =>
+  BANDS.find((b) => score >= b.min) ?? BANDS[BANDS.length - 1]
+
 const pct = (v: unknown) => {
   const n = Number(v)
   if (!isFinite(n) || n <= 0) return 0
@@ -159,6 +176,7 @@ export default function QuizLeaderboard({
   title = 'Leaderboard',
   subtitle = 'Compete for the top spot',
   loading = false,
+  me,
 }: {
   entries: LeaderboardRow[]
   meId?: string | null
@@ -166,12 +184,33 @@ export default function QuizLeaderboard({
   title?: string
   subtitle?: string
   loading?: boolean
+  /**
+   * This student's own figures. Position comes from the board itself; the rest
+   * only the caller knows. Omit it on an admin view — the ranking card is for
+   * the person who sat the quiz.
+   */
+  me?: {
+    /** This attempt, as a percentage or a 0–1 fraction. */
+    score?: number
+    /** Their best across every attempt at this quiz. */
+    bestScore?: number
+    questionsAttempted?: number
+    questionsTotal?: number
+  }
 }) {
   const isMe = (r: LeaderboardRow) =>
     (!!meId && !!r.userId && String(r.userId) === String(meId)) ||
     (!meId &&
       !!meName &&
       r.username.trim().toLowerCase() === meName.trim().toLowerCase())
+
+  // Where the student sits on this board, and what to say about it.
+  const myIndex = entries.findIndex((r) => isMe(r))
+  const myRow = myIndex >= 0 ? entries[myIndex] : null
+  const myScore = pct(me?.score ?? myRow?.score ?? 0)
+  const myBest = me?.bestScore != null ? pct(me.bestScore) : null
+  const band = bandFor(myScore)
+  const showRanking = !!me || !!myRow
 
   const top = entries.slice(0, 3)
   const rest = entries.slice(3)
@@ -212,6 +251,77 @@ export default function QuizLeaderboard({
         </div>
       ) : (
         <>
+          {/* Where this student stands — the part they came to read */}
+          {showRanking && (
+            <div className='mb-4 rounded-3xl bg-white p-4 shadow-[0_5px_0_-1px_rgba(15,23,42,0.06),0_14px_28px_-18px_rgba(15,23,42,0.3)]'>
+              <p className='text-[10px] font-black uppercase tracking-widest text-slate-400'>
+                Your ranking
+              </p>
+
+              <div className='mt-1 flex items-end justify-between gap-3'>
+                <div className='min-w-0'>
+                  <p className='text-3xl font-black text-slate-900 tabular-nums leading-none'>
+                    {myScore}%
+                  </p>
+                  <p className={`mt-1 text-[12px] font-black ${band.tone}`}>
+                    {band.label}
+                  </p>
+                </div>
+                {myIndex >= 0 && (
+                  <div className='text-right shrink-0'>
+                    <p className='text-[10px] font-black uppercase tracking-widest text-slate-400'>
+                      Position
+                    </p>
+                    <p className='text-xl font-black text-[#002EFF] tabular-nums leading-tight'>
+                      {myIndex + 1}
+                      <span className='text-slate-300'>/{entries.length}</span>
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* The score as a bar, so it reads at a glance */}
+              <div className='mt-3 h-2 rounded-full bg-slate-100 overflow-hidden'>
+                <div
+                  className={`h-full rounded-full ${band.bar} transition-[width] duration-700`}
+                  style={{ width: `${Math.max(myScore, 2)}%` }}
+                />
+              </div>
+
+              <p className='mt-2.5 text-[11px] font-semibold text-slate-500 leading-relaxed'>
+                {band.note}
+              </p>
+
+              <dl className='mt-3 grid grid-cols-3 gap-2 border-t border-slate-100 pt-3'>
+                {[
+                  // Position already headlines this card, so the row carries
+                  // the size of the field instead of repeating it.
+                  { label: 'Sat this quiz', value: String(entries.length) },
+                  { label: 'Best score', value: myBest != null ? `${myBest}%` : '—' },
+                  {
+                    label: 'Questions',
+                    value:
+                      me?.questionsTotal != null
+                        ? `${me.questionsAttempted ?? 0}/${me.questionsTotal}`
+                        : '—',
+                  },
+                ].map((s) => (
+                  <div key={s.label}>
+                    <dt className='text-[9px] font-black uppercase tracking-widest text-slate-400'>
+                      {s.label}
+                    </dt>
+                    <dd className='text-[13px] font-black text-slate-800 tabular-nums'>
+                      {s.value}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          )}
+
+          <p className='mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400'>
+            Top performers
+          </p>
           {/* Top 3 podium */}
           <div className='grid grid-cols-3 gap-2 sm:gap-3 items-end mb-4'>
             {podium.map(({ row, rank }) => (
@@ -224,7 +334,7 @@ export default function QuizLeaderboard({
             ))}
           </div>
 
-          {/* The rest */}
+          {/* Everyone else, in order */}
           {rest.length > 0 && (
             <ol className='space-y-2'>
               {rest.map((r, i) => {

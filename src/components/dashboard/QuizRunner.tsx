@@ -579,6 +579,17 @@ export default function QuizRunner() {
       )
     }
 
+    // Their best run at this quiz — previous attempts plus the one just made.
+    const quizId = str(quiz?.id ?? quiz?._id)
+    const bestPctForThisQuiz = myResults.reduce((best, r) => {
+      if (r.withdrawn || str(r.quizId) !== quizId) return best
+      // percentage is stored as a fraction (0–1) by the API.
+      const raw = Number(r.percentage)
+      if (!isFinite(raw) || raw <= 0) return best
+      const p = Math.round(raw <= 1 ? raw * 100 : raw)
+      return p > best ? p : best
+    }, pct)
+
     // Per-subject scores: join the breakdown (by questionId) onto the questions
     // we took (which carry the subject) and total the marks per subject.
     const marksById = new Map(
@@ -734,6 +745,13 @@ export default function QuizRunner() {
             meName={meName}
             loading={boardLoading}
             subtitle='How you rank on this quiz'
+            me={{
+              score: pct,
+              // Their best across every attempt at this quiz, this one included.
+              bestScore: bestPctForThisQuiz,
+              questionsAttempted: result.breakdown?.length ?? questions.length,
+              questionsTotal: questions.length,
+            }}
           />
         )}
 
