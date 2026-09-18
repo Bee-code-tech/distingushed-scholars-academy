@@ -1331,6 +1331,8 @@ export const dsaApi = {
         fileSize?: number
         durationSec?: number
         channelId?: string
+        /** Id of the message this one answers (must be in the same channel). */
+        replyTo?: string
         /** For type 'poll' — a plain poll, or a quiz that marks the answer. */
         poll?: {
           question: string
@@ -1468,6 +1470,20 @@ export const dsaApi = {
           method: 'POST',
           headers: getHeaders(token),
           body: JSON.stringify({ option }),
+        },
+      )
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+
+    // POST /community/messages/:id/react — toggle an emoji (tap again removes
+    // it). Returns the message with fresh { emoji, count, mine } reactions.
+    react: (messageId: string, emoji: string, token?: string) =>
+      fetch(
+        `${BASE_URL}/community/messages/${encodeURIComponent(messageId)}/react`,
+        {
+          method: 'POST',
+          headers: getHeaders(token),
+          body: JSON.stringify({ emoji }),
         },
       )
         .then((r) => handleResponse<{ data?: unknown }>(r))

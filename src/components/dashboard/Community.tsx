@@ -33,6 +33,8 @@ import {
   UserMinus,
   BarChart3,
   Eye,
+  Reply,
+  SmilePlus,
 } from 'lucide-react'
 import { dsaApi } from '@/lib/api'
 import { getUser } from '@/lib/auth'
@@ -73,6 +75,24 @@ export interface PollData {
   correctOption?: number
 }
 
+/** The six emoji people may react with — must match the server's list. */
+const REACTIONS = ['👍', '❤️', '😂', '🔥', '👏', '😮']
+
+export interface Reaction {
+  emoji: string
+  count: number
+  /** Whether I am one of the people who tapped it. */
+  mine: boolean
+}
+
+/** Just enough of the answered message to quote it in the bubble. */
+export interface ReplyPreview {
+  id: string
+  senderName: string
+  text: string
+  type: MsgType
+}
+
 interface Msg {
   id: string
   senderId: string
@@ -91,6 +111,10 @@ interface Msg {
   poll?: PollData
   /** How many people have seen it ("seen by", WhatsApp-style). */
   readCount: number
+  /** Emoji tallies, one row per emoji anyone has used. */
+  reactions: Reaction[]
+  /** Set when this message answers another one. */
+  replyTo?: ReplyPreview
 }
 
 // Largest file we let the browser attempt (Cloudinary's unsigned preset caps it
@@ -104,6 +128,21 @@ function humanSize(bytes?: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+/** One line describing a message, for reply bars and quoted blocks. */
+function previewText(m: {
+  type: MsgType
+  text?: string
+  fileName?: string
+  poll?: PollData
+}): string {
+  if (m.type === 'poll') return `📊 ${m.poll?.question ?? 'Poll'}`
+  if (m.type === 'image') return '📷 Photo'
+  if (m.type === 'video') return '🎥 Video'
+  if (m.type === 'audio') return '🎤 Voice note'
+  if (m.type === 'file') return `📄 ${m.fileName || 'Document'}`
+  return m.text || ''
 }
 
 function clock(ms: number): string {
@@ -149,6 +188,8 @@ export default function Community({
   const [error, setError] = useState<string | null>(null)
   const [notReady, setNotReady] = useState(false)
   const [attachOpen, setAttachOpen] = useState(false)
+  // The message the next send will answer (cleared once it goes out).
+  const [replyTarget, setReplyTarget] = useState<Msg | null>(null)
   // Poll composer (tutors / admins).
   const [pollOpen, setPollOpen] = useState(false)
   const [pollQuestion, setPollQuestion] = useState('')
@@ -259,6 +300,26 @@ export default function Community({
         poll: raw.poll ? (raw.poll as unknown as PollData) : undefined,
         readCount:
           typeof raw.readCount === 'number' ? raw.readCount : 0,
+        reactions: Array.isArray(raw.reactions)
+          ? (raw.reactions as Record<string, unknown>[])
+              .map((r) => ({
+                emoji: str(r.emoji),
+                count: typeof r.count === 'number' ? r.count : 0,
+                mine: !!r.mine,
+              }))
+              .filter((r) => r.emoji && r.count > 0)
+          : [],
+        replyTo: raw.replyTo
+          ? (() => {
+              const p = raw.replyTo as Record<string, unknown>
+              return {
+                id: str(p.id ?? p._id),
+                senderName: str(p.senderName) || 'Member',
+                text: str(p.text),
+                type: (str(p.type) || 'text') as MsgType,
+              }
+            })()
+          : undefined,
       }
     },
     [myId, myName],
@@ -326,7 +387,15 @@ export default function Community({
       setError(null)
       setSending(true)
       try {
-        await dsaApi.community.send({ ...body, channelId: activeChannel }, token)
+        await dsaApi.community.send(
+          {
+            ...body,
+            channelId: activeChannel,
+            ...(replyTarget ? { replyTo: replyTarget.id } : {}),
+          },
+          token,
+        )
+        setReplyTarget(null)
         await load(false)
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Could not send message.')
@@ -334,8 +403,46 @@ export default function Community({
         setSending(false)
       }
     },
-    [load, token, activeChannel],
+    [load, token, activeChannel, replyTarget],
   )
+
+  // Tap an emoji to add it, tap it again to take it back. The bubble updates
+  // straight away so it feels instant; the reload settles the real tally.
+  const react = useCallback(
+    async (id: string, emoji: string) => {
+      setMessages((prev) =>
+        prev.map((m) => {
+          if (m.id !== id) return m
+          const existing = m.reactions.find((r) => r.emoji === emoji)
+          if (!existing)
+            return { ...m, reactions: [...m.reactions, { emoji, count: 1, mine: true }] }
+          const count = existing.count + (existing.mine ? -1 : 1)
+          return {
+            ...m,
+            reactions: m.reactions
+              .map((r) =>
+                r.emoji === emoji ? { ...r, count, mine: !r.mine } : r,
+              )
+              .filter((r) => r.count > 0),
+          }
+        }),
+      )
+      try {
+        await dsaApi.community.react(id, emoji, token)
+      } catch {
+        /* the next poll puts the real tally back */
+      }
+      load(false)
+    },
+    [load, token],
+  )
+
+  // Replying to a message you can no longer see (deleted mid-reply) is a dead
+  // end — drop the target when it leaves the feed.
+  useEffect(() => {
+    if (replyTarget && !messages.some((m) => m.id === replyTarget.id))
+      setReplyTarget(null)
+  }, [messages, replyTarget])
 
   const sendText = useCallback(() => {
     const t = text.trim()
@@ -1130,6 +1237,9 @@ export default function Community({
               onPin={() => togglePin(m)}
               onVote={(option) => votePoll(m.id, option)}
               onSeen={() => loadReads(m.id)}
+              canReply={canCompose && !postingBlocked}
+              onReply={() => setReplyTarget(m)}
+              onReact={(emoji) => react(m.id, emoji)}
             />
           ))
         )}
@@ -1149,6 +1259,26 @@ export default function Community({
         </div>
       ) : canCompose ? (
         <div className='pt-3'>
+          {replyTarget && !recording && (
+            <div className='flex items-start gap-2 rounded-t-2xl border border-b-0 border-zinc-200 bg-zinc-50 px-3 py-2'>
+              <span className='mt-0.5 h-full w-0.5 rounded-full bg-[#002EFF] self-stretch' />
+              <div className='min-w-0 flex-1'>
+                <p className='text-[10px] font-black uppercase tracking-wide text-[#002EFF]'>
+                  Replying to {replyTarget.own ? 'yourself' : replyTarget.senderName}
+                </p>
+                <p className='text-[11px] font-medium text-zinc-500 truncate'>
+                  {previewText(replyTarget)}
+                </p>
+              </div>
+              <button
+                onClick={() => setReplyTarget(null)}
+                className='shrink-0 rounded-lg p-1 text-zinc-400 hover:bg-white hover:text-zinc-700'
+                aria-label='Cancel reply'
+              >
+                <X size={13} />
+              </button>
+            </div>
+          )}
           {recording ? (
             <div className='flex items-center gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3'>
               <span className='h-2.5 w-2.5 rounded-full bg-rose-500 animate-pulse' />
@@ -1427,6 +1557,9 @@ function MessageBubble({
   onPin,
   onVote,
   onSeen,
+  canReply,
+  onReply,
+  onReact,
 }: {
   m: Msg
   showDelete: boolean
@@ -1437,9 +1570,13 @@ function MessageBubble({
   onPin: () => void
   onVote: (option: number) => void
   onSeen: () => Promise<{ fullname: string }[]>
+  canReply: boolean
+  onReply: () => void
+  onReact: (emoji: string) => void
 }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(m.text ?? '')
+  const [pickerOpen, setPickerOpen] = useState(false)
   // "Seen by" — names are fetched only when the sender taps the row.
   const [seen, setSeen] = useState<{ fullname: string }[] | null>(null)
   const [seenLoading, setSeenLoading] = useState(false)
@@ -1493,6 +1630,56 @@ function MessageBubble({
             <Pin size={11} className='text-[#002EFF] fill-[#002EFF]/20' />
           )}
           <span className='flex items-center gap-1.5'>
+            <span className='relative'>
+              <button
+                onClick={() => setPickerOpen((v) => !v)}
+                className={`transition-opacity text-zinc-300 hover:text-[#002EFF] ${
+                  pickerOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                }`}
+                aria-label='React to message'
+                aria-expanded={pickerOpen}
+              >
+                <SmilePlus size={12} />
+              </button>
+              {pickerOpen && (
+                <>
+                  <button
+                    className='fixed inset-0 z-10 cursor-default'
+                    onClick={() => setPickerOpen(false)}
+                    aria-label='Close reactions'
+                    tabIndex={-1}
+                  />
+                  <span
+                    className={`absolute z-20 top-5 flex items-center gap-0.5 rounded-2xl border border-zinc-200 bg-white p-1 shadow-lg ${
+                      m.own ? 'right-0' : 'left-0'
+                    }`}
+                  >
+                    {REACTIONS.map((e) => (
+                      <button
+                        key={e}
+                        onClick={() => {
+                          setPickerOpen(false)
+                          onReact(e)
+                        }}
+                        className='h-8 w-8 rounded-xl text-base leading-none hover:bg-zinc-100 active:scale-90 transition-transform'
+                        aria-label={`React ${e}`}
+                      >
+                        {e}
+                      </button>
+                    ))}
+                  </span>
+                </>
+              )}
+            </span>
+            {canReply && (
+              <button
+                onClick={onReply}
+                className='opacity-0 group-hover:opacity-100 transition-opacity text-zinc-300 hover:text-[#002EFF]'
+                aria-label='Reply to message'
+              >
+                <Reply size={12} />
+              </button>
+            )}
             {canPin && (
               <button
                 onClick={onPin}
@@ -1537,6 +1724,39 @@ function MessageBubble({
                 : 'bg-white border border-zinc-200 p-1.5'
           }`}
         >
+          {/* Quoted message — what this one is answering */}
+          {m.replyTo && (
+            <div
+              className={`mb-2 flex gap-2 rounded-xl px-2.5 py-1.5 ${
+                m.type === 'text' && m.own
+                  ? 'bg-white/15'
+                  : 'bg-zinc-50 border border-zinc-100'
+              }`}
+            >
+              <span
+                className={`w-0.5 shrink-0 rounded-full ${
+                  m.type === 'text' && m.own ? 'bg-white/60' : 'bg-[#002EFF]'
+                }`}
+              />
+              <span className='min-w-0'>
+                <span
+                  className={`block text-[10px] font-black ${
+                    m.type === 'text' && m.own ? 'text-white/80' : 'text-[#002EFF]'
+                  }`}
+                >
+                  {m.replyTo.senderName}
+                </span>
+                <span
+                  className={`block text-[11px] font-medium truncate ${
+                    m.type === 'text' && m.own ? 'text-white/70' : 'text-zinc-500'
+                  }`}
+                >
+                  {previewText(m.replyTo)}
+                </span>
+              </span>
+            </div>
+          )}
+
           {m.type === 'poll' && m.poll && (
             <div className='space-y-2'>
               <div className='flex items-start gap-1.5'>
@@ -1690,6 +1910,32 @@ function MessageBubble({
             </a>
           )}
         </div>
+
+        {/* Reactions — tap a chip to join it, tap again to take yours back */}
+        {m.reactions.length > 0 && (
+          <div
+            className={`mt-1 flex flex-wrap gap-1 ${
+              m.own ? 'justify-end' : 'justify-start'
+            }`}
+          >
+            {m.reactions.map((r) => (
+              <button
+                key={r.emoji}
+                onClick={() => onReact(r.emoji)}
+                className={`flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-black tabular-nums transition-colors active:scale-95 ${
+                  r.mine
+                    ? 'border-[#002EFF] bg-blue-50 text-[#002EFF]'
+                    : 'border-zinc-200 bg-white text-zinc-500 hover:border-zinc-300'
+                }`}
+                aria-label={`${r.emoji} ${r.count}`}
+                aria-pressed={r.mine}
+              >
+                <span className='text-[13px] leading-none'>{r.emoji}</span>
+                {r.count}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Seen by — only on your own messages, names on tap (WhatsApp-style) */}
         {m.own && m.readCount > 0 && (
