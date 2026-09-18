@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter, useParams } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
@@ -55,8 +55,20 @@ export default function SetNewPassword() {
   const [error, setError] = useState('')
   const router = useRouter()
 
-  const params = useParams()
-  const token = params?.token as string
+  // The reset token comes in the URL. Read it client-side so it works whether the
+  // email links to `?token=…` (current) or a `/reset-password/<token>` path
+  // (legacy) — this page is a static route, so useParams() can't see it.
+  const [token, setToken] = useState<string | null>(null)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const url = new URL(window.location.href)
+    const q = url.searchParams.get('token')
+    const segs = url.pathname.split('/').filter(Boolean)
+    const last = segs[segs.length - 1]
+    setToken(
+      q || (last && last !== 'reset-password' ? decodeURIComponent(last) : null),
+    )
+  }, [])
 
   const form = useForm<z.infer<typeof resetPasswordSchema>>({
     resolver: zodResolver(resetPasswordSchema),
