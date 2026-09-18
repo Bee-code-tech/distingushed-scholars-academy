@@ -4,7 +4,13 @@
 // one or more subject blocks, each with its own time limit and its chosen
 // questions. See docs/quiz-feature.md.
 
-import { useCallback, useEffect, useState, type ComponentType } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ComponentType,
+} from 'react'
 import {
   Plus,
   Trash2,
@@ -1257,8 +1263,10 @@ function AttemptsPanel({ quizId, token }: { quizId: string; token?: string }) {
     Record<string, Record<string, unknown>>
   >({})
   const [questionMap, setQuestionMap] = useState<
-    Record<string, { subject: string }>
+    Record<string, { subject: string; body: string }>
   >({})
+  // 'attempts' lists who took it; 'analytics' is the cohort view.
+  const [tab, setTab] = useState<'attempts' | 'analytics'>('attempts')
   const [detailLoading, setDetailLoading] = useState(false)
   // Which public (free-quiz) taker's breakdown is expanded.
   const [openPublic, setOpenPublic] = useState<string | null>(null)
@@ -1281,12 +1289,15 @@ function AttemptsPanel({ quizId, token }: { quizId: string; token?: string }) {
         byId[str(r.id ?? r._id)] = r
       })
       setResultsById(byId)
-      const qmap: Record<string, { subject: string }> = {}
+      const qmap: Record<string, { subject: string; body: string }> = {}
       const subjects = Array.isArray(quiz?.subjects) ? quiz.subjects : []
       subjects.forEach((s: Record<string, unknown>) => {
         const qs = Array.isArray(s.questions) ? s.questions : []
         qs.forEach((q: Record<string, unknown>) => {
-          qmap[str(q._id ?? q.id)] = { subject: str(s.name || 'General') }
+          qmap[str(q._id ?? q.id)] = {
+            subject: str(s.name || 'General'),
+            body: str(q.body ?? q.questionText ?? q.question),
+          }
         })
       })
       setQuestionMap(qmap)
@@ -1406,6 +1417,77 @@ function AttemptsPanel({ quizId, token }: { quizId: string; token?: string }) {
     return t > 0 ? Math.round((s / t) * 100) : 0
   }
 
+  // Cohort analytics — how the whole group did, not one student. Scores come
+  // from the attempt rows; the subject and question detail needs the stored
+  // answers, which only load once the Analytics tab is opened.
+  const analytics = useMemo(() => {
+    const scored = [
+      ...attempts.filter((r) => !r.withdrawn),
+      ...publicAttempts,
+    ].map(pctOf)
+    const answered: Record<string, unknown>[][] = [
+      ...Object.values(resultsById),
+      ...publicAttempts,
+    ]
+      .map((r) =>
+        Array.isArray(r.answers) ? (r.answers as Record<string, unknown>[]) : [],
+      )
+      .filter((a) => a.length > 0)
+
+    const bySubject: Record<string, { correct: number; total: number }> = {}
+    const byQuestion: Record<string, { wrong: number; asked: number }> = {}
+    answered.forEach((answers) => {
+      answers.forEach((a) => {
+        const qid = str(a.questionId)
+        const subj = questionMap[qid]?.subject || 'General'
+        if (!bySubject[subj]) bySubject[subj] = { correct: 0, total: 0 }
+        bySubject[subj].total += 1
+        if (a.isCorrect) bySubject[subj].correct += 1
+        if (!byQuestion[qid]) byQuestion[qid] = { wrong: 0, asked: 0 }
+        byQuestion[qid].asked += 1
+        if (!a.isCorrect) byQuestion[qid].wrong += 1
+      })
+    })
+
+    const bucket = (from: number, to: number) =>
+      scored.filter((p) => p >= from && p <= to).length
+
+    return {
+      takers: scored.length,
+      graded: answered.length,
+      avg: scored.length
+        ? Math.round(scored.reduce((s, p) => s + p, 0) / scored.length)
+        : 0,
+      best: scored.length ? Math.max(...scored) : 0,
+      worst: scored.length ? Math.min(...scored) : 0,
+      below40: scored.filter((p) => p < 40).length,
+      buckets: [
+        { label: '0–39%', count: bucket(0, 39), tone: 'bg-rose-400' },
+        { label: '40–59%', count: bucket(40, 59), tone: 'bg-amber-400' },
+        { label: '60–79%', count: bucket(60, 79), tone: 'bg-sky-400' },
+        { label: '80–100%', count: bucket(80, 100), tone: 'bg-emerald-500' },
+      ],
+      subjects: Object.entries(bySubject)
+        .map(([name, v]) => ({
+          name,
+          ...v,
+          pct: v.total ? Math.round((v.correct / v.total) * 100) : 0,
+        }))
+        .sort((a, b) => a.pct - b.pct),
+      missed: Object.entries(byQuestion)
+        .map(([id, v]) => ({
+          id,
+          ...v,
+          rate: v.asked ? Math.round((v.wrong / v.asked) * 100) : 0,
+          body: questionMap[id]?.body || 'Question',
+          subject: questionMap[id]?.subject || 'General',
+        }))
+        .filter((q) => q.wrong > 0)
+        .sort((a, b) => b.rate - a.rate || b.wrong - a.wrong)
+        .slice(0, 6),
+    }
+  }, [attempts, publicAttempts, resultsById, questionMap])
+
   const doRescore = async () => {
     setRescoring(true)
     setRescoreMsg(null)
@@ -1460,6 +1542,30 @@ function AttemptsPanel({ quizId, token }: { quizId: string; token?: string }) {
             <p className='text-[10px] font-bold text-emerald-600'>{rescoreMsg}</p>
           )}
 
+          {/* Attempts vs the cohort view */}
+          <div className='flex items-center gap-1 p-1 rounded-xl bg-white w-fit'>
+            {(['attempts', 'analytics'] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => {
+                  setTab(t)
+                  if (t === 'analytics') loadDetailData()
+                }}
+                className={`px-3 h-7 rounded-lg text-[10px] font-black uppercase tracking-wide transition-colors ${
+                  tab === t
+                    ? 'bg-[#002EFF] text-white'
+                    : 'text-slate-400 hover:text-[#002EFF]'
+                }`}
+              >
+                {t === 'attempts' ? 'Attempts' : 'Analytics'}
+              </button>
+            ))}
+          </div>
+
+          {tab === 'analytics' ? (
+            <AnalyticsView data={analytics} loading={detailLoading} />
+          ) : (
+          <>
           {board.length > 0 && (
             <QuizLeaderboard
               entries={board as unknown as LeaderboardRow[]}
@@ -1666,9 +1772,166 @@ function AttemptsPanel({ quizId, token }: { quizId: string; token?: string }) {
               })}
             </div>
           )}
+          </>
+          )}
         </>
       )}
     </Card>
+  )
+}
+
+/**
+ * The cohort view of one quiz: how the group scored, which subjects are weak
+ * and which questions most people got wrong.
+ */
+function AnalyticsView({
+  data,
+  loading,
+}: {
+  data: {
+    takers: number
+    graded: number
+    avg: number
+    best: number
+    worst: number
+    below40: number
+    buckets: { label: string; count: number; tone: string }[]
+    subjects: { name: string; correct: number; total: number; pct: number }[]
+    missed: {
+      id: string
+      body: string
+      subject: string
+      wrong: number
+      asked: number
+      rate: number
+    }[]
+  }
+  loading: boolean
+}) {
+  if (!data.takers)
+    return (
+      <p className='text-[11px] font-bold text-slate-400'>
+        Nobody has taken this quiz yet, so there is nothing to analyse.
+      </p>
+    )
+
+  const peak = Math.max(...data.buckets.map((b) => b.count), 1)
+
+  return (
+    <div className='space-y-3'>
+      {/* Headline numbers */}
+      <div className='grid grid-cols-2 md:grid-cols-4 gap-2'>
+        {[
+          { label: 'Average', value: `${data.avg}%`, tint: 'text-[#002EFF]' },
+          { label: 'Highest', value: `${data.best}%`, tint: 'text-emerald-600' },
+          { label: 'Lowest', value: `${data.worst}%`, tint: 'text-rose-500' },
+          {
+            label: 'Below 40%',
+            value: `${data.below40}`,
+            tint: data.below40 ? 'text-amber-600' : 'text-slate-400',
+          },
+        ].map((s) => (
+          <div key={s.label} className='rounded-xl bg-white p-3'>
+            <p className='text-[9px] font-black uppercase tracking-widest text-slate-400'>
+              {s.label}
+            </p>
+            <p className={`text-lg font-black tabular-nums ${s.tint}`}>
+              {s.value}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      {/* How the scores spread out */}
+      <div className='rounded-xl bg-white p-3'>
+        <p className='text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2'>
+          Score spread · {data.takers} {data.takers === 1 ? 'person' : 'people'}
+        </p>
+        <div className='flex items-end gap-2 h-20'>
+          {data.buckets.map((b) => (
+            <div key={b.label} className='flex-1 flex flex-col items-center gap-1'>
+              <span className='text-[10px] font-black text-slate-600 tabular-nums'>
+                {b.count}
+              </span>
+              <div
+                className={`w-full rounded-t-md ${b.tone}`}
+                style={{ height: `${Math.max((b.count / peak) * 56, 3)}px` }}
+              />
+              <span className='text-[8px] font-bold text-slate-400'>{b.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {loading && !data.subjects.length ? (
+        <div className='py-4 flex justify-center'>
+          <Loader2 className='animate-spin text-[#002EFF]' size={16} />
+        </div>
+      ) : !data.graded ? (
+        <p className='text-[10px] font-bold text-slate-400'>
+          Per-question detail is not stored for these attempts, so subject and
+          question analysis is unavailable.
+        </p>
+      ) : (
+        <>
+          {/* Weakest subject first — that is what a tutor needs to revise */}
+          <div className='rounded-xl bg-white p-3 space-y-2'>
+            <p className='text-[9px] font-black uppercase tracking-widest text-slate-400'>
+              Subject averages · weakest first
+            </p>
+            {data.subjects.map((s) => (
+              <div key={s.name} className='flex items-center gap-2'>
+                <span className='text-[10px] font-bold text-slate-600 w-28 truncate'>
+                  {s.name}
+                </span>
+                <div className='flex-1 h-2 rounded-full bg-slate-100 overflow-hidden'>
+                  <div
+                    className={`h-full rounded-full ${
+                      s.pct >= 60
+                        ? 'bg-emerald-500'
+                        : s.pct >= 40
+                          ? 'bg-amber-400'
+                          : 'bg-rose-400'
+                    }`}
+                    style={{ width: `${s.pct}%` }}
+                  />
+                </div>
+                <span className='text-[10px] font-black text-slate-600 w-9 text-right tabular-nums'>
+                  {s.pct}%
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {/* Questions most people failed */}
+          {data.missed.length > 0 && (
+            <div className='rounded-xl bg-white p-3 space-y-1.5'>
+              <p className='text-[9px] font-black uppercase tracking-widest text-slate-400'>
+                Most-missed questions
+              </p>
+              {data.missed.map((q) => (
+                <div
+                  key={q.id}
+                  className='flex items-start gap-2 py-1 border-b border-slate-50 last:border-0'
+                >
+                  <span className='shrink-0 mt-0.5 text-[9px] font-black text-rose-500 tabular-nums w-9 text-right'>
+                    {q.rate}%
+                  </span>
+                  <span className='min-w-0 flex-1'>
+                    <span className='block text-[11px] font-bold text-slate-700 line-clamp-2'>
+                      {q.body}
+                    </span>
+                    <span className='block text-[9px] font-bold text-slate-400'>
+                      {q.subject} · {q.wrong} of {q.asked} got it wrong
+                    </span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </div>
   )
 }
 
