@@ -1323,7 +1323,7 @@ export const dsaApi = {
     // routes it to a channel (omit for the main/General channel).
     send: (
       body: {
-        type: 'text' | 'image' | 'video' | 'audio' | 'file'
+        type: 'text' | 'image' | 'video' | 'audio' | 'file' | 'poll'
         text?: string
         fileUrl?: string
         fileName?: string
@@ -1331,6 +1331,13 @@ export const dsaApi = {
         fileSize?: number
         durationSec?: number
         channelId?: string
+        /** For type 'poll' — a plain poll, or a quiz that marks the answer. */
+        poll?: {
+          question: string
+          options: string[]
+          isQuiz?: boolean
+          correctOption?: number
+        }
       },
       token?: string,
     ) =>
@@ -1421,6 +1428,73 @@ export const dsaApi = {
       })
         .then((r) => handleResponse<{ data?: unknown }>(r))
         .then((r) => (r as { data?: unknown }).data ?? r),
+
+    // PATCH /community/channels/:id (admin) — rename / re-scope a channel
+    // { name?, track?, department?, subject? }.
+    updateChannel: (
+      id: string,
+      body: Record<string, unknown>,
+      token?: string,
+    ) =>
+      fetch(`${BASE_URL}/community/channels/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers: getHeaders(token),
+        body: JSON.stringify(body),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+
+    // GET /community/access — who may open the Community ('all' | 'paid').
+    getAccess: (token?: string) =>
+      fetch(`${BASE_URL}/community/access`, { headers: getHeaders(token) })
+        .then((r) => handleResponse<{ data?: { access?: string } }>(r))
+        .then((r) => (r as { data?: { access?: string } }).data?.access ?? 'all'),
+
+    // PATCH /community/access (admin) — set it.
+    setAccess: (access: 'all' | 'paid', token?: string) =>
+      fetch(`${BASE_URL}/community/access`, {
+        method: 'PATCH',
+        headers: getHeaders(token),
+        body: JSON.stringify({ access }),
+      })
+        .then((r) => handleResponse<{ data?: { access?: string } }>(r))
+        .then((r) => (r as { data?: { access?: string } }).data?.access ?? access),
+
+    // POST /community/messages/:id/vote — pick a poll option (re-voting moves it).
+    vote: (messageId: string, option: number, token?: string) =>
+      fetch(
+        `${BASE_URL}/community/messages/${encodeURIComponent(messageId)}/vote`,
+        {
+          method: 'POST',
+          headers: getHeaders(token),
+          body: JSON.stringify({ option }),
+        },
+      )
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+
+    // POST /community/messages/read — mark a batch of messages seen.
+    markRead: (channelId: string, messageIds: string[], token?: string) =>
+      fetch(`${BASE_URL}/community/messages/read`, {
+        method: 'POST',
+        headers: getHeaders(token),
+        body: JSON.stringify({ channelId, messageIds }),
+      })
+        .then((r) => handleResponse<{ data?: { updated?: number } }>(r))
+        .then((r) => (r as { data?: { updated?: number } }).data ?? {}),
+
+    // GET /community/messages/:id/reads — who has seen a message.
+    reads: (messageId: string, token?: string) =>
+      fetch(
+        `${BASE_URL}/community/messages/${encodeURIComponent(messageId)}/reads`,
+        { headers: getHeaders(token) },
+      )
+        .then((r) =>
+          handleResponse<
+            Record<string, unknown>[] | { data?: Record<string, unknown>[] }
+          >(r),
+        )
+        .then((res) => (Array.isArray(res) ? res : (res?.data ?? []))),
 
     // DELETE /community/channels/:id (admin) — delete a channel + its messages.
     removeChannel: (id: string, token?: string) =>

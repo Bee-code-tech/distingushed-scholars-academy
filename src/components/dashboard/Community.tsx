@@ -31,6 +31,8 @@ import {
   Hash,
   Users,
   UserMinus,
+  BarChart3,
+  Eye,
 } from 'lucide-react'
 import { dsaApi } from '@/lib/api'
 import { getUser } from '@/lib/auth'
@@ -51,7 +53,25 @@ import {
 import type { CourseCategory } from '@/lib/types'
 
 type Mode = 'tutor' | 'student' | 'admin'
-type MsgType = 'text' | 'image' | 'video' | 'audio' | 'file'
+type MsgType = 'text' | 'image' | 'video' | 'audio' | 'file' | 'poll'
+
+export interface PollOption {
+  index: number
+  text: string
+  votes: number
+  voted: boolean
+}
+
+export interface PollData {
+  question: string
+  options: PollOption[]
+  totalVotes: number
+  myVote: number | null
+  isQuiz: boolean
+  closed: boolean
+  /** Only present once the answer is revealed (you voted, or it closed). */
+  correctOption?: number
+}
 
 interface Msg {
   id: string
@@ -68,6 +88,9 @@ interface Msg {
   createdAt: number
   own: boolean
   pinned: boolean
+  poll?: PollData
+  /** How many people have seen it ("seen by", WhatsApp-style). */
+  readCount: number
 }
 
 // Largest file we let the browser attempt (Cloudinary's unsigned preset caps it
@@ -126,6 +149,12 @@ export default function Community({
   const [error, setError] = useState<string | null>(null)
   const [notReady, setNotReady] = useState(false)
   const [attachOpen, setAttachOpen] = useState(false)
+  // Poll composer (tutors / admins).
+  const [pollOpen, setPollOpen] = useState(false)
+  const [pollQuestion, setPollQuestion] = useState('')
+  const [pollOptions, setPollOptions] = useState<string[]>(['', ''])
+  const [pollIsQuiz, setPollIsQuiz] = useState(false)
+  const [pollCorrect, setPollCorrect] = useState(0)
 
   // Channels — General + one per programme (JAMB/Post-UTME/WAEC by department,
   // etc.). Students see General + their programme's; tutors/admin see them all.
@@ -137,6 +166,11 @@ export default function Community({
   >([])
   const [newOpen, setNewOpen] = useState(false)
   const [newName, setNewName] = useState('')
+  const [newSubject, setNewSubject] = useState('')
+  // Admin: who may open the Community, and renaming the active channel.
+  const [access, setAccess] = useState<'all' | 'paid'>('all')
+  const [renameValue, setRenameValue] = useState('')
+  const [renaming, setRenaming] = useState(false)
   const [newCategory, setNewCategory] = useState<CourseCategory | ''>('')
 
   // Voice-note recording (tutors only).
@@ -190,7 +224,10 @@ export default function Community({
       )
       const fileType = str(raw.fileType ?? raw.mimeType)
       let type = str(raw.type) as MsgType
-      if (!type || !['text', 'image', 'video', 'audio', 'file'].includes(type)) {
+      if (
+        !type ||
+        !['text', 'image', 'video', 'audio', 'file', 'poll'].includes(type)
+      ) {
         if (fileType.startsWith('image/')) type = 'image'
         else if (fileType.startsWith('video/')) type = 'video'
         else if (fileType.startsWith('audio/')) type = 'audio'
@@ -219,6 +256,9 @@ export default function Community({
         createdAt,
         own,
         pinned: !!raw.pinned,
+        poll: raw.poll ? (raw.poll as unknown as PollData) : undefined,
+        readCount:
+          typeof raw.readCount === 'number' ? raw.readCount : 0,
       }
     },
     [myId, myName],
@@ -447,6 +487,137 @@ export default function Community({
     [load, token],
   )
 
+  // Admin: load + change who can open the Community.
+  useEffect(() => {
+    if (mode !== 'admin') return
+    let cancelled = false
+    dsaApi.community
+      .getAccess(token)
+      .then((a) => {
+        if (!cancelled) setAccess(a === 'paid' ? 'paid' : 'all')
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [mode, token])
+
+  const changeAccess = useCallback(
+    async (next: 'all' | 'paid') => {
+      const prev = access
+      setAccess(next)
+      try {
+        await dsaApi.community.setAccess(next, token)
+      } catch (e) {
+        setAccess(prev)
+        setError(
+          e instanceof Error ? e.message : 'Could not change community access.',
+        )
+      }
+    },
+    [access, token],
+  )
+
+  // Post a poll — plain, or marked as a quiz with a correct option.
+  const sendPoll = useCallback(async () => {
+    const question = pollQuestion.trim()
+    const options = pollOptions.map((o) => o.trim()).filter(Boolean)
+    if (!question) return setError('Add a poll question.')
+    if (options.length < 2) return setError('A poll needs at least 2 options.')
+    if (pollIsQuiz && (pollCorrect < 0 || pollCorrect >= options.length)) {
+      return setError('Choose which option is the correct answer.')
+    }
+    setError(null)
+    setSending(true)
+    try {
+      await dsaApi.community.send(
+        {
+          type: 'poll',
+          channelId: activeChannel,
+          poll: {
+            question,
+            options,
+            isQuiz: pollIsQuiz,
+            ...(pollIsQuiz ? { correctOption: pollCorrect } : {}),
+          },
+        },
+        token,
+      )
+      setPollOpen(false)
+      setPollQuestion('')
+      setPollOptions(['', ''])
+      setPollIsQuiz(false)
+      setPollCorrect(0)
+      await load(false)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not post the poll.')
+    } finally {
+      setSending(false)
+    }
+  }, [
+    pollQuestion,
+    pollOptions,
+    pollIsQuiz,
+    pollCorrect,
+    activeChannel,
+    token,
+    load,
+  ])
+
+  // Vote on a poll — the server returns the updated tallies.
+  const votePoll = useCallback(
+    async (messageId: string, option: number) => {
+      setError(null)
+      try {
+        const updated = (await dsaApi.community.vote(
+          messageId,
+          option,
+          token,
+        )) as Record<string, unknown>
+        const next = normalize(updated)
+        setMessages((prev) => prev.map((m) => (m.id === next.id ? next : m)))
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Could not record your vote.')
+      }
+    },
+    [normalize, token],
+  )
+
+  // Who has seen a message (sender taps "Seen by").
+  const loadReads = useCallback(
+    async (messageId: string) => {
+      const rows = (await dsaApi.community.reads(messageId, token)) as Record<
+        string,
+        unknown
+      >[]
+      return rows.map((r) => ({ fullname: str(r.fullname) || 'Member' }))
+    },
+    [token],
+  )
+
+  // Mark everyone else's messages in this channel as seen, once they're loaded.
+  useEffect(() => {
+    const unseen = messages
+      .filter((m) => !m.own && m.id)
+      .map((m) => m.id)
+      .slice(-100)
+    if (!unseen.length) return
+    let cancelled = false
+    const id = setTimeout(() => {
+      dsaApi.community
+        .markRead(activeChannel, unseen, token)
+        .catch(() => {})
+        .finally(() => {
+          if (cancelled) return
+        })
+    }, 600)
+    return () => {
+      cancelled = true
+      clearTimeout(id)
+    }
+    // Re-runs when the visible set changes; the server ignores duplicates.
+  }, [messages, activeChannel, token])
+
   // Lock / unlock the channel (tutor / admin) — optimistic with rollback.
   const toggleLock = useCallback(async () => {
     const next = !locked
@@ -515,17 +686,23 @@ export default function Community({
     const name = newName.trim()
     if (!name) return
     const category = newCategory || undefined
+    const subject = newSubject.trim() || undefined
     try {
-      // The backend stores the category in its `track` string field.
-      await dsaApi.community.createChannel({ name, track: category }, token)
+      // The backend stores the category in its `track` string field; `subject`
+      // scopes it further (e.g. a Physics class community).
+      await dsaApi.community.createChannel(
+        { name, track: category, subject },
+        token,
+      )
     } catch {
       addLocalChannel({ name, category: category ?? null })
     }
     setNewName('')
     setNewCategory('')
+    setNewSubject('')
     setNewOpen(false)
     await loadChannels()
-  }, [newName, newCategory, token, loadChannels])
+  }, [newName, newCategory, newSubject, token, loadChannels])
 
   const deleteChannel = useCallback(
     async (id: string) => {
@@ -540,6 +717,23 @@ export default function Community({
     },
     [token, activeChannel, loadChannels],
   )
+
+  // Admin: rename the active channel.
+  const renameChannel = useCallback(async () => {
+    const name = renameValue.trim()
+    if (!name) return
+    setRenaming(true)
+    setError(null)
+    try {
+      await dsaApi.community.updateChannel(activeChannel, { name }, token)
+      setRenameValue('')
+      await loadChannels()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not rename the channel.')
+    } finally {
+      setRenaming(false)
+    }
+  }, [renameValue, activeChannel, token, loadChannels])
 
   // ---- Members (tutor / admin) ----
   const loadMembers = useCallback(async () => {
@@ -708,6 +902,51 @@ export default function Community({
         </div>
       )}
 
+      {/* Admin controls: who can open Community + rename the active channel */}
+      {isAdmin && (
+        <div className='mb-3 rounded-2xl border border-slate-200 bg-white p-3 flex flex-wrap items-center gap-3'>
+          <div className='flex items-center gap-2'>
+            <span className='text-[10px] font-black uppercase text-slate-400'>
+              Access
+            </span>
+            <div className='inline-flex rounded-lg bg-slate-100 p-0.5'>
+              {(['all', 'paid'] as const).map((a) => (
+                <button
+                  key={a}
+                  onClick={() => changeAccess(a)}
+                  className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase transition-colors ${
+                    access === a
+                      ? 'bg-white text-[#002EFF] shadow-sm'
+                      : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  {a === 'all' ? 'All students' : 'Paid only'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className='flex items-center gap-2 flex-1 min-w-[220px]'>
+            <span className='text-[10px] font-black uppercase text-slate-400 shrink-0'>
+              Rename
+            </span>
+            <input
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              placeholder={active.name}
+              className='h-9 px-3 rounded-lg bg-slate-50 border border-transparent focus:border-[#002EFF]/30 focus:bg-white outline-none text-[12px] font-bold flex-1 min-w-0'
+            />
+            <button
+              onClick={renameChannel}
+              disabled={!renameValue.trim() || renaming}
+              className='h-9 px-3 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-black uppercase hover:text-[#002EFF] disabled:opacity-50 shrink-0'
+            >
+              {renaming ? <Loader2 size={12} className='animate-spin' /> : 'Save'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* New-channel form (admin) */}
       {isAdmin && newOpen && (
         <div className='mb-3 rounded-2xl border border-slate-200 bg-white p-3 space-y-2'>
@@ -738,6 +977,13 @@ export default function Community({
                 </option>
               ))}
             </select>
+            <input
+              value={newSubject}
+              onChange={(e) => setNewSubject(e.target.value)}
+              placeholder='Subject (optional, e.g. Physics)'
+              title='Scope this community to a subject — e.g. a Physics class'
+              className='h-9 px-3 rounded-lg bg-slate-50 border border-transparent focus:border-[#002EFF]/30 focus:bg-white outline-none text-[12px] font-bold flex-1 min-w-[150px]'
+            />
             <button
               onClick={createChannel}
               disabled={!newName.trim()}
@@ -882,6 +1128,8 @@ export default function Community({
               onDelete={() => remove(m.id)}
               onEdit={(newText) => editMessage(m.id, newText)}
               onPin={() => togglePin(m)}
+              onVote={(option) => votePoll(m.id, option)}
+              onSeen={() => loadReads(m.id)}
             />
           ))
         )}
@@ -924,6 +1172,104 @@ export default function Community({
             </div>
           ) : (
             <div className='relative flex items-end gap-2'>
+              {/* Poll composer */}
+              {pollOpen && (
+                <div className='absolute bottom-14 left-0 right-0 z-20 rounded-2xl border border-zinc-200 bg-white shadow-xl p-3 space-y-2'>
+                  <div className='flex items-center justify-between'>
+                    <p className='text-[11px] font-black uppercase tracking-wide text-zinc-500 flex items-center gap-1.5'>
+                      <BarChart3 size={13} className='text-[#002EFF]' /> New poll
+                    </p>
+                    <button
+                      onClick={() => setPollOpen(false)}
+                      className='text-zinc-400 hover:text-rose-500'
+                      aria-label='Close poll composer'
+                    >
+                      <X size={15} />
+                    </button>
+                  </div>
+
+                  <input
+                    value={pollQuestion}
+                    onChange={(e) => setPollQuestion(e.target.value)}
+                    placeholder='Ask a question…'
+                    className='w-full h-10 px-3 rounded-xl bg-zinc-50 border border-zinc-200 outline-none text-[13px] font-bold focus:border-[#002EFF]/40'
+                  />
+
+                  <div className='space-y-1.5'>
+                    {pollOptions.map((o, i) => (
+                      <div key={i} className='flex items-center gap-2'>
+                        {pollIsQuiz && (
+                          <input
+                            type='radio'
+                            name='poll-correct'
+                            checked={pollCorrect === i}
+                            onChange={() => setPollCorrect(i)}
+                            title='Mark as the correct answer'
+                            className='accent-emerald-600 shrink-0'
+                          />
+                        )}
+                        <input
+                          value={o}
+                          onChange={(e) =>
+                            setPollOptions((prev) =>
+                              prev.map((p, idx) => (idx === i ? e.target.value : p)),
+                            )
+                          }
+                          placeholder={`Option ${i + 1}`}
+                          className='flex-1 h-9 px-3 rounded-lg bg-zinc-50 border border-zinc-200 outline-none text-[12px] font-medium focus:border-[#002EFF]/40'
+                        />
+                        {pollOptions.length > 2 && (
+                          <button
+                            onClick={() =>
+                              setPollOptions((prev) =>
+                                prev.filter((_, idx) => idx !== i),
+                              )
+                            }
+                            className='text-zinc-300 hover:text-rose-500 shrink-0'
+                            aria-label={`Remove option ${i + 1}`}
+                          >
+                            <X size={14} />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    {pollOptions.length < 10 && (
+                      <button
+                        onClick={() => setPollOptions((prev) => [...prev, ''])}
+                        className='inline-flex items-center gap-1 text-[10px] font-black uppercase text-[#002EFF] hover:underline'
+                      >
+                        <Plus size={11} /> Add option
+                      </button>
+                    )}
+                  </div>
+
+                  <label className='flex items-center gap-2 cursor-pointer'>
+                    <input
+                      type='checkbox'
+                      checked={pollIsQuiz}
+                      onChange={(e) => setPollIsQuiz(e.target.checked)}
+                      className='h-4 w-4 accent-[#002EFF]'
+                    />
+                    <span className='text-[11px] font-bold text-zinc-600'>
+                      Mark as a quiz (reveals the answer after voting)
+                    </span>
+                  </label>
+
+                  <button
+                    onClick={sendPoll}
+                    disabled={sending}
+                    className='w-full h-10 rounded-xl bg-[#002EFF] text-white font-black text-[11px] uppercase tracking-wide hover:bg-blue-700 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2'
+                  >
+                    {sending ? (
+                      <Loader2 size={14} className='animate-spin' />
+                    ) : (
+                      <Send size={14} />
+                    )}
+                    Post poll
+                  </button>
+                </div>
+              )}
+
               {/* Attach */}
               <div className='relative'>
                 <button
@@ -956,6 +1302,16 @@ export default function Community({
                       label='Document'
                       onClick={() => docInput.current?.click()}
                     />
+                    {canManage && (
+                      <AttachItem
+                        icon={BarChart3}
+                        label='Poll'
+                        onClick={() => {
+                          setAttachOpen(false)
+                          setPollOpen(true)
+                        }}
+                      />
+                    )}
                     {canRecord && (
                       <AttachItem
                         icon={Mic}
@@ -1069,6 +1425,8 @@ function MessageBubble({
   onDelete,
   onEdit,
   onPin,
+  onVote,
+  onSeen,
 }: {
   m: Msg
   showDelete: boolean
@@ -1077,9 +1435,25 @@ function MessageBubble({
   onDelete: () => void
   onEdit: (newText: string) => void
   onPin: () => void
+  onVote: (option: number) => void
+  onSeen: () => Promise<{ fullname: string }[]>
 }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(m.text ?? '')
+  // "Seen by" — names are fetched only when the sender taps the row.
+  const [seen, setSeen] = useState<{ fullname: string }[] | null>(null)
+  const [seenLoading, setSeenLoading] = useState(false)
+  const toggleSeen = async () => {
+    if (seen) return setSeen(null)
+    setSeenLoading(true)
+    try {
+      setSeen(await onSeen())
+    } catch {
+      setSeen([])
+    } finally {
+      setSeenLoading(false)
+    }
+  }
 
   const initials = m.senderName
     .split(' ')
@@ -1158,9 +1532,75 @@ function MessageBubble({
               ? m.own
                 ? 'bg-[#002EFF] text-white px-4 py-2.5'
                 : 'bg-zinc-100 text-zinc-800 px-4 py-2.5'
-              : 'bg-white border border-zinc-200 p-1.5'
+              : m.type === 'poll'
+                ? 'bg-white border border-zinc-200 p-3 min-w-[250px]'
+                : 'bg-white border border-zinc-200 p-1.5'
           }`}
         >
+          {m.type === 'poll' && m.poll && (
+            <div className='space-y-2'>
+              <div className='flex items-start gap-1.5'>
+                <BarChart3
+                  size={14}
+                  className='text-[#002EFF] mt-0.5 shrink-0'
+                  aria-hidden
+                />
+                <p className='text-[13px] font-black text-zinc-800 leading-snug break-words'>
+                  {m.poll.question}
+                </p>
+              </div>
+              {m.poll.isQuiz && (
+                <span className='inline-block text-[8px] font-black uppercase tracking-wide bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded'>
+                  Quiz
+                </span>
+              )}
+              <div className='space-y-1.5'>
+                {m.poll.options.map((o) => {
+                  const total = m.poll?.totalVotes ?? 0
+                  const share = total ? Math.round((o.votes / total) * 100) : 0
+                  const answered = m.poll?.myVote != null
+                  const correct = m.poll?.correctOption
+                  const isCorrect = correct != null && correct === o.index
+                  const wrongPick = o.voted && correct != null && !isCorrect
+                  return (
+                    <button
+                      key={o.index}
+                      onClick={() => onVote(o.index)}
+                      disabled={m.poll?.closed}
+                      className={`relative w-full text-left rounded-xl px-2.5 py-2 text-[12px] font-bold overflow-hidden border transition-colors disabled:cursor-not-allowed ${
+                        isCorrect && answered
+                          ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
+                          : wrongPick
+                            ? 'border-rose-300 bg-rose-50 text-rose-700'
+                            : o.voted
+                              ? 'border-[#002EFF] bg-blue-50 text-[#002EFF]'
+                              : 'border-zinc-200 bg-white text-zinc-700 hover:border-[#002EFF]/40'
+                      }`}
+                    >
+                      {answered && (
+                        <span
+                          aria-hidden
+                          className='absolute inset-y-0 left-0 bg-current opacity-10'
+                          style={{ width: `${share}%` }}
+                        />
+                      )}
+                      <span className='relative flex items-center justify-between gap-2'>
+                        <span className='truncate'>{o.text}</span>
+                        {answered && (
+                          <span className='tabular-nums shrink-0'>{share}%</span>
+                        )}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+              <p className='text-[10px] font-bold text-zinc-400 tabular-nums'>
+                {m.poll.totalVotes} vote{m.poll.totalVotes === 1 ? '' : 's'}
+                {m.poll.closed ? ' · closed' : ''}
+              </p>
+            </div>
+          )}
+
           {m.type === 'text' &&
             (editing ? (
               <div className='min-w-[220px]'>
@@ -1250,6 +1690,30 @@ function MessageBubble({
             </a>
           )}
         </div>
+
+        {/* Seen by — only on your own messages, names on tap (WhatsApp-style) */}
+        {m.own && m.readCount > 0 && (
+          <div className='mt-1 px-1'>
+            <button
+              onClick={toggleSeen}
+              className='inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wide text-zinc-400 hover:text-[#002EFF] transition-colors'
+            >
+              {seenLoading ? (
+                <Loader2 size={10} className='animate-spin' />
+              ) : (
+                <Eye size={10} />
+              )}
+              Seen by {m.readCount}
+            </button>
+            {seen && (
+              <p className='mt-0.5 text-[10px] font-medium text-zinc-500 max-w-[220px] break-words'>
+                {seen.length
+                  ? seen.map((s) => s.fullname).join(', ')
+                  : 'No one yet'}
+              </p>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )
