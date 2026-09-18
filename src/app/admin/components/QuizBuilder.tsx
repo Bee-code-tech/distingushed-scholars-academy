@@ -34,6 +34,7 @@ import {
   ChevronRight,
   X,
   RotateCcw,
+  AlertTriangle,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import QuizLeaderboard, {
@@ -140,6 +141,7 @@ export default function QuizBuilder() {
   const [step, setStep] = useState(0)
   // The list area shows either the quizzes or every submission across them.
   const [listView, setListView] = useState<'quizzes' | 'attempts'>('quizzes')
+  const [askConfirm, confirmDialog] = useConfirm()
 
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -288,8 +290,22 @@ export default function QuizBuilder() {
       ...b,
       { name: JAMB_SUBJECTS[0], timeLimit: 15, picked: [] },
     ])
-  const removeBlock = (i: number) =>
+  const dropBlock = (i: number) =>
     setBlocks((b) => b.filter((_, idx) => idx !== i))
+
+  // Picked questions are easy to lose and slow to pick again.
+  const removeBlock = (i: number) => {
+    const block = blocks[i]
+    if (!block?.picked.length) return dropBlock(i)
+    askConfirm({
+      title: `Remove ${block.name}?`,
+      body: `The ${block.picked.length} question${
+        block.picked.length === 1 ? '' : 's'
+      } you picked for it go with it, and you would have to pick them again.`,
+      confirmLabel: 'Remove subject',
+      onConfirm: () => dropBlock(i),
+    })
+  }
   const patchBlock = (i: number, patch: Partial<SubjectBlock>) =>
     setBlocks((b) => b.map((blk, idx) => (idx === i ? { ...blk, ...patch } : blk)))
 
@@ -535,9 +551,18 @@ export default function QuizBuilder() {
     setShowBuilder(true)
   }
 
-  const toggleStatus = async (q: Record<string, unknown>) => {
+  /** How many people have already sat it, when the list tells us. */
+  const takenCount = (q: Record<string, unknown>) =>
+    Number(q.attemptsCount ?? q.attempts ?? q.takenCount) || 0
+
+  const sat = (q: Record<string, unknown>) => {
+    const n = takenCount(q)
+    if (!n) return ''
+    return ` ${n} student${n === 1 ? ' has' : 's have'} already submitted — their results are not affected.`
+  }
+
+  const setStatus = async (q: Record<string, unknown>, next: boolean) => {
     const id = str(q.id ?? q._id)
-    const next = !q.isActive
     setQuizzes((qs) =>
       qs.map((x) => (str(x.id ?? x._id) === id ? { ...x, isActive: next } : x)),
     )
@@ -548,13 +573,35 @@ export default function QuizBuilder() {
     }
   }
 
-  const removeQuiz = async (id: string) => {
-    setQuizzes((qs) => qs.filter((x) => str(x.id ?? x._id) !== id))
-    try {
-      await dsaApi.quizzes.remove(id, token)
-    } catch {
-      loadList()
-    }
+  // Publishing is safe; taking a live quiz away from students is not.
+  const toggleStatus = (q: Record<string, unknown>) => {
+    if (!q.isActive) return setStatus(q, true)
+    askConfirm({
+      title: `Unpublish “${str(q.title)}”?`,
+      body: `Students will no longer see this quiz or be able to start it. You can publish it again at any time.${sat(q)}`,
+      confirmLabel: 'Unpublish',
+      onConfirm: () => setStatus(q, false),
+    })
+  }
+
+  const removeQuiz = (id: string, q: Record<string, unknown>) => {
+    askConfirm({
+      title: `Delete “${str(q.title)}”?`,
+      body: `The quiz and its questions go for good, and this cannot be undone.${
+        takenCount(q)
+          ? ` ${takenCount(q)} submitted result${takenCount(q) === 1 ? '' : 's'} may go with it.`
+          : ' Unpublish it instead if you only want to hide it from students.'
+      }`,
+      confirmLabel: 'Delete quiz',
+      onConfirm: async () => {
+        setQuizzes((qs) => qs.filter((x) => str(x.id ?? x._id) !== id))
+        try {
+          await dsaApi.quizzes.remove(id, token)
+        } catch {
+          loadList()
+        }
+      },
+    })
   }
 
   return (
@@ -1330,7 +1377,7 @@ export default function QuizBuilder() {
                             </button>
                             {canDelete && (
                               <button
-                                onClick={() => removeQuiz(id)}
+                                onClick={() => removeQuiz(id, q)}
                                 className='p-1.5 text-slate-300 hover:text-rose-500'
                                 title='Delete quiz'
                               >
@@ -1386,6 +1433,8 @@ export default function QuizBuilder() {
           </div>
         )
       })()}
+
+      {confirmDialog}
     </div>
   )
 }
@@ -1550,6 +1599,91 @@ function StatusBadge({ live }: { live: boolean }) {
 /** Admin panel: who took a quiz, the leaderboard, and per-attempt controls.
  *  Live-first — degrades to an empty/"not available" state until the backend
  *  ships the attempts routes (docs/backend-requests-2026-09-02.md §6). */
+interface ConfirmRequest {
+  title: string
+  /** What actually happens, in plain words — including who it affects. */
+  body: string
+  confirmLabel: string
+  onConfirm: () => void | Promise<void>
+}
+
+/**
+ * A confirm step for anything that can't be undone. Returns the asker and the
+ * dialog to drop into the tree; nothing renders until something is asked.
+ */
+function useConfirm(): [(req: ConfirmRequest) => void, React.ReactNode] {
+  const [req, setReq] = useState<ConfirmRequest | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  const close = useCallback(() => {
+    setReq(null)
+    setBusy(false)
+  }, [])
+
+  useEffect(() => {
+    if (!req) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [req, close])
+
+  const node = req ? (
+    <div className='fixed inset-0 z-50 flex items-center justify-center p-4'>
+      <button
+        aria-label='Cancel'
+        onClick={close}
+        className='absolute inset-0 bg-slate-900/40 backdrop-blur-[2px] cursor-default'
+      />
+      <Card
+        role='alertdialog'
+        aria-modal='true'
+        className='relative w-full max-w-sm p-5 rounded-3xl border-none shadow-xl bg-white space-y-3'
+      >
+        <div className='flex items-start gap-3'>
+          <span className='h-10 w-10 shrink-0 rounded-2xl bg-rose-50 text-rose-500 grid place-items-center'>
+            <AlertTriangle size={18} />
+          </span>
+          <div className='min-w-0'>
+            <p className='text-sm font-black text-slate-800'>{req.title}</p>
+            <p className='text-[11px] font-medium text-slate-500 mt-1 leading-relaxed'>
+              {req.body}
+            </p>
+          </div>
+        </div>
+        <div className='flex items-center justify-end gap-2 pt-1'>
+          <button
+            autoFocus
+            onClick={close}
+            disabled={busy}
+            className='h-9 px-3 rounded-xl bg-slate-100 text-slate-500 font-black text-[11px] uppercase tracking-wide hover:text-slate-700 disabled:opacity-50'
+          >
+            Cancel
+          </button>
+          <button
+            onClick={async () => {
+              setBusy(true)
+              try {
+                await req.onConfirm()
+              } finally {
+                close()
+              }
+            }}
+            disabled={busy}
+            className='flex items-center gap-2 h-9 px-4 rounded-xl bg-rose-500 text-white font-black text-[11px] uppercase tracking-wide hover:bg-rose-600 active:scale-[0.98] disabled:opacity-50'
+          >
+            {busy && <Loader2 size={13} className='animate-spin' />}
+            {req.confirmLabel}
+          </button>
+        </div>
+      </Card>
+    </div>
+  ) : null
+
+  return [setReq, node]
+}
+
 /**
  * Every submission across every quiz, in one place — so "who sat anything this
  * week" doesn't mean opening each quiz in turn.
@@ -1835,6 +1969,7 @@ function AttemptsPanel({
   )
   // 'attempts' lists who took it; 'analytics' is the cohort view.
   const [tab, setTab] = useState<'attempts' | 'analytics'>('attempts')
+  const [askConfirm, confirmDialog] = useConfirm()
   const [detailLoading, setDetailLoading] = useState(false)
   // Which public (free-quiz) taker's breakdown is expanded.
   const [openPublic, setOpenPublic] = useState<string | null>(null)
@@ -2022,24 +2157,37 @@ function AttemptsPanel({
   const rowId = (r: Record<string, unknown>) =>
     str(r.attemptId ?? r.id ?? r._id)
 
-  const del = async (aid: string) => {
-    try {
-      await dsaApi.quizzes.deleteAttempt(quizId, aid, token)
-      setAttempts((prev) => prev.filter((r) => rowId(r) !== aid))
-    } catch {
-      /* ignore — a reload reflects the true state */
-    }
-  }
-  const withdraw = async (aid: string) => {
-    try {
-      await dsaApi.quizzes.withdrawAttempt(quizId, aid, token)
-      setAttempts((prev) =>
-        prev.map((r) => (rowId(r) === aid ? { ...r, withdrawn: true } : r)),
-      )
-    } catch {
-      /* ignore */
-    }
-  }
+  const del = (aid: string, name: string) =>
+    askConfirm({
+      title: `Delete ${name}’s attempt?`,
+      body: 'The score and every answer they gave are removed for good. Withdraw it instead to void the score but keep the record.',
+      confirmLabel: 'Delete attempt',
+      onConfirm: async () => {
+        try {
+          await dsaApi.quizzes.deleteAttempt(quizId, aid, token)
+          setAttempts((prev) => prev.filter((r) => rowId(r) !== aid))
+        } catch {
+          /* ignore — a reload reflects the true state */
+        }
+      },
+    })
+
+  const withdraw = (aid: string, name: string) =>
+    askConfirm({
+      title: `Withdraw ${name}’s result?`,
+      body: 'The score stops counting and leaves the leaderboard, and they get an attempt back. The record itself is kept.',
+      confirmLabel: 'Withdraw',
+      onConfirm: async () => {
+        try {
+          await dsaApi.quizzes.withdrawAttempt(quizId, aid, token)
+          setAttempts((prev) =>
+            prev.map((r) => (rowId(r) === aid ? { ...r, withdrawn: true } : r)),
+          )
+        } catch {
+          /* ignore */
+        }
+      },
+    })
 
   const pctOf = (r: Record<string, unknown>) => {
     const p = Number(r.percentage)
@@ -2120,6 +2268,16 @@ function AttemptsPanel({
     }
   }, [attempts, publicAttempts, resultsById, questionMap])
 
+  const confirmRescore = () =>
+    askConfirm({
+      title: 'Re-grade every submission?',
+      body: `All ${attempts.length + publicAttempts.length} result${
+        attempts.length + publicAttempts.length === 1 ? '' : 's'
+      } are marked again against the current correct answers. Scores can go up or down, and students see the new ones.`,
+      confirmLabel: 'Rescore',
+      onConfirm: doRescore,
+    })
+
   const doRescore = async () => {
     setRescoring(true)
     setRescoreMsg(null)
@@ -2191,7 +2349,7 @@ function AttemptsPanel({
             </p>
             {attempts.length + publicAttempts.length > 0 && (
               <button
-                onClick={doRescore}
+                onClick={confirmRescore}
                 disabled={rescoring}
                 title='Re-grade all submissions against the current correct answers (use after fixing an answer)'
                 className='shrink-0 inline-flex items-center gap-1.5 h-7 px-2.5 rounded-lg bg-white text-[#002EFF] font-black text-[9px] uppercase tracking-wide hover:bg-blue-50 disabled:opacity-50'
@@ -2353,6 +2511,9 @@ function AttemptsPanel({
                 const withdrawn = !!r.withdrawn
                 const isOpen = openDetail === aid
                 const detail = isOpen ? breakdownFor(aid) : null
+                const who = str(
+                  r.studentName ?? r.fullname ?? r.username ?? 'Student',
+                )
                 return (
                   <div key={aid} className='rounded-xl bg-white overflow-hidden'>
                     <div
@@ -2387,14 +2548,7 @@ function AttemptsPanel({
                         View
                       </button>
                       <button
-                        onClick={() =>
-                          openPaper(
-                            aid,
-                            str(
-                              r.studentName ?? r.fullname ?? r.username ?? 'Student',
-                            ),
-                          )
-                        }
+                        onClick={() => openPaper(aid, who)}
                         className='px-2 py-1 rounded-lg bg-slate-100 text-slate-500 text-[9px] font-black uppercase hover:text-[#002EFF]'
                         title='Read the marked paper, answer by answer'
                       >
@@ -2402,7 +2556,7 @@ function AttemptsPanel({
                       </button>
                       {!withdrawn && (
                         <button
-                          onClick={() => withdraw(aid)}
+                          onClick={() => withdraw(aid, who)}
                           className='px-2 py-1 rounded-lg bg-amber-50 text-amber-600 text-[9px] font-black uppercase'
                           title='Withdraw result (keeps the record, voids the score)'
                         >
@@ -2410,7 +2564,7 @@ function AttemptsPanel({
                         </button>
                       )}
                       <button
-                        onClick={() => del(aid)}
+                        onClick={() => del(aid, who)}
                         className='p-1 text-slate-300 hover:text-rose-500'
                         title='Delete attempt'
                       >
@@ -2468,6 +2622,7 @@ function AttemptsPanel({
           )}
         </>
       )}
+      {confirmDialog}
     </Card>
   )
 }
