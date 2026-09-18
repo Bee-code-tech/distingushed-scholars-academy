@@ -471,46 +471,62 @@ export default function QuizBuilder() {
   }
 
   return (
-    <div className='max-w-4xl mx-auto space-y-6 px-1'>
-      <div className='flex items-start justify-between gap-3'>
-        <div>
-          <h1 className='text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2'>
-            <HelpCircle size={20} className='text-[#002EFF]' /> Quizzes
-          </h1>
-          <p className='text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-1'>
-            {editingId
-              ? 'Edit quiz details'
-              : showBuilder
-                ? 'Build a quiz from the tutor question bank'
-                : 'Create and manage student assessments'}
-          </p>
+    <div className='max-w-4xl mx-auto space-y-6 px-1 [font-variant-numeric:tabular-nums]'>
+      <header className='relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#002EFF] to-[#0a1cc4] text-white p-5 sm:p-6 shadow-lg shadow-blue-200/60'>
+        <div
+          aria-hidden
+          className='pointer-events-none absolute inset-0 opacity-[0.12]'
+          style={{
+            backgroundImage:
+              'radial-gradient(circle at 1px 1px, #fff 1px, transparent 0)',
+            backgroundSize: '22px 22px',
+          }}
+        />
+        <div className='relative flex items-start justify-between gap-3'>
+          <div className='flex items-start gap-3 min-w-0'>
+            <div className='h-11 w-11 rounded-2xl bg-white/15 backdrop-blur flex items-center justify-center shrink-0 ring-1 ring-white/20'>
+              <HelpCircle size={22} />
+            </div>
+            <div className='min-w-0'>
+              <h1 className='text-2xl sm:text-3xl font-black tracking-tight leading-none'>
+                Quizzes
+              </h1>
+              <p className='text-[11px] font-semibold text-blue-100/90 mt-2'>
+                {editingId
+                  ? 'Edit quiz details'
+                  : showBuilder
+                    ? 'Build a quiz from the tutor question bank'
+                    : 'Create and manage student assessments'}
+              </p>
+            </div>
+          </div>
+          {(canCreate || showBuilder) && (
+            <button
+              onClick={() => {
+                if (showBuilder) {
+                  // Leaving the builder — clear any in-progress edit.
+                  setEditingId(null)
+                  setShowBuilder(false)
+                } else {
+                  setEditingId(null)
+                  setShowBuilder(true)
+                }
+              }}
+              className='flex items-center gap-2 h-10 px-4 rounded-xl bg-white text-[#002EFF] font-black text-[11px] uppercase tracking-wide hover:bg-blue-50 active:scale-[0.98] transition-all shrink-0 shadow-sm'
+            >
+              {showBuilder ? (
+                <>
+                  <ArrowLeft size={15} /> Back to list
+                </>
+              ) : (
+                <>
+                  <Plus size={15} /> Create quiz
+                </>
+              )}
+            </button>
+          )}
         </div>
-        {(canCreate || showBuilder) && (
-          <button
-            onClick={() => {
-              if (showBuilder) {
-                // Leaving the builder — clear any in-progress edit.
-                setEditingId(null)
-                setShowBuilder(false)
-              } else {
-                setEditingId(null)
-                setShowBuilder(true)
-              }
-            }}
-            className='flex items-center gap-2 h-10 px-4 rounded-xl bg-[#002EFF] text-white font-black text-[11px] uppercase tracking-wide hover:bg-blue-700 active:scale-[0.98] shrink-0'
-          >
-            {showBuilder ? (
-              <>
-                <ArrowLeft size={15} /> Back to list
-              </>
-            ) : (
-              <>
-                <Plus size={15} /> Create New Quiz
-              </>
-            )}
-          </button>
-        )}
-      </div>
+      </header>
 
       {notice && (
         <div className='flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5'>
@@ -942,7 +958,7 @@ export default function QuizBuilder() {
                   const open = openAttempts === id
                   return (
                     <div key={id} className='space-y-2'>
-                      <Card className='p-3.5 rounded-2xl border border-slate-100 shadow-sm bg-white'>
+                      <Card className='p-3.5 rounded-2xl border border-slate-100/80 shadow-sm bg-white transition-all hover:shadow-md hover:border-[#002EFF]/20'>
                         <div className='flex flex-wrap items-center gap-3'>
                           {/* Quiz info */}
                           <div className='min-w-0 flex-1'>
@@ -1064,12 +1080,12 @@ function StatCard({
   tint: string
 }) {
   return (
-    <Card className='p-3 rounded-2xl border border-slate-100 shadow-sm bg-white flex items-center gap-2.5'>
-      <div className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 ${tint}`}>
-        <Icon size={15} />
+    <Card className='p-3 rounded-2xl border-none shadow-sm bg-white flex items-center gap-2.5 transition-shadow hover:shadow-md'>
+      <div className={`h-9 w-9 rounded-xl flex items-center justify-center shrink-0 ${tint}`}>
+        <Icon size={16} />
       </div>
       <div className='min-w-0'>
-        <p className='text-lg font-black text-slate-900 leading-none tabular-nums'>{value}</p>
+        <p className='text-xl font-black text-slate-900 leading-none tabular-nums'>{value}</p>
         <p className='text-[8px] font-black uppercase tracking-widest text-slate-400 mt-1 truncate'>
           {label}
         </p>

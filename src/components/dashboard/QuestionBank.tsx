@@ -348,46 +348,63 @@ export default function QuestionBank({ token }: { token?: string }) {
   }
 
   return (
-    <div className='max-w-4xl mx-auto space-y-5'>
-      <div className='flex items-center justify-between flex-wrap gap-2'>
-        <div>
-          <h2 className='text-2xl font-black text-[#002EFF] italic uppercase'>
-            Question Bank
-          </h2>
-          <p className='text-[10px] font-bold text-gray-400 uppercase tracking-widest'>
-            Add questions for your subjects — the admin builds quizzes from these
-          </p>
-        </div>
-        <div className='flex items-center gap-2 flex-wrap'>
-          <input
-            value={batchName}
-            onChange={(e) => setBatchName(e.target.value)}
-            placeholder='Batch name (optional)'
-            title='Names this Excel upload — shown on every question in it (tutor & admin)'
-            className='h-10 px-3 rounded-xl bg-slate-50 border border-slate-200 outline-none text-[12px] font-bold w-40'
-          />
-          <button
-            onClick={downloadTemplate}
-            className='flex items-center gap-2 h-10 px-4 rounded-xl bg-slate-50 text-slate-600 font-black text-[11px] uppercase tracking-wide hover:bg-slate-100'
-          >
-            <Download size={15} /> Template
-          </button>
-          <button
-            onClick={() => excelInput.current?.click()}
-            disabled={busy}
-            className='flex items-center gap-2 h-10 px-4 rounded-xl bg-emerald-50 text-emerald-700 font-black text-[11px] uppercase tracking-wide hover:bg-emerald-100 disabled:opacity-50'
-          >
-            <FileSpreadsheet size={15} /> Import Excel
-          </button>
-        </div>
-        <input
-          ref={excelInput}
-          type='file'
-          accept='.xlsx,.xls,.csv'
-          hidden
-          onChange={(e) => onExcel(e.target.files?.[0] ?? null)}
+    <div className='max-w-4xl mx-auto space-y-5 [font-variant-numeric:tabular-nums]'>
+      <header className='relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#002EFF] to-[#0a1cc4] text-white p-5 sm:p-6 shadow-lg shadow-blue-200/60'>
+        <div
+          aria-hidden
+          className='pointer-events-none absolute inset-0 opacity-[0.12]'
+          style={{
+            backgroundImage:
+              'radial-gradient(circle at 1px 1px, #fff 1px, transparent 0)',
+            backgroundSize: '22px 22px',
+          }}
         />
-      </div>
+        <div className='relative flex flex-wrap items-start justify-between gap-3'>
+          <div className='flex items-start gap-3 min-w-0'>
+            <div className='h-11 w-11 rounded-2xl bg-white/15 ring-1 ring-white/20 backdrop-blur flex items-center justify-center shrink-0'>
+              <FileSpreadsheet size={20} />
+            </div>
+            <div className='min-w-0'>
+              <h2 className='text-2xl sm:text-3xl font-black tracking-tight leading-none'>
+                Question bank
+              </h2>
+              <p className='text-[11px] font-semibold text-blue-100/90 mt-2 max-w-sm'>
+                Add questions for your subjects — the admin builds quizzes from
+                these.
+              </p>
+            </div>
+          </div>
+          <div className='flex items-center gap-2 flex-wrap'>
+            <input
+              value={batchName}
+              onChange={(e) => setBatchName(e.target.value)}
+              placeholder='Batch name (optional)'
+              title='Names this Excel upload — shown on every question in it (tutor & admin)'
+              className='h-10 px-3 rounded-xl bg-white/15 ring-1 ring-white/25 text-white placeholder-blue-100/70 outline-none text-[12px] font-bold w-40 focus:bg-white/25 transition-colors'
+            />
+            <button
+              onClick={downloadTemplate}
+              className='flex items-center gap-2 h-10 px-4 rounded-xl bg-white/15 ring-1 ring-white/25 text-white font-black text-[11px] uppercase tracking-wide hover:bg-white/25 active:scale-[0.98] transition-all'
+            >
+              <Download size={15} /> Template
+            </button>
+            <button
+              onClick={() => excelInput.current?.click()}
+              disabled={busy}
+              className='flex items-center gap-2 h-10 px-4 rounded-xl bg-[#FCB900] text-[#002EFF] font-black text-[11px] uppercase tracking-wide hover:brightness-105 active:scale-[0.98] transition-all disabled:opacity-50'
+            >
+              <FileSpreadsheet size={15} /> Import Excel
+            </button>
+          </div>
+          <input
+            ref={excelInput}
+            type='file'
+            accept='.xlsx,.xls,.csv'
+            hidden
+            onChange={(e) => onExcel(e.target.files?.[0] ?? null)}
+          />
+        </div>
+      </header>
 
       {notice && (
         <div className='flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5'>
@@ -586,9 +603,9 @@ export default function QuestionBank({ token }: { token?: string }) {
           questions.map((q, i) => (
             <Card
               key={q.id}
-              className='p-3 rounded-2xl border-none shadow-sm bg-white flex items-start gap-3'
+              className='p-3 rounded-2xl border-none shadow-sm bg-white flex items-start gap-3 transition-shadow hover:shadow-md'
             >
-              <span className='text-[10px] font-black text-slate-300 mt-0.5'>
+              <span className='text-[10px] font-black text-slate-300 mt-0.5 tabular-nums'>
                 {i + 1}
               </span>
               <div className='min-w-0 flex-1'>
