@@ -17,8 +17,6 @@ import {
 
 import { dsaApi, isBackendUnreachable } from '@/lib/api'
 import { setSession, dashboardPathForRole } from '@/lib/auth'
-import { DEMO_TOKEN_PREFIX } from '@/lib/demoAccounts'
-import type { UserRole } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import {
   Form,
@@ -36,12 +34,15 @@ import {
 import { Card, CardContent } from '@/components/ui/card'
 
 const formSchema = z.object({
-  otp: z.string().length(4, 'Enter the full 4-digit code'),
+  // Codes are 6 digits. Older ones already in someone's inbox are 4, so both
+  // are accepted until every 10-minute code from the previous format is gone.
+  otp: z
+    .string()
+    .regex(/^\d{4}$|^\d{6}$/, 'Enter the full code from your email'),
 })
 
 // Demo verification code. The real flow will verify against the backend; for
 // now any account activates with this code. Keep in sync with the hint shown.
-const DEMO_OTP = '1111'
 
 const RESEND_COOLDOWN = 180
 
@@ -117,36 +118,6 @@ export default function VerifyOTP() {
     }
   }
 
-  // Establish a local demo session from the profile stashed at registration.
-  // Used ONLY as a preview fallback when the backend can't be reached yet.
-  const activateDemoSession = () => {
-    let pending: { email?: string; username?: string; role?: string } | null =
-      null
-    try {
-      pending = JSON.parse(localStorage.getItem('dsa_pending_user') || 'null')
-    } catch {
-      pending = null
-    }
-    const role = (pending?.role as UserRole) || 'student'
-    setSession({
-      token: `${DEMO_TOKEN_PREFIX}${pending?.username || 'student'}`,
-      user: pending
-        ? {
-            email: pending.email || email || '',
-            username: pending.username,
-            role,
-            ...(pending as object),
-          }
-        : { email: email || '', role },
-      role,
-    })
-    localStorage.removeItem('dsa_pending_email')
-    localStorage.removeItem('dsa_pending_user')
-    localStorage.removeItem('otp_expiry')
-    setApiSuccess('Verified! Loading your dashboard…')
-    router.replace(dashboardPathForRole(role))
-  }
-
   async function onSubmit(values: z.infer<typeof formSchema>) {
     if (!email) return
     setApiError(null)
@@ -170,17 +141,13 @@ export default function VerifyOTP() {
       setApiSuccess('Verified! Loading your dashboard…')
       router.replace(dashboardPathForRole(data.user?.role || 'student'))
     } catch (err) {
-      // Only fall back to the demo code when the backend isn't reachable yet.
-      // A real server error (wrong/expired code) is shown as-is.
+      // The API sleeps between bursts of traffic; lib/api.ts already retried a
+      // couple of times, so if it is still unreachable say so plainly and let
+      // them try again. Never sign anyone in without the server's say-so.
       if (isBackendUnreachable(err)) {
-        if (values.otp === DEMO_OTP) {
-          activateDemoSession()
-        } else {
-          setApiError(
-            'Backend not connected — enter the demo code 1111 to preview.',
-          )
-          form.setValue('otp', '')
-        }
+        setApiError(
+          'We could not reach the server just now. Wait a moment and press Verify again — your code is still valid.',
+        )
       } else {
         setApiError(
           err instanceof Error
@@ -213,7 +180,7 @@ export default function VerifyOTP() {
           We sent a code to <span className='text-[#002EFF]'>{email}</span>
         </p>
         <p className='text-[10px] font-bold text-gray-400 mt-1 tracking-wide normal-case'>
-          Enter the 4-digit code from your email. Check spam if you don&apos;t see
+          Enter the code from your email. Check spam if you don&apos;t see
           it, or tap “Request New Code”.
         </p>
       </div>
@@ -257,16 +224,16 @@ export default function VerifyOTP() {
                     <FormControl>
                       {/* FIXED: Using direct child pattern to prevent the 'undefined (reading 0)' crash */}
                       <InputOTP
-                        maxLength={4}
+                        maxLength={6}
                         {...field}
                         onComplete={() => form.handleSubmit(onSubmit)()}
                       >
-                        <InputOTPGroup className='gap-2 md:gap-3'>
-                          {[0, 1, 2, 3].map((idx) => (
+                        <InputOTPGroup className='gap-1.5 md:gap-2'>
+                          {[0, 1, 2, 3, 4, 5].map((idx) => (
                             <InputOTPSlot
                               key={idx}
                               index={idx}
-                              className='w-10 h-14 md:w-12 md:h-16 text-2xl font-black rounded-xl border-none bg-gray-50 focus-visible:ring-2 focus-visible:ring-[#002EFF]'
+                              className='w-9 h-12 md:w-11 md:h-14 text-xl md:text-2xl font-black rounded-xl border-none bg-gray-50 focus-visible:ring-2 focus-visible:ring-[#002EFF]'
                             />
                           ))}
                         </InputOTPGroup>

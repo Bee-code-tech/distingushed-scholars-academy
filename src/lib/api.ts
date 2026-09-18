@@ -83,6 +83,34 @@ async function handleResponse<T>(response: Response): Promise<T> {
   return data as T
 }
 
+/**
+ * The API is serverless: the first request after a quiet spell waits on a fresh
+ * database connection and can come back 503 "Database unavailable", or drop
+ * before it answers at all. That is a few seconds of waking up, not a fault, so
+ * calls that a person is sitting and waiting on retry once or twice rather than
+ * telling them something is broken.
+ */
+async function withWakeUpRetry<T>(
+  call: () => Promise<T>,
+  attempts = 3,
+): Promise<T> {
+  let lastError: unknown
+  for (let i = 0; i < attempts; i += 1) {
+    try {
+      return await call()
+    } catch (err) {
+      lastError = err
+      const transient =
+        isBackendUnreachable(err) ||
+        (err instanceof Error && /database unavailable|50[234]/i.test(err.message))
+      if (!transient || i === attempts - 1) throw err
+      // 600ms, then 1.8s — a cold start is usually up well inside that.
+      await new Promise((r) => setTimeout(r, 600 * 3 ** i))
+    }
+  }
+  throw lastError
+}
+
 /** Default headers, including the Bearer token when available. */
 const getHeaders = (token?: string, isJson = true): HeadersInit => {
   const headers: Record<string, string> = {}
@@ -134,25 +162,31 @@ export const dsaApi = {
      * handleResponse surfaces those messages as-is.
      */
     sendOtp: (email: string) =>
-      fetch(`${BASE_URL}/auth/send-otp`, {
-        method: 'POST',
-        headers: getHeaders(),
-        body: JSON.stringify({ email }),
-      }).then((r) => handleResponse<{ success?: boolean; message: string }>(r)),
+      withWakeUpRetry(() =>
+        fetch(`${BASE_URL}/auth/send-otp`, {
+          method: 'POST',
+          headers: getHeaders(),
+          body: JSON.stringify({ email }),
+        }).then((r) => handleResponse<{ success?: boolean; message: string }>(r)),
+      ),
 
     verifyOtp: (email: string, otp: string) =>
-      fetch(`${BASE_URL}/auth/verify-otp`, {
-        method: 'POST',
-        headers: getHeaders(),
-        body: JSON.stringify({ email, otp }),
-      }).then((r) => handleResponse<AuthResponse>(r)),
+      withWakeUpRetry(() =>
+        fetch(`${BASE_URL}/auth/verify-otp`, {
+          method: 'POST',
+          headers: getHeaders(),
+          body: JSON.stringify({ email, otp }),
+        }).then((r) => handleResponse<AuthResponse>(r)),
+      ),
 
     login: (payload: LoginPayload) =>
-      fetch(`${BASE_URL}/auth/login`, {
-        method: 'POST',
-        headers: getHeaders(),
-        body: JSON.stringify(payload),
-      }).then((r) => handleResponse<AuthResponse>(r)),
+      withWakeUpRetry(() =>
+        fetch(`${BASE_URL}/auth/login`, {
+          method: 'POST',
+          headers: getHeaders(),
+          body: JSON.stringify(payload),
+        }).then((r) => handleResponse<AuthResponse>(r)),
+      ),
 
     forgotPassword: (email: string) =>
       fetch(`${BASE_URL}/auth/forgot-password`, {
