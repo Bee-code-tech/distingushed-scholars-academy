@@ -24,6 +24,7 @@ import {
   Users,
   Link as LinkIcon,
   ArrowLeft,
+  ArrowRight,
   Pencil,
   Search,
   FileQuestion,
@@ -132,6 +133,8 @@ export default function QuizBuilder() {
   const PAGE_SIZE = 8
   // When set, the builder is editing an existing quiz's details (not creating).
   const [editingId, setEditingId] = useState<string | null>(null)
+  // The builder runs as steps so one long form doesn't face you all at once.
+  const [step, setStep] = useState(0)
 
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -288,7 +291,60 @@ export default function QuizBuilder() {
   const totalQuestions = blocks.reduce((n, b) => n + b.picked.length, 0)
   const totalMinutes = blocks.reduce((n, b) => n + (Number(b.timeLimit) || 0), 0)
 
-  const publish = async () => {
+  // Editing only changes details, so that run skips the Questions step.
+  const steps = (
+    editingId
+      ? (['basics', 'settings', 'review'] as const)
+      : (['basics', 'questions', 'settings', 'review'] as const)
+  ).slice() as ('basics' | 'questions' | 'settings' | 'review')[]
+  const stepLabels: Record<(typeof steps)[number], string> = {
+    basics: 'Basic info',
+    questions: 'Questions',
+    settings: 'Settings',
+    review: editingId ? 'Review & save' : 'Review & publish',
+  }
+  const current = steps[Math.min(step, steps.length - 1)]
+
+  /** What still has to be filled in before this step can be left. */
+  const stepError = (key: (typeof steps)[number]): string | null => {
+    if (key === 'basics') {
+      if (title.trim().length < 3) return 'Enter a quiz title.'
+      if (
+        accessMode === 'portal' &&
+        audienceMode === 'students' &&
+        assignedStudents.length === 0
+      )
+        return 'Select at least one student to assign this quiz to.'
+      if (
+        accessMode === 'portal' &&
+        audienceMode === 'programme' &&
+        track !== 'all' &&
+        isDeptSplitTrack(track) &&
+        !department
+      )
+        return 'Pick a department (Science, Art or Commercial) for this programme.'
+    }
+    if (key === 'questions' && totalQuestions === 0)
+      return 'Add at least one question.'
+    return null
+  }
+
+  const goToStep = (target: number) => {
+    // Going back is always allowed; going forward checks the steps in between.
+    if (target > step) {
+      for (let i = step; i < target; i += 1) {
+        const problem = stepError(steps[i])
+        if (problem) {
+          setStep(i)
+          return setError(problem)
+        }
+      }
+    }
+    setError(null)
+    setStep(Math.max(0, Math.min(target, steps.length - 1)))
+  }
+
+  const publish = async (asDraft = false) => {
     setError(null)
     if (title.trim().length < 3) return setError('Enter a quiz title.')
     // When editing, we update details only — questions aren't re-picked here.
@@ -370,6 +426,9 @@ export default function QuizBuilder() {
         const created = (await dsaApi.quizzes.create(
           {
             ...details,
+            // A draft is saved but stays out of students' quiz lists until it
+            // is published from the list view.
+            isActive: !asDraft,
             type: 'general',
             subjects: blocks
               .filter((b) => b.picked.length)
@@ -410,10 +469,19 @@ export default function QuizBuilder() {
       setShowCorrections(true)
       setBlocks([])
       setEditingId(null)
+      setStep(0)
       // A free quiz (created or edited) keeps the builder open so the shareable
       // link shows; a portal publish/edit returns to the list.
-      if (!isFree) setShowBuilder(false)
-      flash(wasEditing ? 'Quiz updated' : isFree ? 'Free quiz published' : 'Quiz published')
+      if (!isFree || asDraft) setShowBuilder(false)
+      flash(
+        wasEditing
+          ? 'Quiz updated'
+          : asDraft
+            ? 'Saved as draft'
+            : isFree
+              ? 'Free quiz published'
+              : 'Quiz published',
+      )
       loadList()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not save the quiz.')
@@ -426,6 +494,8 @@ export default function QuizBuilder() {
   const startEdit = (q: Record<string, unknown>) => {
     const id = str(q.id ?? q._id)
     setEditingId(id)
+    setStep(0)
+    setError(null)
     setTitle(str(q.title))
     setDescription(str(q.description))
     const mode = q.accessMode === 'free' ? 'free' : 'portal'
@@ -515,14 +585,11 @@ export default function QuizBuilder() {
           {(canCreate || showBuilder) && (
             <button
               onClick={() => {
-                if (showBuilder) {
-                  // Leaving the builder — clear any in-progress edit.
-                  setEditingId(null)
-                  setShowBuilder(false)
-                } else {
-                  setEditingId(null)
-                  setShowBuilder(true)
-                }
+                // Either way the next visit starts at step one.
+                setEditingId(null)
+                setError(null)
+                setStep(0)
+                setShowBuilder((open) => !open)
               }}
               className='flex items-center gap-2 h-10 px-4 rounded-xl bg-white text-[#002EFF] font-black text-[11px] uppercase tracking-wide hover:bg-blue-50 active:scale-[0.98] transition-all shrink-0 shadow-sm'
             >
@@ -588,7 +655,57 @@ export default function QuizBuilder() {
       {/* Builder — only when creating a new quiz */}
       {showBuilder && (
       <Card className='p-5 rounded-3xl border-none shadow-sm bg-white space-y-3'>
+        {/* Step rail — click a done step to go back and change something */}
+        <ol className='flex items-center gap-1 overflow-x-auto pb-1'>
+          {steps.map((s, i) => {
+            const state = i === step ? 'now' : i < step ? 'done' : 'todo'
+            return (
+              <li key={s} className='flex items-center gap-1 shrink-0'>
+                <button
+                  type='button'
+                  onClick={() => goToStep(i)}
+                  className={`flex items-center gap-1.5 h-8 pl-1.5 rounded-full transition-colors sm:pr-3 ${
+                    state === 'now' ? 'pr-3' : 'pr-1.5'
+                  } ${
+                    state === 'now'
+                      ? 'bg-[#002EFF] text-white'
+                      : state === 'done'
+                        ? 'bg-blue-50 text-[#002EFF] hover:bg-blue-100'
+                        : 'text-slate-400 hover:text-slate-600'
+                  }`}
+                >
+                  <span
+                    className={`h-5 w-5 rounded-full grid place-items-center text-[9px] font-black ${
+                      state === 'now'
+                        ? 'bg-white/20'
+                        : state === 'done'
+                          ? 'bg-[#002EFF] text-white'
+                          : 'bg-slate-100'
+                    }`}
+                  >
+                    {state === 'done' ? <Check size={11} /> : i + 1}
+                  </span>
+                  {/* On a phone only the step you are on spells itself out */}
+                  <span
+                    className={`text-[10px] font-black uppercase tracking-wide whitespace-nowrap ${
+                      state === 'now' ? '' : 'hidden sm:inline'
+                    }`}
+                  >
+                    {stepLabels[s]}
+                  </span>
+                </button>
+                {i < steps.length - 1 && (
+                  <span className='h-px w-3 bg-slate-200 shrink-0' />
+                )}
+              </li>
+            )
+          })}
+        </ol>
+
         {error && <p className='text-[11px] font-bold text-rose-600'>{error}</p>}
+
+        {current === 'basics' && (
+        <>
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
@@ -744,8 +861,11 @@ export default function QuizBuilder() {
             quiz, then see their result.
           </p>
         )}
+        </>
+        )}
 
         {/* Attempts & result controls */}
+        {current === 'settings' && (
         <div className='rounded-2xl bg-slate-50/70 p-3 space-y-2.5'>
           <p className='text-[9px] font-black uppercase text-slate-400'>
             Attempts &amp; results
@@ -801,14 +921,24 @@ export default function QuizBuilder() {
           </label>
         </div>
 
-        {editingId ? (
+        )}
+
+        {current === 'settings' && editingId && (
           <p className='text-[10px] font-bold text-slate-400 rounded-xl bg-slate-50 px-3 py-2.5'>
             Editing this quiz&apos;s details (title, audience, access, attempts,
             result settings). The questions stay as they are — to change questions,
             create a new quiz.
           </p>
-        ) : (
+        )}
+
+        {current === 'questions' && (
           <>
+            {blocks.length === 0 && (
+              <p className='text-[10px] font-bold text-slate-400 rounded-xl bg-slate-50 px-3 py-2.5'>
+                Add a subject, then pick its questions from the tutor question
+                bank. A mock can hold several subjects, each with its own timer.
+              </p>
+            )}
             {blocks.map((b, i) => (
               <SubjectBlockEditor
                 key={i}
@@ -829,8 +959,103 @@ export default function QuizBuilder() {
           </>
         )}
 
-        <div className='flex items-center justify-between pt-1'>
-          <span className='text-[11px] font-black text-slate-400 flex items-center gap-1'>
+        {/* Last look before it goes out to students */}
+        {current === 'review' && (
+          <div className='space-y-2'>
+            <div className='rounded-2xl bg-slate-50/70 p-3.5 space-y-2.5'>
+              <div>
+                <p className='text-[9px] font-black uppercase tracking-widest text-slate-400'>
+                  {accessMode === 'free' ? 'Free quiz · public link' : 'Portal quiz'}
+                </p>
+                <p className='text-base font-black text-slate-800 leading-tight mt-0.5'>
+                  {title.trim() || 'Untitled quiz'}
+                </p>
+                {description.trim() && (
+                  <p className='text-[11px] font-medium text-slate-500 mt-0.5'>
+                    {description.trim()}
+                  </p>
+                )}
+              </div>
+              <div className='grid grid-cols-2 sm:grid-cols-4 gap-2'>
+                {[
+                  {
+                    label: 'Who sees it',
+                    value:
+                      accessMode === 'free'
+                        ? 'Anyone with the link'
+                        : audienceMode === 'students'
+                          ? `${assignedStudents.length} student${assignedStudents.length === 1 ? '' : 's'}`
+                          : audienceLabel(
+                              track === 'all' ? null : track,
+                              track !== 'all' && isDeptSplitTrack(track)
+                                ? department
+                                : null,
+                            ),
+                  },
+                  {
+                    label: 'Questions',
+                    value: editingId ? 'Unchanged' : String(totalQuestions),
+                  },
+                  {
+                    label: 'Duration',
+                    value: editingId
+                      ? 'Unchanged'
+                      : totalMinutes > 0
+                        ? `${totalMinutes} min`
+                        : 'No limit',
+                  },
+                  {
+                    label: 'Attempts',
+                    value:
+                      Math.max(0, parseInt(maxAttempts, 10) || 0) === 0
+                        ? 'Unlimited'
+                        : maxAttempts,
+                  },
+                ].map((s) => (
+                  <div key={s.label} className='rounded-xl bg-white px-2.5 py-2'>
+                    <p className='text-[8px] font-black uppercase tracking-widest text-slate-400'>
+                      {s.label}
+                    </p>
+                    <p className='text-[11px] font-black text-slate-700 truncate'>
+                      {s.value}
+                    </p>
+                  </div>
+                ))}
+              </div>
+              {!editingId && blocks.some((b) => b.picked.length) && (
+                <div className='flex flex-wrap gap-1.5'>
+                  {blocks
+                    .filter((b) => b.picked.length)
+                    .map((b, i) => (
+                      <span
+                        key={i}
+                        className='text-[10px] font-black text-[#002EFF] bg-blue-50 rounded-lg px-2 py-1'
+                      >
+                        {b.name} · {b.picked.length}q
+                        {b.timeLimit ? ` · ${b.timeLimit}m` : ''}
+                      </span>
+                    ))}
+                </div>
+              )}
+              <p className='text-[10px] font-bold text-slate-500 flex flex-wrap gap-x-2'>
+                <span>
+                  Results {showResults ? 'shown' : 'hidden'}
+                </span>
+                <span className='text-slate-300'>·</span>
+                <span>
+                  Corrections{' '}
+                  {showResults && showCorrections ? 'allowed' : 'off'}
+                </span>
+                <span className='text-slate-300'>·</span>
+                <span>Leaderboard {showLeaderboard ? 'on' : 'off'}</span>
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Step navigation */}
+        <div className='flex items-center justify-between gap-3 pt-1'>
+          <span className='text-[11px] font-black text-slate-400 flex items-center gap-1 min-w-0'>
             {editingId ? (
               'Editing details'
             ) : (
@@ -846,18 +1071,49 @@ export default function QuizBuilder() {
               </>
             )}
           </span>
-          <button
-            onClick={publish}
-            disabled={publishing}
-            className='flex items-center gap-2 h-10 px-5 bg-[#002EFF] text-white rounded-xl font-black text-[11px] uppercase tracking-wide hover:bg-blue-700 active:scale-[0.98] disabled:opacity-50'
-          >
-            {publishing ? (
-              <Loader2 size={15} className='animate-spin' />
-            ) : (
-              <Check size={15} />
+          <div className='flex items-center gap-2 shrink-0'>
+            {step > 0 && (
+              <button
+                onClick={() => goToStep(step - 1)}
+                className='flex items-center gap-1.5 h-10 px-3 rounded-xl bg-slate-100 text-slate-500 font-black text-[11px] uppercase tracking-wide hover:text-[#002EFF]'
+              >
+                <ArrowLeft size={14} /> Back
+              </button>
             )}
-            {editingId ? 'Save changes' : 'Publish quiz'}
-          </button>
+            {current !== 'review' ? (
+              <button
+                onClick={() => goToStep(step + 1)}
+                className='flex items-center gap-2 h-10 px-5 bg-[#002EFF] text-white rounded-xl font-black text-[11px] uppercase tracking-wide hover:bg-blue-700 active:scale-[0.98]'
+              >
+                Next <ArrowRight size={14} />
+              </button>
+            ) : (
+              <>
+                {!editingId && (
+                  <button
+                    onClick={() => publish(true)}
+                    disabled={publishing}
+                    title='Save without showing it to students yet'
+                    className='h-10 px-3 rounded-xl bg-slate-100 text-slate-500 font-black text-[11px] uppercase tracking-wide hover:text-[#002EFF] disabled:opacity-50'
+                  >
+                    Save as draft
+                  </button>
+                )}
+                <button
+                  onClick={() => publish(false)}
+                  disabled={publishing}
+                  className='flex items-center gap-2 h-10 px-5 bg-[#002EFF] text-white rounded-xl font-black text-[11px] uppercase tracking-wide hover:bg-blue-700 active:scale-[0.98] disabled:opacity-50'
+                >
+                  {publishing ? (
+                    <Loader2 size={15} className='animate-spin' />
+                  ) : (
+                    <Check size={15} />
+                  )}
+                  {editingId ? 'Save changes' : 'Publish quiz'}
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </Card>
       )}
@@ -1854,7 +2110,7 @@ function AnalyticsView({
                 {b.count}
               </span>
               <div
-                className={`w-full rounded-t-md ${b.tone}`}
+                className={`w-full max-w-[56px] rounded-t-md ${b.tone}`}
                 style={{ height: `${Math.max((b.count / peak) * 56, 3)}px` }}
               />
               <span className='text-[8px] font-bold text-slate-400'>{b.label}</span>

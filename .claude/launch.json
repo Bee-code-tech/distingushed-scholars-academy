@@ -6,6 +6,13 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "port": 3000
+    },
+    {
+      "name": "dsa-preview",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["next", "dev", "--webpack", "-p", "3100"],
+      "env": { "NEXT_PUBLIC_API_URL": "http://localhost:59998" },
+      "port": 3100
     }
   ]
 }
