@@ -65,20 +65,21 @@ const LEVEL_RANK: Record<AccessLevel, number> = {
 }
 
 /**
- * Whether a feature is available. Community needs L2+, Assignments need L3.
- * Count-limited features (tests/materials/live classes) are "available" here —
- * their per-level caps are checked with `capFor`. Always true while the paywall
- * is off.
+ * Whether a feature is available. Community is open to ALL students (free + paid)
+ * — it's used for live classes. Assignments need L3. Count-limited features
+ * (tests/materials/live classes) are "available" here — their per-level caps are
+ * checked with `capFor`. Always true while the paywall is off.
  */
 export function canAccess(
   feature: GatedFeature,
   user?: Partial<User> | null,
 ): boolean {
+  // Community stays open regardless of the paywall — an admin toggle to restrict
+  // it to paid users can gate this later.
+  if (feature === 'community') return true
   if (!PAYWALL_ENABLED) return true
   const rank = LEVEL_RANK[accessLevel(user)]
   switch (feature) {
-    case 'community':
-      return rank >= LEVEL_RANK.portal
     case 'assignments':
       return rank >= LEVEL_RANK.tutorial
     default:
