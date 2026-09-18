@@ -26,6 +26,7 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
+  RotateCcw,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { dsaApi } from '@/lib/api'
@@ -1228,6 +1229,8 @@ function AttemptsPanel({ quizId, token }: { quizId: string; token?: string }) {
   const [detailLoading, setDetailLoading] = useState(false)
   // Which public (free-quiz) taker's breakdown is expanded.
   const [openPublic, setOpenPublic] = useState<string | null>(null)
+  const [rescoring, setRescoring] = useState(false)
+  const [rescoreMsg, setRescoreMsg] = useState<string | null>(null)
 
   // Load the per-question results + the quiz's question→subject map, once.
   const loadDetailData = useCallback(async () => {
@@ -1370,6 +1373,26 @@ function AttemptsPanel({ quizId, token }: { quizId: string; token?: string }) {
     return t > 0 ? Math.round((s / t) * 100) : 0
   }
 
+  const doRescore = async () => {
+    setRescoring(true)
+    setRescoreMsg(null)
+    try {
+      const res = (await dsaApi.quizzes.rescore(quizId, token)) as {
+        updated?: number
+      }
+      setRescoreMsg(
+        `Re-graded ${res?.updated ?? 0} result${res?.updated === 1 ? '' : 's'} against the current answers.`,
+      )
+      await load()
+    } catch (e) {
+      setRescoreMsg(
+        e instanceof Error ? e.message : 'Could not rescore right now.',
+      )
+    } finally {
+      setRescoring(false)
+    }
+  }
+
   return (
     <Card className='p-4 rounded-2xl border-none shadow-sm bg-slate-50/70 space-y-3'>
       {loading ? (
@@ -1378,11 +1401,31 @@ function AttemptsPanel({ quizId, token }: { quizId: string; token?: string }) {
         </div>
       ) : (
         <>
-          <p className='text-[9px] font-black uppercase tracking-widest text-slate-400'>
-            {attempts.length + publicAttempts.length}{' '}
-            {attempts.length + publicAttempts.length === 1 ? 'person' : 'people'}{' '}
-            took this quiz
-          </p>
+          <div className='flex items-center justify-between gap-2'>
+            <p className='text-[9px] font-black uppercase tracking-widest text-slate-400'>
+              {attempts.length + publicAttempts.length}{' '}
+              {attempts.length + publicAttempts.length === 1 ? 'person' : 'people'}{' '}
+              took this quiz
+            </p>
+            {attempts.length + publicAttempts.length > 0 && (
+              <button
+                onClick={doRescore}
+                disabled={rescoring}
+                title='Re-grade all submissions against the current correct answers (use after fixing an answer)'
+                className='shrink-0 inline-flex items-center gap-1.5 h-7 px-2.5 rounded-lg bg-white text-[#002EFF] font-black text-[9px] uppercase tracking-wide hover:bg-blue-50 disabled:opacity-50'
+              >
+                {rescoring ? (
+                  <Loader2 size={11} className='animate-spin' />
+                ) : (
+                  <RotateCcw size={11} />
+                )}
+                Rescore
+              </button>
+            )}
+          </div>
+          {rescoreMsg && (
+            <p className='text-[10px] font-bold text-emerald-600'>{rescoreMsg}</p>
+          )}
 
           {board.length > 0 && (
             <div>

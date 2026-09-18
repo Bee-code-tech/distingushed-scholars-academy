@@ -305,6 +305,16 @@ export const dsaApi = {
         headers: getHeaders(token),
       }).then((r) => handleResponse<LeaderboardEntry[]>(r)),
 
+    // POST /quizzes/:id/rescore — re-grade all results against current answers
+    // (after fixing a wrong correct-answer). Returns { updated }.
+    rescore: (id: string, token?: string) =>
+      fetch(`${BASE_URL}/quizzes/${encodeURIComponent(id)}/rescore`, {
+        method: 'POST',
+        headers: getHeaders(token),
+      })
+        .then((r) => handleResponse<{ data?: { updated?: number } }>(r))
+        .then((r) => (r as { data?: { updated?: number } }).data ?? {}),
+
     // GET /quizzes/:id/results — every submission for a quiz (admin/tutor), each
     // with the student's per-question answers for a score breakdown.
     results: (id: string, token?: string) =>
