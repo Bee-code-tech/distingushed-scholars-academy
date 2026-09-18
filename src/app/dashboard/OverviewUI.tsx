@@ -29,6 +29,7 @@ import {
   getTodayClasses,
   gridFromApi,
   slotsFromApi,
+  timetableKey,
   DEFAULT_SLOTS,
   type NextClass,
   type Slot,
@@ -98,7 +99,10 @@ function ModeCard({ student }: { student: StudentProfile }) {
     const t = getToken()
     if (t && !isDemoToken(t)) {
       Promise.allSettled([
-        dsaApi.timetable.get(student.track),
+        // Fetch the SAME timetable the admin edits — the department-split key
+        // (e.g. jamb-science), not the bare track, or the card reads a different
+        // timetable that still has the default morning times.
+        dsaApi.timetable.get(timetableKey(student.track, student.department)),
         dsaApi.liveClasses.next(student.track),
       ])
         .then(([tt, lc]) => {
