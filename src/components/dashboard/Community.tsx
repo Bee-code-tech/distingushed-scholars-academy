@@ -33,6 +33,8 @@ import {
   UserMinus,
   BarChart3,
   Eye,
+  Bell,
+  BellOff,
   Reply,
   SmilePlus,
   ChevronDown,
@@ -117,6 +119,8 @@ interface Msg {
   reactions: Reaction[]
   /** Set when this message answers another one. */
   replyTo?: ReplyPreview
+  /** This message names me (by name or @everyone). */
+  mentionedMe: boolean
 }
 
 // Largest file we let the browser attempt (Cloudinary's unsigned preset caps it
@@ -145,6 +149,23 @@ function previewText(m: {
   if (m.type === 'audio') return '🎤 Voice note'
   if (m.type === 'file') return `📄 ${m.fileName || 'Document'}`
   return m.text || ''
+}
+
+/** Draw @names apart from the rest of the sentence. */
+function withMentions(text: string, own: boolean) {
+  const parts = text.split(/(@[\w][\w' -]{0,29})/g)
+  return parts.map((part, i) =>
+    part.startsWith('@') ? (
+      <span
+        key={i}
+        className={`font-black ${own ? 'text-white underline decoration-white/40' : 'text-[#002EFF]'}`}
+      >
+        {part}
+      </span>
+    ) : (
+      <Fragment key={i}>{part}</Fragment>
+    ),
+  )
 }
 
 /** Messages are grouped under the day they were sent. */
@@ -212,6 +233,19 @@ export default function Community({
   const [attachOpen, setAttachOpen] = useState(false)
   // The message the next send will answer (cleared once it goes out).
   const [replyTarget, setReplyTarget] = useState<Msg | null>(null)
+  // Who else is in this channel right now, and who is mid-sentence.
+  const [online, setOnline] = useState<
+    { id: string; fullname: string; role: string }[]
+  >([])
+  const [typingNames, setTypingNames] = useState<string[]>([])
+  const typingRef = useRef(false)
+  const typingStopRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // @mention picker state, driven by what you are typing.
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null)
+  const mentionedRef = useRef<Record<string, string>>({})
+  // The notifications panel (unread + mentions per channel, with mute).
+  const [bellOpen, setBellOpen] = useState(false)
+  const [memberSearch, setMemberSearch] = useState('')
   // Search across the channels this person can open.
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
@@ -344,6 +378,7 @@ export default function Community({
               }))
               .filter((r) => r.emoji && r.count > 0)
           : [],
+        mentionedMe: !!raw.mentionedMe,
         replyTo: raw.replyTo
           ? (() => {
               const p = raw.replyTo as Record<string, unknown>
@@ -445,6 +480,52 @@ export default function Community({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages.length])
 
+  // One beat: tell the server we're here, hear who else is.
+  const beat = useCallback(
+    async (typing?: boolean) => {
+      try {
+        const res = await dsaApi.community.presence(
+          { channelId: activeChannel, ...(typing === undefined ? {} : { typing }) },
+          token,
+        )
+        setOnline(res.online ?? [])
+        setTypingNames((res.typing ?? []).map((t) => t.fullname))
+      } catch {
+        /* presence endpoint not live yet — the room just looks empty */
+      }
+    },
+    [activeChannel, token],
+  )
+
+  useEffect(() => {
+    setOnline([])
+    setTypingNames([])
+    beat()
+    const timer = setInterval(() => beat(), 12000)
+    return () => clearInterval(timer)
+  }, [beat])
+
+  /** Called as you type: says "typing" once, and stops on its own. */
+  const noteTyping = useCallback(() => {
+    if (!typingRef.current) {
+      typingRef.current = true
+      beat(true)
+    }
+    if (typingStopRef.current) clearTimeout(typingStopRef.current)
+    typingStopRef.current = setTimeout(() => {
+      typingRef.current = false
+      beat(false)
+    }, 4000)
+  }, [beat])
+
+  const stopTyping = useCallback(() => {
+    if (typingStopRef.current) clearTimeout(typingStopRef.current)
+    if (typingRef.current) {
+      typingRef.current = false
+      beat(false)
+    }
+  }, [beat])
+
   const runSearch = useCallback(async () => {
     const q = searchTerm.trim()
     if (q.length < 2) return
@@ -544,9 +625,22 @@ export default function Community({
   const sendText = useCallback(() => {
     const t = text.trim()
     if (!t || sending) return
+    // Only send the mentions whose name is still in the text.
+    const mentions = Object.entries(mentionedRef.current)
+      .filter(([, name]) => t.includes(`@${name}`))
+      .map(([id]) => id)
+    const mentionsEveryone = /(^|\s)@everyone\b/i.test(t) && canManage
     setText('')
-    post({ type: 'text', text: t })
-  }, [text, sending, post])
+    setMentionQuery(null)
+    mentionedRef.current = {}
+    stopTyping()
+    post({
+      type: 'text',
+      text: t,
+      ...(mentions.length ? { mentions } : {}),
+      ...(mentionsEveryone ? { mentionsEveryone: true } : {}),
+    })
+  }, [text, sending, post, canManage, stopTyping])
 
   const handleFile = useCallback(
     async (file: File | null, type: MsgType) => {
@@ -945,7 +1039,6 @@ export default function Community({
 
   // ---- Members (tutor / admin) ----
   const loadMembers = useCallback(async () => {
-    if (!(mode === 'tutor' || mode === 'admin')) return
     try {
       const rows = (await dsaApi.community.members(
         activeChannel,
@@ -975,11 +1068,72 @@ export default function Community({
         })
     })
     setMembers([...seen.values()])
-  }, [mode, activeChannel, token, messages])
+  }, [activeChannel, token, messages])
 
+  // The roster feeds both the member panel and the @mention picker, so load it
+  // with the channel rather than only when the panel opens.
   useEffect(() => {
-    if (membersOpen) loadMembers()
-  }, [membersOpen, loadMembers])
+    loadMembers()
+  }, [loadMembers])
+
+  // Who the "@" you just typed could mean. Staff also get @everyone.
+  const mentionOptions =
+    mentionQuery === null
+      ? []
+      : [
+          ...(canManage && 'everyone'.startsWith(mentionQuery.toLowerCase())
+            ? [{ id: '@everyone', name: 'everyone', role: 'all' }]
+            : []),
+          ...members
+            .filter((m) => m.id !== myId)
+            .filter((m) =>
+              m.name.toLowerCase().includes(mentionQuery.toLowerCase()),
+            ),
+        ].slice(0, 6)
+
+  // The bell counts what a muted channel keeps to itself.
+  const alertCount = channels.reduce(
+    (n, c) => (c.muted ? n : n + (c.unread || 0)),
+    0,
+  )
+
+  const setMute = useCallback(
+    async (channelId: string, minutes?: number) => {
+      // Optimistic: the badge should go quiet the moment you ask.
+      setChannels((cur) =>
+        cur.map((c) =>
+          c.id === channelId
+            ? {
+                ...c,
+                muted: minutes !== 0,
+                mutedUntil:
+                  minutes && minutes > 0 ? Date.now() + minutes * 60000 : null,
+              }
+            : c,
+        ),
+      )
+      try {
+        await dsaApi.community.mute(
+          channelId,
+          minutes === 0 ? { off: true } : { minutes },
+          token,
+        )
+      } catch {
+        /* ignore — the next channel poll restores the truth */
+      }
+      loadChannels()
+    },
+    [token, loadChannels],
+  )
+
+  const pickMention = useCallback(
+    (who: { id: string; name: string }) => {
+      setText((cur) => cur.replace(/@([\w' -]{0,30})$/, `@${who.name} `))
+      if (who.id !== '@everyone') mentionedRef.current[who.id] = who.name
+      setMentionQuery(null)
+    },
+    [],
+  )
 
   const removeMember = useCallback(
     async (userId: string) => {
@@ -1055,6 +1209,31 @@ export default function Community({
               {locked ? 'Locked' : 'Lock'}
             </button>
           )}
+          {online.length > 0 && (
+            <span
+              className='inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded-full bg-emerald-50 text-emerald-600'
+              title={online.map((o) => o.fullname).join(', ')}
+            >
+              <span className='h-1.5 w-1.5 rounded-full bg-emerald-500' />
+              {online.length} online
+            </span>
+          )}
+          <button
+            onClick={() => setBellOpen((o) => !o)}
+            className={`relative inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded-full ${
+              bellOpen
+                ? 'bg-[#002EFF] text-white'
+                : 'bg-slate-100 text-slate-500 hover:text-[#002EFF]'
+            }`}
+            title='What you have missed'
+          >
+            <Bell size={11} /> Alerts
+            {alertCount > 0 && (
+              <span className='absolute -top-1 -right-1 min-w-[15px] rounded-full bg-rose-500 px-1 text-[8px] font-black text-white tabular-nums'>
+                {alertCount > 9 ? '9+' : alertCount}
+              </span>
+            )}
+          </button>
           <button
             onClick={() => (searchOpen ? closeSearch() : setSearchOpen(true))}
             className={`inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded-full ${
@@ -1227,8 +1406,8 @@ export default function Community({
         </div>
       )}
 
-      {/* Members panel (tutor / admin) */}
-      {canManageMembers && membersOpen && (
+      {/* Who is in this channel */}
+      {membersOpen && (
         <div className='mb-3 rounded-2xl border border-slate-200 bg-white p-3'>
           <div className='flex items-center justify-between mb-2'>
             <p className='text-[10px] font-black uppercase text-slate-400 flex items-center gap-1'>
@@ -1246,32 +1425,98 @@ export default function Community({
               No members to show yet.
             </p>
           ) : (
-            <div className='space-y-1 max-h-52 overflow-y-auto custom-scrollbar'>
-              {members.map((mem) => (
-                <div
-                  key={mem.id}
-                  className='flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-50'
-                >
-                  <span className='text-[11px] font-bold text-zinc-700 flex-1 truncate'>
-                    {mem.name}
-                  </span>
-                  <span
-                    className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded ${roleTint(mem.role)}`}
-                  >
-                    {roleLabel(mem.role)}
-                  </span>
-                  {mem.role.toLowerCase() === 'student' && (
-                    <button
-                      onClick={() => removeMember(mem.id)}
-                      className='p-1 text-slate-300 hover:text-rose-500'
-                      title='Remove from this community'
-                    >
-                      <UserMinus size={13} />
-                    </button>
+            (() => {
+              const term = memberSearch.trim().toLowerCase()
+              const shown = members.filter((m) =>
+                term ? m.name.toLowerCase().includes(term) : true,
+              )
+              const onlineIds = new Set(online.map((o) => String(o.id)))
+              const groups: { label: string; rows: typeof shown }[] = [
+                {
+                  label: 'Admins',
+                  rows: shown.filter((m) => m.role.toLowerCase().includes('admin')),
+                },
+                {
+                  label: 'Tutors',
+                  rows: shown.filter((m) => m.role.toLowerCase() === 'tutor'),
+                },
+                {
+                  label: 'Students',
+                  rows: shown.filter((m) => m.role.toLowerCase() === 'student'),
+                },
+              ].filter((g) => g.rows.length)
+
+              return (
+                <>
+                  {members.length > 6 && (
+                    <div className='relative mb-2'>
+                      <Search
+                        size={13}
+                        className='absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400'
+                      />
+                      <input
+                        value={memberSearch}
+                        onChange={(e) => setMemberSearch(e.target.value)}
+                        placeholder='Search members…'
+                        className='w-full h-8 pl-8 pr-2 rounded-xl bg-zinc-50 text-[12px] font-medium outline-none focus:bg-white focus:ring-1 focus:ring-[#002EFF]/30'
+                      />
+                    </div>
                   )}
-                </div>
-              ))}
-            </div>
+                  <div className='space-y-2 max-h-60 overflow-y-auto custom-scrollbar'>
+                    {groups.length === 0 ? (
+                      <p className='py-2 text-center text-[11px] font-bold text-zinc-400'>
+                        Nobody by that name.
+                      </p>
+                    ) : (
+                      groups.map((g) => (
+                        <div key={g.label}>
+                          <p className='px-2 pb-1 text-[9px] font-black uppercase tracking-widest text-zinc-300'>
+                            {g.label} · {g.rows.length}
+                          </p>
+                          {g.rows.map((mem) => (
+                            <div
+                              key={mem.id}
+                              className='flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-50'
+                            >
+                              <span className='relative h-6 w-6 shrink-0 rounded-lg bg-zinc-100 text-[9px] font-black text-zinc-600 grid place-items-center'>
+                                {mem.name.slice(0, 2).toUpperCase()}
+                                {onlineIds.has(String(mem.id)) && (
+                                  <span
+                                    className='absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-white'
+                                    title='Online now'
+                                  />
+                                )}
+                              </span>
+                              <span className='text-[11px] font-bold text-zinc-700 flex-1 truncate'>
+                                {mem.name}
+                                {mem.id === myId && (
+                                  <span className='ml-1 text-zinc-400'>(you)</span>
+                                )}
+                              </span>
+                              <span
+                                className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded ${roleTint(mem.role)}`}
+                              >
+                                {roleLabel(mem.role)}
+                              </span>
+                              {canManageMembers &&
+                                mem.role.toLowerCase() === 'student' && (
+                                  <button
+                                    onClick={() => removeMember(mem.id)}
+                                    className='p-1 text-slate-300 hover:text-rose-500'
+                                    title='Remove from this community'
+                                  >
+                                    <UserMinus size={13} />
+                                  </button>
+                                )}
+                            </div>
+                          ))}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </>
+              )
+            })()
           )}
         </div>
       )}
@@ -1325,6 +1570,97 @@ export default function Community({
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* What you have missed, channel by channel — and how to quieten it */}
+      {bellOpen && (
+        <div className='mb-3 rounded-2xl border border-slate-200 bg-white p-3 space-y-1.5'>
+          <div className='flex items-center justify-between'>
+            <p className='text-[10px] font-black uppercase tracking-widest text-slate-400'>
+              Since you were last here
+            </p>
+            <button
+              onClick={() => setBellOpen(false)}
+              className='text-zinc-400 hover:text-zinc-600'
+              aria-label='Close alerts'
+            >
+              <X size={14} />
+            </button>
+          </div>
+          {channels.filter((c) => (c.unread || 0) > 0).length === 0 ? (
+            <p className='py-3 text-center text-[11px] font-bold text-zinc-400'>
+              You are all caught up.
+            </p>
+          ) : (
+            channels
+              .filter((c) => (c.unread || 0) > 0)
+              .map((c) => (
+                <div
+                  key={c.id}
+                  className='flex items-center gap-2 rounded-xl bg-zinc-50 px-3 py-2'
+                >
+                  <button
+                    onClick={() => {
+                      setActiveChannel(c.id)
+                      setBellOpen(false)
+                    }}
+                    className='min-w-0 flex-1 text-left'
+                  >
+                    <span className='flex items-center gap-1.5 text-[11px] font-black text-zinc-700'>
+                      <Hash size={10} className='text-zinc-400' />
+                      {c.name}
+                      {!!c.mentions && (
+                        <span className='rounded-full bg-amber-100 px-1.5 py-0.5 text-[8px] font-black uppercase text-amber-700'>
+                          {c.mentions} mention{c.mentions === 1 ? '' : 's'}
+                        </span>
+                      )}
+                      {c.muted && (
+                        <BellOff size={10} className='text-zinc-400' />
+                      )}
+                    </span>
+                    <span className='mt-0.5 block truncate text-[10px] font-medium text-zinc-400'>
+                      {c.unread} new
+                      {c.lastMessageSender
+                        ? ` · ${c.lastMessageSender}: ${c.lastMessageText ?? ''}`
+                        : ''}
+                    </span>
+                  </button>
+                  {c.muted ? (
+                    <button
+                      onClick={() => setMute(c.id, 0)}
+                      className='shrink-0 rounded-lg bg-white px-2 py-1 text-[9px] font-black uppercase text-[#002EFF] hover:bg-blue-50'
+                    >
+                      Unmute
+                    </button>
+                  ) : (
+                    <span className='flex shrink-0 items-center gap-1'>
+                      {[
+                        { label: '1h', minutes: 60 },
+                        { label: '8h', minutes: 480 },
+                        { label: 'Off', minutes: undefined },
+                      ].map((opt) => (
+                        <button
+                          key={opt.label}
+                          onClick={() => setMute(c.id, opt.minutes)}
+                          title={
+                            opt.minutes
+                              ? `Mute for ${opt.label}`
+                              : 'Mute until you turn it back on'
+                          }
+                          className='rounded-lg bg-white px-2 py-1 text-[9px] font-black uppercase text-zinc-400 hover:text-[#002EFF]'
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </span>
+                  )}
+                </div>
+              ))
+          )}
+          <p className='pt-1 text-[9px] font-bold text-zinc-400'>
+            Muting keeps a channel quiet — it does not mark anything as read.
+          </p>
         </div>
       )}
 
@@ -1523,6 +1859,26 @@ export default function Community({
       )}
       </div>
 
+      {/* Someone is mid-sentence */}
+      {typingNames.length > 0 && (
+        <p className='px-2 pt-1.5 text-[11px] font-bold text-[#002EFF] flex items-center gap-1.5'>
+          <span className='flex gap-0.5' aria-hidden>
+            {[0, 150, 300].map((d) => (
+              <span
+                key={d}
+                className='h-1 w-1 rounded-full bg-[#002EFF] animate-bounce'
+                style={{ animationDelay: `${d}ms` }}
+              />
+            ))}
+          </span>
+          {typingNames.length === 1
+            ? `${typingNames[0]} is typing…`
+            : typingNames.length === 2
+              ? `${typingNames[0]} and ${typingNames[1]} are typing…`
+              : `${typingNames.length} people are typing…`}
+        </p>
+      )}
+
       {error && (
         <p className='text-[11px] font-semibold text-rose-600 px-1 pt-2'>{error}</p>
       )}
@@ -1580,6 +1936,39 @@ export default function Community({
             </div>
           ) : (
             <div className='relative flex items-end gap-2'>
+              {/* @mention picker */}
+              {mentionQuery !== null && mentionOptions.length > 0 && (
+                <div className='absolute bottom-14 left-0 z-30 w-64 rounded-2xl border border-zinc-200 bg-white shadow-xl p-1'>
+                  {mentionOptions.map((o) => (
+                    <button
+                      key={o.id}
+                      onMouseDown={(e) => {
+                        e.preventDefault()
+                        pickMention(o)
+                      }}
+                      className='flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left hover:bg-blue-50'
+                    >
+                      <span className='h-6 w-6 shrink-0 rounded-lg bg-zinc-100 text-[9px] font-black text-zinc-600 grid place-items-center'>
+                        {o.id === '@everyone'
+                          ? '@'
+                          : o.name.slice(0, 2).toUpperCase()}
+                      </span>
+                      <span className='min-w-0 flex-1 truncate text-[12px] font-bold text-zinc-700'>
+                        {o.name}
+                      </span>
+                      <span
+                        className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded ${
+                          o.id === '@everyone'
+                            ? 'bg-amber-50 text-amber-600'
+                            : roleTint(o.role)
+                        }`}
+                      >
+                        {o.id === '@everyone' ? 'All' : roleLabel(o.role)}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
               {/* Poll composer */}
               {pollOpen && (
                 <div className='absolute bottom-14 left-0 right-0 z-20 rounded-2xl border border-zinc-200 bg-white shadow-xl p-3 space-y-2'>
@@ -1737,14 +2126,27 @@ export default function Community({
               <textarea
                 rows={1}
                 value={text}
-                onChange={(e) => setText(e.target.value)}
+                onChange={(e) => {
+                  const v = e.target.value
+                  setText(v)
+                  noteTyping()
+                  // An "@" with no space after it opens the picker.
+                  const at = v.match(/@([\w' -]{0,30})$/)
+                  setMentionQuery(at ? at[1] : null)
+                }}
+                onBlur={stopTyping}
                 onKeyDown={(e) => {
+                  if (e.key === 'Escape') setMentionQuery(null)
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault()
+                    if (mentionQuery !== null && mentionOptions.length) {
+                      pickMention(mentionOptions[0])
+                      return
+                    }
                     sendText()
                   }
                 }}
-                placeholder='Write a message…'
+                placeholder='Write a message… use @ to mention someone'
                 className='flex-1 resize-none max-h-32 rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-800 placeholder:text-zinc-400 focus:outline-none focus:border-[#002EFF] focus:ring-2 focus:ring-[#002EFF]/10'
               />
 
@@ -2008,6 +2410,8 @@ function MessageBubble({
 
         <div
           className={`rounded-2xl overflow-hidden ${
+            m.mentionedMe && !m.own ? 'ring-2 ring-[#FCB900]' : ''
+          } ${
             m.type === 'text'
               ? m.own
                 ? 'bg-[#002EFF] text-white px-4 py-2.5'
@@ -2148,7 +2552,7 @@ function MessageBubble({
               </div>
             ) : (
               <p className='text-[13px] leading-relaxed whitespace-pre-wrap break-words'>
-                {m.text}
+                {withMentions(m.text ?? '', m.own)}
               </p>
             ))}
 

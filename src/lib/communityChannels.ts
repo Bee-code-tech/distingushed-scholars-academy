@@ -18,6 +18,11 @@ export interface CommunityChannel {
   system?: boolean
   /** How many messages in here you haven't read (backend-supplied). */
   unread?: number
+  /** How many of those name you (or @everyone). */
+  mentions?: number
+  /** You asked this channel to stay quiet. */
+  muted?: boolean
+  mutedUntil?: number | null
   /** A one-line summary of the last message, for the channel list. */
   lastMessageText?: string | null
   lastMessageSender?: string | null
@@ -73,6 +78,9 @@ export function toChannel(raw: Record<string, unknown>): CommunityChannel {
     kind,
     system: !!raw.system || raw.id === 'general',
     unread: typeof raw.unread === 'number' ? raw.unread : 0,
+    mentions: typeof raw.mentions === 'number' ? raw.mentions : 0,
+    muted: !!raw.muted,
+    mutedUntil: raw.mutedUntil ? Date.parse(String(raw.mutedUntil)) || null : null,
     lastMessageText: raw.lastMessageText ? String(raw.lastMessageText) : null,
     lastMessageSender: raw.lastMessageSender
       ? String(raw.lastMessageSender)

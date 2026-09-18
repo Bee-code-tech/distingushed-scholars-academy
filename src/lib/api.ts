@@ -1475,6 +1475,44 @@ export const dsaApi = {
         .then((r) => handleResponse<{ data?: unknown }>(r))
         .then((r) => (r as { data?: unknown }).data ?? r),
 
+    // POST /community/presence — say you're here (and whether you're typing),
+    // and hear who else is. One call per beat, both directions.
+    presence: (
+      body: { channelId?: string; typing?: boolean },
+      token?: string,
+    ) =>
+      fetch(`${BASE_URL}/community/presence`, {
+        method: 'POST',
+        headers: getHeaders(token),
+        body: JSON.stringify(body),
+      })
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then(
+          (r) =>
+            ((r as { data?: unknown }).data ?? r) as {
+              online?: { id: string; fullname: string; role: string }[]
+              onlineCount?: number
+              typing?: { id: string; fullname: string }[]
+            },
+        ),
+
+    // PATCH /community/channels/:id/mute — quiet for `minutes`, or `off`.
+    mute: (
+      channelId: string,
+      body: { minutes?: number; off?: boolean },
+      token?: string,
+    ) =>
+      fetch(
+        `${BASE_URL}/community/channels/${encodeURIComponent(channelId)}/mute`,
+        {
+          method: 'PATCH',
+          headers: getHeaders(token),
+          body: JSON.stringify(body),
+        },
+      )
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+
     // GET /community/search?q=&channelId=&type= — look through the channels
     // this person can see. `type` narrows to files or links.
     search: (
