@@ -53,9 +53,12 @@ const OPT_LETTER = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
 export default function QuizCorrections({
   data,
   onBack,
+  who,
 }: {
   data: CorrectionsData
   onBack?: () => void
+  /** Set when a tutor or admin is reading someone else's paper, not their own. */
+  who?: string
 }) {
   const pct = Math.round(
     data.percentage <= 1 && data.percentage > 0
@@ -79,10 +82,10 @@ export default function QuizCorrections({
         )}
         <div className='min-w-0'>
           <h2 className='text-2xl font-black text-[#002EFF] italic uppercase truncate'>
-            Corrections
+            {who ? `${who}’s paper` : 'Corrections'}
           </h2>
           <p className='text-[10px] font-bold text-gray-400 uppercase tracking-widest truncate'>
-            {str(data.quizTitle) || 'Your answers reviewed'}
+            {str(data.quizTitle) || (who ? 'Answer by answer' : 'Your answers reviewed')}
           </p>
         </div>
       </div>
@@ -91,7 +94,7 @@ export default function QuizCorrections({
       <Card className='p-5 rounded-3xl border-none shadow-sm bg-white flex items-center justify-between'>
         <div>
           <p className='text-[10px] font-black uppercase tracking-widest text-slate-400'>
-            Your score
+            {who ? 'Score' : 'Your score'}
           </p>
           <p className='text-2xl font-black text-slate-900'>
             {n(data.totalScore)}
@@ -176,7 +179,7 @@ export default function QuizCorrections({
           <CheckCircle2 size={13} /> Correct answer
         </span>
         <span className='inline-flex items-center gap-1 text-rose-500'>
-          <XCircle size={13} /> Your wrong choice
+          <XCircle size={13} /> {who ? 'Wrong choice' : 'Your wrong choice'}
         </span>
       </div>
 
@@ -257,7 +260,7 @@ export default function QuizCorrections({
                       )}
                       {chosenWrong && (
                         <span className='shrink-0 text-[9px] font-black uppercase text-rose-500 inline-flex items-center gap-1'>
-                          <XCircle size={12} /> Your answer
+                          <XCircle size={12} /> {who ? 'Their pick' : 'Your answer'}
                         </span>
                       )}
                     </div>
@@ -267,7 +270,9 @@ export default function QuizCorrections({
 
               {!answered && (
                 <p className='text-[10px] font-bold text-amber-600'>
-                  You didn&apos;t answer this question.
+                  {who
+                    ? 'No answer given for this question.'
+                    : 'You didn’t answer this question.'}
                 </p>
               )}
 

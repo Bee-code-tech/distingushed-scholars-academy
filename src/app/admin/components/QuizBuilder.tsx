@@ -39,6 +39,9 @@ import { Card } from '@/components/ui/card'
 import QuizLeaderboard, {
   type LeaderboardRow,
 } from '@/components/dashboard/QuizLeaderboard'
+import QuizCorrections, {
+  type CorrectionsData,
+} from '@/components/dashboard/QuizCorrections'
 import { dsaApi } from '@/lib/api'
 import { canCreateQuiz, canDeleteQuiz } from '@/lib/quizPermissions'
 import { JAMB_SUBJECTS } from '../constants/quiz'
@@ -135,6 +138,8 @@ export default function QuizBuilder() {
   const [editingId, setEditingId] = useState<string | null>(null)
   // The builder runs as steps so one long form doesn't face you all at once.
   const [step, setStep] = useState(0)
+  // The list area shows either the quizzes or every submission across them.
+  const [listView, setListView] = useState<'quizzes' | 'attempts'>('quizzes')
 
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -1162,6 +1167,37 @@ export default function QuizBuilder() {
               <StatCard label='Attempts' value={knowAttempts ? totalAttempts : '—'} icon={Users} tint='text-violet-600 bg-violet-50' />
             </div>
 
+            {/* One quiz at a time, or every submission side by side */}
+            <div className='flex items-center gap-1 p-1 rounded-xl bg-white border border-slate-100 w-fit'>
+              {(['quizzes', 'attempts'] as const).map((v) => (
+                <button
+                  key={v}
+                  onClick={() => setListView(v)}
+                  className={`px-3 h-8 rounded-lg text-[10px] font-black uppercase tracking-wide transition-colors ${
+                    listView === v
+                      ? 'bg-[#002EFF] text-white'
+                      : 'text-slate-400 hover:text-[#002EFF]'
+                  }`}
+                >
+                  {v === 'quizzes' ? 'Quizzes' : 'All attempts'}
+                </button>
+              ))}
+            </div>
+
+            {listView === 'attempts' ? (
+              <AllAttempts
+                quizzes={quizzes}
+                token={token}
+                onOpenQuiz={(id) => {
+                  setListView('quizzes')
+                  setSearch('')
+                  setStatusFilter('all')
+                  setPage(1)
+                  setOpenAttempts(id)
+                }}
+              />
+            ) : (
+            <>
             {/* Search + filters */}
             <div className='flex flex-col sm:flex-row gap-2'>
               <div className='relative flex-1'>
@@ -1304,7 +1340,13 @@ export default function QuizBuilder() {
                           </div>
                         </div>
                       </Card>
-                      {open && <AttemptsPanel quizId={id} token={token} />}
+                      {open && (
+                        <AttemptsPanel
+                          quizId={id}
+                          quizTitle={str(q.title)}
+                          token={token}
+                        />
+                      )}
                     </div>
                   )
                 })}
@@ -1338,6 +1380,8 @@ export default function QuizBuilder() {
                   </div>
                 )}
               </div>
+            )}
+            </>
             )}
           </div>
         )
@@ -1506,7 +1550,273 @@ function StatusBadge({ live }: { live: boolean }) {
 /** Admin panel: who took a quiz, the leaderboard, and per-attempt controls.
  *  Live-first — degrades to an empty/"not available" state until the backend
  *  ships the attempts routes (docs/backend-requests-2026-09-02.md §6). */
-function AttemptsPanel({ quizId, token }: { quizId: string; token?: string }) {
+/**
+ * Every submission across every quiz, in one place — so "who sat anything this
+ * week" doesn't mean opening each quiz in turn.
+ */
+function AllAttempts({
+  quizzes,
+  token,
+  onOpenQuiz,
+}: {
+  quizzes: Record<string, unknown>[]
+  token?: string
+  onOpenQuiz: (quizId: string) => void
+}) {
+  interface Row {
+    key: string
+    quizId: string
+    quizTitle: string
+    name: string
+    contact: string
+    pct: number
+    score: string
+    at: number
+    free: boolean
+    withdrawn: boolean
+  }
+  const [rows, setRows] = useState<Row[]>([])
+  const [loading, setLoading] = useState(true)
+  const [quizFilter, setQuizFilter] = useState('all')
+  const [search, setSearch] = useState('')
+  const [band, setBand] = useState<'all' | 'low' | 'mid' | 'high'>('all')
+  const [sortBy, setSortBy] = useState<'recent' | 'best' | 'worst'>('recent')
+
+  const pct = (r: Record<string, unknown>) => {
+    const p = Number(r.percentage)
+    if (!isNaN(p) && r.percentage != null)
+      return p <= 1 ? Math.round(p * 100) : Math.round(p)
+    const s = Number(r.score ?? r.totalScore)
+    const t = Number(r.totalMarks ?? r.total)
+    return t > 0 ? Math.round((s / t) * 100) : 0
+  }
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      setLoading(true)
+      const collected: Row[] = []
+      await Promise.all(
+        quizzes.map(async (q) => {
+          const quizId = str(q.id ?? q._id)
+          const quizTitle = str(q.title)
+          const [portal, free] = await Promise.allSettled([
+            dsaApi.quizzes.attempts(quizId, token) as Promise<
+              Record<string, unknown>[]
+            >,
+            dsaApi.quizzes.publicResults(quizId, token) as Promise<
+              Record<string, unknown>[]
+            >,
+          ])
+          if (portal.status === 'fulfilled' && Array.isArray(portal.value))
+            portal.value.forEach((r, i) =>
+              collected.push({
+                key: `${quizId}-p-${str(r.attemptId ?? r.id ?? r._id) || i}`,
+                quizId,
+                quizTitle,
+                name: str(
+                  r.studentName ?? r.fullname ?? r.username ?? 'Student',
+                ),
+                contact: str(r.email ?? ''),
+                pct: pct(r),
+                score: `${str(r.score ?? r.totalScore)}/${str(r.totalMarks ?? r.total)}`,
+                at: new Date(str(r.submittedAt ?? r.createdAt)).getTime() || 0,
+                free: false,
+                withdrawn: !!r.withdrawn,
+              }),
+            )
+          if (free.status === 'fulfilled' && Array.isArray(free.value))
+            free.value.forEach((r, i) =>
+              collected.push({
+                key: `${quizId}-f-${str(r.id ?? r._id ?? r.email) || i}`,
+                quizId,
+                quizTitle,
+                name: str(r.name ?? 'Anonymous'),
+                contact: str(r.email ?? r.phone ?? ''),
+                pct: pct(r),
+                score: `${str(r.score ?? r.totalScore)}/${str(r.totalMarks ?? r.total)}`,
+                at: new Date(str(r.submittedAt ?? r.createdAt)).getTime() || 0,
+                free: true,
+                withdrawn: false,
+              }),
+            )
+        }),
+      )
+      if (!cancelled) {
+        setRows(collected)
+        setLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [quizzes, token])
+
+  const term = search.trim().toLowerCase()
+  const shown = rows
+    .filter((r) => {
+      if (quizFilter !== 'all' && r.quizId !== quizFilter) return false
+      if (band === 'low' && r.pct >= 40) return false
+      if (band === 'mid' && (r.pct < 40 || r.pct >= 60)) return false
+      if (band === 'high' && r.pct < 60) return false
+      if (!term) return true
+      return `${r.name} ${r.contact} ${r.quizTitle}`.toLowerCase().includes(term)
+    })
+    .sort((a, b) =>
+      sortBy === 'best'
+        ? b.pct - a.pct
+        : sortBy === 'worst'
+          ? a.pct - b.pct
+          : b.at - a.at,
+    )
+
+  if (loading)
+    return (
+      <div className='py-10 flex justify-center'>
+        <Loader2 className='animate-spin text-[#002EFF]' size={20} />
+      </div>
+    )
+
+  return (
+    <div className='space-y-3'>
+      <div className='flex flex-col sm:flex-row gap-2'>
+        <div className='relative flex-1'>
+          <Search
+            size={14}
+            className='absolute left-3 top-1/2 -translate-y-1/2 text-slate-400'
+          />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder='Search student, email or quiz…'
+            className='w-full h-10 pl-9 pr-3 rounded-xl bg-white border border-slate-200 focus:border-[#002EFF]/40 outline-none text-sm font-medium'
+          />
+        </div>
+        <select
+          value={quizFilter}
+          onChange={(e) => setQuizFilter(e.target.value)}
+          className='h-10 px-3 rounded-xl bg-white border border-slate-200 outline-none text-[12px] font-bold max-w-[190px]'
+        >
+          <option value='all'>Every quiz</option>
+          {quizzes.map((q) => (
+            <option key={str(q.id ?? q._id)} value={str(q.id ?? q._id)}>
+              {str(q.title)}
+            </option>
+          ))}
+        </select>
+        <select
+          value={band}
+          onChange={(e) =>
+            setBand(e.target.value as 'all' | 'low' | 'mid' | 'high')
+          }
+          className='h-10 px-3 rounded-xl bg-white border border-slate-200 outline-none text-[12px] font-bold'
+        >
+          <option value='all'>Any score</option>
+          <option value='low'>Below 40%</option>
+          <option value='mid'>40–59%</option>
+          <option value='high'>60% and up</option>
+        </select>
+        <select
+          value={sortBy}
+          onChange={(e) =>
+            setSortBy(e.target.value as 'recent' | 'best' | 'worst')
+          }
+          className='h-10 px-3 rounded-xl bg-white border border-slate-200 outline-none text-[12px] font-bold'
+        >
+          <option value='recent'>Most recent</option>
+          <option value='best'>Highest score</option>
+          <option value='worst'>Lowest score</option>
+        </select>
+      </div>
+
+      <p className='text-[10px] font-black uppercase tracking-widest text-slate-400'>
+        {shown.length} submission{shown.length === 1 ? '' : 's'}
+        {shown.length !== rows.length ? ` of ${rows.length}` : ''}
+      </p>
+
+      {shown.length === 0 ? (
+        <Card className='p-8 rounded-2xl border-none shadow-sm bg-white text-center'>
+          <p className='text-sm font-bold text-slate-500'>
+            {rows.length
+              ? 'Nothing matches those filters.'
+              : 'No one has submitted a quiz yet.'}
+          </p>
+        </Card>
+      ) : (
+        <div className='space-y-1.5'>
+          {shown.map((r) => (
+            <Card
+              key={r.key}
+              className={`p-3 rounded-2xl border border-slate-100/80 shadow-sm bg-white flex items-center gap-3 ${
+                r.withdrawn ? 'opacity-50' : ''
+              }`}
+            >
+              <span
+                className={`h-9 w-11 shrink-0 rounded-xl grid place-items-center text-[12px] font-black tabular-nums ${
+                  r.pct >= 60
+                    ? 'bg-emerald-50 text-emerald-600'
+                    : r.pct >= 40
+                      ? 'bg-amber-50 text-amber-600'
+                      : 'bg-rose-50 text-rose-500'
+                }`}
+              >
+                {r.pct}%
+              </span>
+              <div className='min-w-0 flex-1'>
+                <p className='text-[12px] font-black text-slate-800 truncate'>
+                  {r.name}
+                  {r.free && (
+                    <span className='ml-1.5 text-[8px] font-black uppercase bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded'>
+                      Link
+                    </span>
+                  )}
+                  {r.withdrawn && (
+                    <span className='ml-1.5 text-[8px] font-black uppercase text-rose-500'>
+                      withdrawn
+                    </span>
+                  )}
+                </p>
+                <p className='text-[10px] font-bold text-slate-400 truncate'>
+                  {r.quizTitle} · {r.score}
+                  {r.at ? ` · ${new Date(r.at).toLocaleDateString()}` : ''}
+                  {r.contact ? ` · ${r.contact}` : ''}
+                </p>
+              </div>
+              <button
+                onClick={() => onOpenQuiz(r.quizId)}
+                className='shrink-0 px-2.5 h-8 rounded-lg bg-blue-50 text-[#002EFF] text-[9px] font-black uppercase hover:bg-blue-100'
+                title='Open this quiz to read the paper or manage the result'
+              >
+                Open quiz
+              </button>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** Everything about one question that a marked paper needs to show. */
+interface QMapEntry {
+  subject: string
+  body: string
+  options: string[]
+  correctIndex: number | null
+  explanation?: string
+  imageUrl?: string | null
+  marks: number
+}
+
+function AttemptsPanel({
+  quizId,
+  quizTitle,
+  token,
+}: {
+  quizId: string
+  quizTitle?: string
+  token?: string
+}) {
   const [attempts, setAttempts] = useState<Record<string, unknown>[]>([])
   // Attempts on a FREE/public quiz — anonymous takers via the shareable link.
   const [publicAttempts, setPublicAttempts] = useState<Record<string, unknown>[]>([])
@@ -1518,9 +1828,11 @@ function AttemptsPanel({ quizId, token }: { quizId: string; token?: string }) {
   const [resultsById, setResultsById] = useState<
     Record<string, Record<string, unknown>>
   >({})
-  const [questionMap, setQuestionMap] = useState<
-    Record<string, { subject: string; body: string }>
-  >({})
+  const [questionMap, setQuestionMap] = useState<Record<string, QMapEntry>>({})
+  // The attempt whose paper is open, answer by answer.
+  const [paperOf, setPaperOf] = useState<{ id: string; name: string } | null>(
+    null,
+  )
   // 'attempts' lists who took it; 'analytics' is the cohort view.
   const [tab, setTab] = useState<'attempts' | 'analytics'>('attempts')
   const [detailLoading, setDetailLoading] = useState(false)
@@ -1545,14 +1857,20 @@ function AttemptsPanel({ quizId, token }: { quizId: string; token?: string }) {
         byId[str(r.id ?? r._id)] = r
       })
       setResultsById(byId)
-      const qmap: Record<string, { subject: string; body: string }> = {}
+      const qmap: Record<string, QMapEntry> = {}
       const subjects = Array.isArray(quiz?.subjects) ? quiz.subjects : []
       subjects.forEach((s: Record<string, unknown>) => {
         const qs = Array.isArray(s.questions) ? s.questions : []
         qs.forEach((q: Record<string, unknown>) => {
+          const correct = Number(q.correctAnswer)
           qmap[str(q._id ?? q.id)] = {
             subject: str(s.name || 'General'),
             body: str(q.body ?? q.questionText ?? q.question),
+            options: Array.isArray(q.options) ? (q.options as string[]) : [],
+            correctIndex: isNaN(correct) ? null : correct,
+            explanation: q.explanation ? str(q.explanation) : undefined,
+            imageUrl: q.imageUrl ? str(q.imageUrl) : null,
+            marks: Number(q.marks ?? q.mark) || 1,
           }
         })
       })
@@ -1607,6 +1925,64 @@ function AttemptsPanel({ quizId, token }: { quizId: string; token?: string }) {
     })
     const correct = answers.filter((a) => a.isCorrect).length
     return { bySubject, correct, total: answers.length }
+  }
+
+  /**
+   * Shape one attempt into the same structure the student corrections screen
+   * takes, so an admin reads the paper exactly as the student would.
+   */
+  const paperFor = (row: Record<string, unknown>): CorrectionsData | null => {
+    const answers = Array.isArray(row.answers)
+      ? (row.answers as Record<string, unknown>[])
+      : []
+    if (!answers.length) return null
+    const perSubject: Record<
+      string,
+      { earned: number; total: number; correct: number; count: number }
+    > = {}
+    const questions = answers.map((a) => {
+      const q = questionMap[str(a.questionId)]
+      const subject = q?.subject || 'General'
+      const marks = q?.marks ?? 1
+      const earned = Number(a.marksEarned) || (a.isCorrect ? marks : 0)
+      if (!perSubject[subject])
+        perSubject[subject] = { earned: 0, total: 0, correct: 0, count: 0 }
+      perSubject[subject].earned += earned
+      perSubject[subject].total += marks
+      perSubject[subject].count += 1
+      if (a.isCorrect) perSubject[subject].correct += 1
+      return {
+        questionId: str(a.questionId),
+        subject,
+        questionText: q?.body || 'Question no longer in this quiz',
+        imageUrl: q?.imageUrl ?? null,
+        options: q?.options ?? [],
+        correctIndex: q?.correctIndex ?? null,
+        selectedIndex:
+          typeof a.selectedOption === 'number' ? a.selectedOption : null,
+        isCorrect: !!a.isCorrect,
+        marks,
+        marksEarned: earned,
+        explanation: q?.explanation,
+      }
+    })
+    return {
+      quizTitle,
+      totalScore: Number(row.totalScore ?? row.score) || 0,
+      totalMarks: Number(row.totalMarks ?? row.total) || 0,
+      percentage: pctOf(row),
+      perSubject: Object.entries(perSubject).map(([subject, v]) => ({
+        subject,
+        ...v,
+        percentage: v.count ? (v.correct / v.count) * 100 : 0,
+      })),
+      questions,
+    }
+  }
+
+  const openPaper = (id: string, name: string) => {
+    setPaperOf({ id, name })
+    loadDetailData()
   }
 
   const openPublicTaker = (id: string) => {
@@ -1764,6 +2140,41 @@ function AttemptsPanel({ quizId, token }: { quizId: string; token?: string }) {
     }
   }
 
+  // One student's marked paper takes over the panel until it's closed.
+  if (paperOf) {
+    const row =
+      resultsById[paperOf.id] ??
+      publicAttempts.find((r) => str(r.id ?? r._id ?? r.email) === paperOf.id)
+    const paper = row ? paperFor(row) : null
+    return (
+      <Card className='p-4 rounded-2xl border-none shadow-sm bg-slate-50/70'>
+        {detailLoading && !paper ? (
+          <div className='py-6 flex justify-center'>
+            <Loader2 className='animate-spin text-[#002EFF]' size={18} />
+          </div>
+        ) : paper ? (
+          <QuizCorrections
+            data={paper}
+            who={paperOf.name}
+            onBack={() => setPaperOf(null)}
+          />
+        ) : (
+          <div className='py-4 text-center space-y-2'>
+            <p className='text-[11px] font-bold text-slate-400'>
+              This attempt has no stored answers, so there is no paper to read.
+            </p>
+            <button
+              onClick={() => setPaperOf(null)}
+              className='text-[10px] font-black uppercase text-[#002EFF] hover:underline'
+            >
+              Back to attempts
+            </button>
+          </div>
+        )}
+      </Card>
+    )
+  }
+
   return (
     <Card className='p-4 rounded-2xl border-none shadow-sm bg-slate-50/70 space-y-3'>
       {loading ? (
@@ -1860,12 +2271,23 @@ function AttemptsPanel({ quizId, token }: { quizId: string; token?: string }) {
                           {pctOf(r)}%
                         </span>
                         {hasAnswers && (
-                          <button
-                            onClick={() => openPublicTaker(id)}
-                            className='shrink-0 text-[9px] font-black uppercase text-[#002EFF] hover:underline'
-                          >
-                            {isOpen ? 'Hide' : 'View'}
-                          </button>
+                          <>
+                            <button
+                              onClick={() => openPublicTaker(id)}
+                              className='shrink-0 text-[9px] font-black uppercase text-[#002EFF] hover:underline'
+                            >
+                              {isOpen ? 'Hide' : 'View'}
+                            </button>
+                            <button
+                              onClick={() =>
+                                openPaper(id, str(r.name ?? 'Anonymous'))
+                              }
+                              className='shrink-0 text-[9px] font-black uppercase text-slate-400 hover:text-[#002EFF] hover:underline'
+                              title='Read the marked paper'
+                            >
+                              Paper
+                            </button>
+                          </>
                         )}
                       </div>
                       {isOpen && (
@@ -1963,6 +2385,20 @@ function AttemptsPanel({ quizId, token }: { quizId: string; token?: string }) {
                         title='View this student’s score breakdown'
                       >
                         View
+                      </button>
+                      <button
+                        onClick={() =>
+                          openPaper(
+                            aid,
+                            str(
+                              r.studentName ?? r.fullname ?? r.username ?? 'Student',
+                            ),
+                          )
+                        }
+                        className='px-2 py-1 rounded-lg bg-slate-100 text-slate-500 text-[9px] font-black uppercase hover:text-[#002EFF]'
+                        title='Read the marked paper, answer by answer'
+                      >
+                        Paper
                       </button>
                       {!withdrawn && (
                         <button
