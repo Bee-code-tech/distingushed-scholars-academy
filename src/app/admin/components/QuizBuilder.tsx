@@ -80,6 +80,8 @@ interface BankQ {
   imageUrl?: string
   mark: number
   batchName?: string
+  /** Shown to the student in corrections. Lost here means lost for good. */
+  explanation?: string
 }
 interface SubjectBlock {
   name: string
@@ -101,6 +103,7 @@ function normalizeQ(raw: Record<string, unknown>): BankQ {
     imageUrl: raw.imageUrl ? str(raw.imageUrl) : undefined,
     mark: typeof raw.mark === 'number' ? raw.mark : Number(raw.marks) || 1,
     batchName: raw.batchName ? str(raw.batchName) : undefined,
+    explanation: raw.explanation ? str(raw.explanation) : undefined,
   }
 }
 
@@ -117,6 +120,7 @@ function toEmbed(q: BankQ) {
     Answer: q.correctOption,
     mark: q.mark,
     imageUrl: q.imageUrl,
+    explanation: q.explanation,
   }
 }
 
