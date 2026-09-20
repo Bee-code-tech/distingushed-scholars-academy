@@ -8,6 +8,7 @@ import {
   Wallet,
   Plus,
   Trash2,
+  Pencil,
   Loader2,
   Check,
   X,
@@ -120,22 +121,73 @@ function PlansSection({ token }: { token?: string }) {
     }
   }
 
+  // Which plan is open for editing, and the values being typed into it.
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [edit, setEdit] = useState({ name: '', amount: '', durationMonths: '', note: '' })
+  // Delete is two taps: the bin, then "Sure?" on the same row.
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+
+  const beginEdit = (p: Record<string, unknown>) => {
+    setEditingId(str(p.id ?? p._id))
+    setEdit({
+      name: str(p.name),
+      amount: str(p.amount),
+      durationMonths: str(p.durationMonths ?? ''),
+      note: str(p.note ?? ''),
+    })
+    setError(null)
+  }
+
+  const saveEdit = async () => {
+    if (!editingId) return
+    const amount = Number(edit.amount)
+    if (!edit.name.trim()) return setError('Give the plan a name.')
+    if (!Number.isFinite(amount) || amount <= 0) return setError('Enter a valid amount.')
+    setBusy(true)
+    setError(null)
+    try {
+      await dsaApi.plans.update(
+        editingId,
+        {
+          name: edit.name.trim(),
+          amount,
+          durationMonths: edit.durationMonths ? Number(edit.durationMonths) : undefined,
+          note: edit.note.trim() || undefined,
+        },
+        token,
+      )
+      setEditingId(null)
+      await load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not save the plan.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const toggle = async (p: Record<string, unknown>) => {
     const id = str(p.id ?? p._id)
+    setError(null)
     try {
       await dsaApi.plans.update(id, { active: !p.active }, token)
       load()
-    } catch {
-      /* ignore */
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not update the plan.')
     }
   }
+
   const remove = async (id: string) => {
+    setError(null)
     try {
       await dsaApi.plans.remove(id, token)
-    } catch {
-      /* ignore */
+      setConfirmDeleteId(null)
+      await load()
+    } catch (e) {
+      // The API refuses to delete a plan with payments against it and says so.
+      // That message is the useful one, so it is shown as-is.
+      setConfirmDeleteId(null)
+      setError(e instanceof Error ? e.message : 'Could not delete the plan.')
     }
-    load()
   }
 
   return (
@@ -243,8 +295,57 @@ function PlansSection({ token }: { token?: string }) {
             return (
               <div
                 key={id}
-                className='flex items-center gap-2 p-2.5 rounded-xl bg-slate-50'
+                className='flex flex-wrap items-center gap-2 p-2.5 rounded-xl bg-slate-50'
               >
+                {editingId === id && (
+                  <div className='basis-full grid grid-cols-2 sm:grid-cols-4 gap-2'>
+                    <input
+                      value={edit.name}
+                      onChange={(e) => setEdit((v) => ({ ...v, name: e.target.value }))}
+                      placeholder='Plan name'
+                      className='col-span-2 h-9 px-2.5 rounded-lg bg-white border border-slate-200 text-[12px] font-bold outline-none'
+                    />
+                    <input
+                      type='number'
+                      min={0}
+                      value={edit.amount}
+                      onChange={(e) => setEdit((v) => ({ ...v, amount: e.target.value }))}
+                      placeholder='Amount in naira'
+                      className='h-9 px-2.5 rounded-lg bg-white border border-slate-200 text-[12px] font-bold outline-none'
+                    />
+                    <input
+                      type='number'
+                      min={0}
+                      value={edit.durationMonths}
+                      onChange={(e) =>
+                        setEdit((v) => ({ ...v, durationMonths: e.target.value }))
+                      }
+                      placeholder='Months'
+                      className='h-9 px-2.5 rounded-lg bg-white border border-slate-200 text-[12px] font-bold outline-none'
+                    />
+                    <input
+                      value={edit.note}
+                      onChange={(e) => setEdit((v) => ({ ...v, note: e.target.value }))}
+                      placeholder='Note (optional)'
+                      className='col-span-2 sm:col-span-3 h-9 px-2.5 rounded-lg bg-white border border-slate-200 text-[12px] outline-none'
+                    />
+                    <div className='flex gap-1.5'>
+                      <button
+                        onClick={saveEdit}
+                        disabled={busy}
+                        className='flex-1 h-9 rounded-lg bg-[#002EFF] text-white text-[10px] font-black uppercase disabled:opacity-50'
+                      >
+                        Save
+                      </button>
+                      <button
+                        onClick={() => setEditingId(null)}
+                        className='h-9 px-2.5 rounded-lg bg-white border border-slate-200 text-slate-500 text-[10px] font-black uppercase'
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
                 <div className='min-w-0 flex-1'>
                   <p className='text-xs font-black text-slate-800 truncate'>
                     {str(p.name)}
@@ -274,11 +375,29 @@ function PlansSection({ token }: { token?: string }) {
                   <Power size={10} className='inline' /> {p.active ? 'On' : 'Off'}
                 </button>
                 <button
-                  onClick={() => remove(id)}
-                  className='p-1 text-slate-300 hover:text-rose-500'
+                  onClick={() => beginEdit(p)}
+                  className='p-1 text-slate-300 hover:text-[#002EFF]'
+                  title='Edit plan'
                 >
-                  <Trash2 size={13} />
+                  <Pencil size={13} />
                 </button>
+                {confirmDeleteId === id ? (
+                  <button
+                    onClick={() => remove(id)}
+                    className='px-2 py-1 rounded-lg bg-rose-500 text-white text-[9px] font-black uppercase'
+                    title='Yes, delete it'
+                  >
+                    Sure?
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setConfirmDeleteId(id)}
+                    className='p-1 text-slate-300 hover:text-rose-500'
+                    title='Delete plan'
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                )}
               </div>
             )
           })

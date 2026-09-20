@@ -89,6 +89,8 @@ interface BankQuestion {
   imageUrl?: string
   mark: number
   batchName?: string
+  /** Shown to students in corrections. Editing must not lose it. */
+  explanation?: string
 }
 
 const str = (v: unknown) => (v == null ? '' : String(v))
@@ -105,6 +107,7 @@ function normalize(raw: Record<string, unknown>): BankQuestion {
     body: str(raw.body ?? raw.questionText),
     options,
     correctOption: str(raw.correctOption || LETTERS[Number(raw.correctAnswer) || 0]),
+    explanation: raw.explanation ? str(raw.explanation) : undefined,
     imageUrl: raw.imageUrl ? str(raw.imageUrl) : undefined,
     mark: typeof raw.mark === 'number' ? raw.mark : Number(raw.marks) || 1,
     batchName: raw.batchName ? str(raw.batchName) : undefined,
@@ -230,13 +233,13 @@ export default function QuestionBank({ token }: { token?: string }) {
       body,
       options: { A, B, C, D, E },
       Answer: (q.correctOption as Letter) || 'A',
-      explanation: '',
+      // The bank's explanation used to be dropped here, so every edit wiped it.
+      explanation: q.explanation || '',
       mark: q.mark || 1,
       imageUrl: q.imageUrl || '',
     })
     setEditingId(q.id)
     setError(null)
-    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const onImage = async (file: File | null) => {
@@ -416,7 +419,8 @@ export default function QuestionBank({ token }: { token?: string }) {
         <p className='text-[11px] font-bold text-rose-600 px-1'>{error}</p>
       )}
 
-      {/* Add one by one */}
+      {/* Add one by one — steps aside while a question is edited in its own box */}
+      {!editingId && (
       <Card className='p-5 rounded-3xl border-none shadow-sm bg-white space-y-3'>
         <p className='text-[11px] font-black uppercase text-slate-500 flex items-center gap-1.5'>
           <Plus size={14} /> Add a question
@@ -568,6 +572,18 @@ export default function QuestionBank({ token }: { token?: string }) {
           )}
         </div>
       </Card>
+      )}
+
+      {/* One image picker shared by the add form and the inline editor */}
+      {editingId && (
+        <input
+          ref={imgInput}
+          type='file'
+          accept='image/*'
+          hidden
+          onChange={(e) => onImage(e.target.files?.[0] ?? null)}
+        />
+      )}
 
       {/* Existing questions */}
       <div className='space-y-2'>
@@ -649,6 +665,130 @@ export default function QuestionBank({ token }: { token?: string }) {
                   </div>
                 )}
               </div>
+              {editingId === q.id && (
+                <div className='basis-full mt-3 pt-3 border-t border-slate-100 space-y-2.5'>
+                  <p className='text-[10px] font-black uppercase tracking-widest text-[#002EFF]'>
+                    Editing this question
+                  </p>
+                  <div className='grid grid-cols-1 sm:grid-cols-3 gap-2'>
+                    <input
+                      list='dsa-subject-options'
+                      value={form.subject}
+                      onChange={(e) => setForm((f) => ({ ...f, subject: e.target.value }))}
+                      placeholder='Subject'
+                      className='h-10 px-3 rounded-lg bg-slate-50 outline-none text-sm font-bold sm:col-span-2'
+                    />
+                    <input
+                      value={form.topic}
+                      onChange={(e) => setForm((f) => ({ ...f, topic: e.target.value }))}
+                      placeholder='Topic (optional)'
+                      className='h-10 px-3 rounded-lg bg-slate-50 outline-none text-sm font-medium'
+                    />
+                  </div>
+                  <RichTextField
+                    value={form.passage}
+                    onChange={(v) => setForm((f) => ({ ...f, passage: v }))}
+                    placeholder='Passage (optional)'
+                    rows={2}
+                  />
+                  <RichTextField
+                    value={form.body}
+                    onChange={(v) => setForm((f) => ({ ...f, body: v }))}
+                    placeholder='Question'
+                    rows={2}
+                  />
+                  <div className='grid grid-cols-1 sm:grid-cols-2 gap-2'>
+                    {LETTERS.map((l) => (
+                      <label
+                        key={l}
+                        className={`flex items-center gap-2 px-2 rounded-lg border ${
+                          form.Answer === l
+                            ? 'border-emerald-300 bg-emerald-50/50'
+                            : 'border-slate-100 bg-slate-50'
+                        }`}
+                      >
+                        <input
+                          type='radio'
+                          name={`answer-${q.id}`}
+                          checked={form.Answer === l}
+                          onChange={() => setForm((f) => ({ ...f, Answer: l }))}
+                          title='Mark correct'
+                          className='accent-emerald-600'
+                        />
+                        <span className='text-[11px] font-black text-slate-500 w-4'>{l}</span>
+                        <input
+                          value={form.options[l]}
+                          onChange={(e) =>
+                            setForm((f) => ({
+                              ...f,
+                              options: { ...f.options, [l]: e.target.value },
+                            }))
+                          }
+                          placeholder={l === 'E' ? 'Option E (optional)' : `Option ${l}`}
+                          className='flex-1 h-9 bg-transparent outline-none text-sm'
+                        />
+                      </label>
+                    ))}
+                  </div>
+                  <div className='flex flex-wrap items-center gap-2'>
+                    <input
+                      value={form.explanation}
+                      onChange={(e) => setForm((f) => ({ ...f, explanation: e.target.value }))}
+                      placeholder='Explanation shown in corrections (optional)'
+                      className='flex-1 min-w-[160px] h-10 px-3 rounded-lg bg-slate-50 outline-none text-sm'
+                    />
+                    <input
+                      type='number'
+                      min={1}
+                      value={form.mark}
+                      onChange={(e) => setForm((f) => ({ ...f, mark: Number(e.target.value) }))}
+                      title='Mark'
+                      className='w-20 h-10 px-3 rounded-lg bg-slate-50 outline-none text-sm font-bold'
+                    />
+                    <button
+                      onClick={() => imgInput.current?.click()}
+                      disabled={uploadingImg}
+                      className='flex items-center gap-1.5 h-10 px-3 rounded-lg bg-slate-50 text-slate-600 text-[11px] font-bold hover:bg-slate-100 disabled:opacity-50'
+                    >
+                      {uploadingImg ? (
+                        <Loader2 size={14} className='animate-spin' />
+                      ) : (
+                        <ImageIcon size={14} />
+                      )}
+                      {form.imageUrl ? 'Image added' : 'Image'}
+                    </button>
+                    {form.imageUrl && (
+                      <button
+                        onClick={() => setForm((f) => ({ ...f, imageUrl: '' }))}
+                        className='text-slate-400 hover:text-rose-500'
+                        title='Remove image'
+                      >
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
+                  <div className='flex gap-2'>
+                    <button
+                      onClick={addOne}
+                      disabled={busy}
+                      className='flex-1 flex items-center justify-center gap-2 h-11 bg-[#002EFF] text-white rounded-xl font-black text-[11px] uppercase tracking-wide hover:bg-blue-700 active:scale-[0.98] transition-all disabled:opacity-50'
+                    >
+                      {busy ? <Loader2 size={15} className='animate-spin' /> : <Check size={15} />}
+                      Save changes
+                    </button>
+                    <button
+                      onClick={() => {
+                        setEditingId(null)
+                        setForm(emptyForm)
+                        setError(null)
+                      }}
+                      className='h-11 px-4 rounded-xl bg-slate-100 text-slate-500 font-black text-[11px] uppercase tracking-wide hover:text-[#002EFF]'
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
               <button
                 onClick={() => startEdit(q)}
                 className='p-1.5 text-slate-300 hover:text-[#002EFF] shrink-0'

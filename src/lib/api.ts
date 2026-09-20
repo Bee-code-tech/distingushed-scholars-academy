@@ -370,6 +370,27 @@ export const dsaApi = {
 
     // GET /quizzes/:id/public-results — attempts on a FREE/public quiz (admin),
     // i.e. people who took it via the shareable link (name, email, score).
+    // GET /public/quizzes/:link/leaderboard — everyone who has taken a free
+    // quiz, signed-in and via the link, ranked together. No token needed.
+    publicLeaderboard: (link: string) =>
+      fetch(`${BASE_URL}/public/quizzes/${encodeURIComponent(link)}/leaderboard`)
+        .then((r) =>
+          handleResponse<
+            Record<string, unknown>[] | { data?: Record<string, unknown>[] }
+          >(r),
+        )
+        .then((res) => (Array.isArray(res) ? res : (res?.data ?? []))),
+
+    // DELETE /quizzes/:id/public-results/:attemptId — remove one attempt made
+    // through the public link (admin / staff).
+    deletePublicAttempt: (quizId: string, attemptId: string, token?: string) =>
+      fetch(
+        `${BASE_URL}/quizzes/${encodeURIComponent(quizId)}/public-results/${encodeURIComponent(attemptId)}`,
+        { method: 'DELETE', headers: getHeaders(token) },
+      )
+        .then((r) => handleResponse<{ data?: unknown }>(r))
+        .then((r) => (r as { data?: unknown }).data ?? r),
+
     publicResults: (id: string, token?: string) =>
       fetch(`${BASE_URL}/quizzes/${encodeURIComponent(id)}/public-results`, {
         headers: getHeaders(token),

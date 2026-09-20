@@ -2451,6 +2451,29 @@ function AttemptsPanel({
                             </button>
                           </>
                         )}
+                        <button
+                          onClick={() =>
+                            askConfirm({
+                              title: `Delete ${str(r.name ?? 'this')}’s attempt?`,
+                              body: 'Their score and every answer they gave are removed for good. This was a public-link attempt, so there is no account to withdraw it from.',
+                              confirmLabel: 'Delete attempt',
+                              onConfirm: async () => {
+                                try {
+                                  await dsaApi.quizzes.deletePublicAttempt(quizId, id, token)
+                                  setPublicAttempts((prev) =>
+                                    prev.filter((x) => str(x.id ?? x._id ?? x.email) !== id),
+                                  )
+                                } catch {
+                                  /* a reload reflects the true state */
+                                }
+                              },
+                            })
+                          }
+                          className='shrink-0 p-1 text-slate-300 hover:text-rose-500'
+                          title='Delete this attempt'
+                        >
+                          <Trash2 size={13} />
+                        </button>
                       </div>
                       {isOpen && (
                         <div className='px-3 pb-3 pt-1 bg-slate-50 space-y-2'>

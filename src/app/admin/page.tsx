@@ -755,7 +755,6 @@ import {
   CalendarCheck,
   HelpCircle,
   HardDrive,
-  FileSpreadsheet,
 } from 'lucide-react'
 
 // UI Components
@@ -776,8 +775,7 @@ import Library from './components/Library'
 import TakeAttendance from '@/components/dashboard/TakeAttendance'
 import TimetableEditor from '@/components/dashboard/TimetableEditor'
 import Announcements from '@/components/dashboard/Announcements'
-import QuizBuilder from './components/QuizBuilder'
-import QuestionBank from '@/components/dashboard/QuestionBank'
+import Assessments from './components/Assessments'
 import CommunityModeration from './components/CommunityModeration'
 import PaymentsAdmin from './components/PaymentsAdmin'
 import RolesPermissions from './components/RolesPermissions'
@@ -794,6 +792,7 @@ type AdminTab =
   | 'view-tutors'
   | 'view-guardians'
   | 'courses'
+  | 'assessments'
   | 'quizzes'
   | 'question-bank'
   | 'library'
@@ -876,11 +875,10 @@ export default function AdminAdmin() {
       group: 'Academics',
       items: [
         { id: 'courses' as AdminTab, label: 'Courses', icon: BookOpen },
-        { id: 'quizzes' as AdminTab, label: 'Quizzes', icon: HelpCircle },
         {
-          id: 'question-bank' as AdminTab,
-          label: 'Question Bank',
-          icon: FileSpreadsheet,
+          id: 'assessments' as AdminTab,
+          label: 'Quizzes & Questions',
+          icon: HelpCircle,
         },
         { id: 'library' as AdminTab, label: 'Library Pro', icon: HardDrive },
         {
@@ -936,10 +934,14 @@ export default function AdminAdmin() {
         return <PeopleRoster kind='guardians' />
       case 'courses':
         return <CourseManager />
+      case 'assessments':
       case 'quizzes':
-        return <QuizBuilder />
       case 'question-bank':
-        return <QuestionBank />
+        return (
+          <Assessments
+            initial={activeTab === 'question-bank' ? 'bank' : 'quizzes'}
+          />
+        )
       case 'library':
         return <Library />
       case 'create-tutor':

@@ -12,6 +12,10 @@ import { Trophy, Crown, Medal, Clock, Loader2 } from 'lucide-react'
 
 export type LeaderboardRow = {
   userId?: string | null
+  /** sha256 of the taker's email, lower-cased — never the address itself. */
+  emailHash?: string | null
+  /** 'portal' for a signed-in student, 'public' for the shareable link. */
+  source?: 'portal' | 'public'
   username: string
   profilePic?: string | null
   /** Percentage — stored as a fraction (0–1) by the API; we normalise here. */
@@ -177,10 +181,13 @@ export default function QuizLeaderboard({
   subtitle = 'Compete for the top spot',
   loading = false,
   me,
+  meEmailHash,
 }: {
   entries: LeaderboardRow[]
   meId?: string | null
   meName?: string | null
+  /** For a public taker: sha256 of the email they typed, to find their row. */
+  meEmailHash?: string | null
   title?: string
   subtitle?: string
   loading?: boolean
@@ -200,7 +207,9 @@ export default function QuizLeaderboard({
 }) {
   const isMe = (r: LeaderboardRow) =>
     (!!meId && !!r.userId && String(r.userId) === String(meId)) ||
+    (!!meEmailHash && !!r.emailHash && r.emailHash === meEmailHash) ||
     (!meId &&
+      !meEmailHash &&
       !!meName &&
       r.username.trim().toLowerCase() === meName.trim().toLowerCase())
 
@@ -357,6 +366,14 @@ export default function QuizLeaderboard({
                         {mine && (
                           <span className='ml-1.5 align-middle rounded-md bg-[#002EFF] text-white text-[8px] font-black px-1.5 py-0.5'>
                             YOU
+                          </span>
+                        )}
+                        {r.source === 'public' && (
+                          <span
+                            className='ml-1.5 align-middle rounded-md bg-amber-50 text-amber-700 text-[8px] font-black px-1.5 py-0.5'
+                            title='Took the quiz through the public link'
+                          >
+                            LINK
                           </span>
                         )}
                       </p>

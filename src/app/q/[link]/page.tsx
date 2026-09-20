@@ -27,6 +27,9 @@ import { dsaApi } from '@/lib/api'
 import RichText from '@/components/ui/RichText'
 import { ScientificCalculator } from '@/app/rapid-quiz/components/Calculator'
 import type { PublicQuizResult } from '@/lib/types'
+import QuizLeaderboard, {
+  type LeaderboardRow,
+} from '@/components/dashboard/QuizLeaderboard'
 import QuizCorrections, {
   type CorrectionsData,
 } from '@/components/dashboard/QuizCorrections'
@@ -76,7 +79,11 @@ function fmt(sec: number): string {
   return `${m}:${String(s).padStart(2, '0')}`
 }
 
-/** The numbered question palette — jump to any question; blue = answered. */
+/**
+ * The question palette, grouped by subject the way a JAMB CBT screen is —
+ * so a student on a four-subject mock can see where Chemistry starts. Jump to
+ * any question; blue means answered.
+ */
 function QuestionMap({
   questions,
   answers,
@@ -86,26 +93,62 @@ function QuestionMap({
   answers: Record<string, number>
   onPick?: () => void
 }) {
+  const bySubject: { subject: string; items: number[] }[] = []
+  questions.forEach((q, i) => {
+    const subj = q.subject || 'General'
+    let g = bySubject.find((x) => x.subject === subj)
+    if (!g) {
+      g = { subject: subj, items: [] }
+      bySubject.push(g)
+    }
+    g.items.push(i)
+  })
+
   return (
-    <div className='flex flex-wrap gap-1.5'>
-      {questions.map((q, i) => {
-        const done = answers[q.questionId] !== undefined
-        return (
-          <a
-            key={q.questionId || i}
-            href={`#pq-${i}`}
-            onClick={onPick}
-            title={done ? 'Answered' : 'Not answered'}
-            className={`h-8 w-8 rounded-lg text-[11px] font-black flex items-center justify-center ${
-              done ? 'bg-[#002EFF] text-white' : 'bg-slate-100 text-slate-500'
-            }`}
-          >
-            {i + 1}
-          </a>
-        )
-      })}
+    <div className='space-y-2.5'>
+      {bySubject.map((g) => (
+        <div key={g.subject}>
+          {bySubject.length > 1 && (
+            <p className='text-[9px] font-black uppercase tracking-wide text-[#002EFF] mb-1'>
+              {g.subject}
+            </p>
+          )}
+          <div className='flex flex-wrap gap-1.5'>
+            {g.items.map((i) => {
+              const q = questions[i]
+              const done = answers[q.questionId] !== undefined
+              return (
+                <a
+                  key={q.questionId || i}
+                  href={`#pq-${i}`}
+                  onClick={onPick}
+                  title={done ? 'Answered' : 'Not answered'}
+                  className={`h-8 w-8 rounded-lg text-[11px] font-black flex items-center justify-center ${
+                    done ? 'bg-[#002EFF] text-white' : 'bg-slate-100 text-slate-500'
+                  }`}
+                >
+                  {i + 1}
+                </a>
+              )
+            })}
+          </div>
+        </div>
+      ))}
     </div>
   )
+}
+
+/** sha256 of an email, lower-cased — what the leaderboard uses to find you. */
+async function emailHash(email: string): Promise<string | null> {
+  try {
+    const data = new TextEncoder().encode(email.trim().toLowerCase())
+    const buf = await crypto.subtle.digest('SHA-256', data)
+    return Array.from(new Uint8Array(buf))
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('')
+  } catch {
+    return null
+  }
 }
 
 export default function PublicQuizPage() {
@@ -133,6 +176,31 @@ export default function PublicQuizPage() {
   const [alreadyTaken, setAlreadyTaken] = useState(false)
   const [showCorrections, setShowCorrections] = useState(false)
   const [showMap, setShowMap] = useState(false) // mobile question-map drawer
+  // Everyone's ranking on this quiz, signed-in and via the link together.
+  const [board, setBoard] = useState<LeaderboardRow[]>([])
+  const [boardLoading, setBoardLoading] = useState(false)
+  const [boardHidden, setBoardHidden] = useState(false)
+  const [myHash, setMyHash] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (step !== 'result' || !link) return
+    let cancelled = false
+    setBoardLoading(true)
+    ;(async () => {
+      const [rows, hash] = await Promise.all([
+        dsaApi.quizzes.publicLeaderboard(link).catch(() => null),
+        emailHash(email),
+      ])
+      if (cancelled) return
+      if (rows === null) setBoardHidden(true) // disabled for this quiz, or unreachable
+      else setBoard(rows as unknown as LeaderboardRow[])
+      setMyHash(hash)
+      setBoardLoading(false)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [step, link, email])
   const totalTime = useRef(0)
   // Anti-cheating: count tab-switch / minimise / split-screen exits; auto-submit
   // once past the limit, warn before that.
@@ -624,9 +692,16 @@ ${rows ? `<table border="1" cellpadding="8" cellspacing="0" style="border-collap
                   <span className='text-[11px] font-black text-[#002EFF]'>
                     {i + 1}.
                   </span>
-                  <RichText className='text-[13px] font-bold text-slate-800 flex-1'>
-                    {q.questionText}
-                  </RichText>
+                  <div className='flex-1 min-w-0'>
+                    {q.subject && (
+                      <span className='inline-block mb-1.5 text-[8px] font-black uppercase tracking-wide bg-blue-50 text-[#002EFF] px-1.5 py-0.5 rounded'>
+                        {q.subject}
+                      </span>
+                    )}
+                    <RichText className='text-[13px] font-bold text-slate-800'>
+                      {q.questionText}
+                    </RichText>
+                  </div>
                 </div>
                 <div className='space-y-1.5'>
                   {q.options.map((o, oi) => (
@@ -836,6 +911,23 @@ ${rows ? `<table border="1" cellpadding="8" cellspacing="0" style="border-collap
                 </div>
               )}
             </div>
+
+            {/* How they rank against everyone else who sat it */}
+            {!boardHidden && (boardLoading || board.length > 0) && (
+              <QuizLeaderboard
+                entries={board}
+                meEmailHash={myHash}
+                meName={name}
+                loading={boardLoading}
+                subtitle='Everyone who has taken this quiz'
+                me={{
+                  score: pct,
+                  bestScore: pct,
+                  questionsAttempted: Object.keys(answers).length,
+                  questionsTotal: questions.length,
+                }}
+              />
+            )}
 
             {canShowCorrections && (
               <button
