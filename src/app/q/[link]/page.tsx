@@ -710,14 +710,16 @@ ${rows ? `<table border="1" cellpadding="8" cellspacing="0" style="border-collap
                       onClick={() =>
                         setAnswers((a) => ({ ...a, [q.questionId]: oi }))
                       }
-                      className={`w-full text-left px-3 py-2.5 rounded-xl text-[12px] font-bold border transition-all ${
+                      className={`w-full flex items-start gap-1.5 text-left px-3 py-2.5 rounded-xl text-[12px] font-bold border transition-all ${
                         answers[q.questionId] === oi
                           ? 'bg-[#002EFF] text-white border-[#002EFF]'
                           : 'bg-slate-50 text-slate-600 border-transparent hover:border-[#002EFF]/30'
                       }`}
                     >
-                      <span className='font-black mr-1.5'>{LETTERS[oi]}.</span>
-                      <RichText className='inline'>{o}</RichText>
+                      <span className='font-black shrink-0'>{LETTERS[oi]}.</span>
+                      <RichText inline className='flex-1 min-w-0 break-words'>
+                        {o}
+                      </RichText>
                     </button>
                   ))}
                 </div>

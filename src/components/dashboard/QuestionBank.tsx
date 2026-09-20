@@ -646,7 +646,7 @@ export default function QuestionBank({ token }: { token?: string }) {
                           : 'bg-slate-50 text-slate-500'
                       }`}
                     >
-                      {LETTERS[oi]}. <RichText className='inline'>{o}</RichText>
+                      {LETTERS[oi]}. <RichText inline>{o}</RichText>
                     </span>
                   ))}
                 </div>

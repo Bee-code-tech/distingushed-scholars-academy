@@ -30,24 +30,38 @@ const COMPONENTS: Components = {
   img: () => null,
 }
 
+// Inline mode: Markdown wraps everything in a <p>, which is a block — so
+// `className='inline'` on the wrapper never reached it, and an option letter
+// ended up alone on its line with the text underneath. Here the paragraph is a
+// span too, so "A." and its answer share a line. Line breaks typed into the
+// text still break (remark-breaks turns them into <br>).
+const INLINE_COMPONENTS: Components = {
+  ...COMPONENTS,
+  p: ({ children }) => <span className='whitespace-pre-wrap'>{children} </span>,
+}
+
 export default function RichText({
   children,
   className,
+  inline = false,
 }: {
   children?: string | null
   className?: string
+  /** Flow with the surrounding text instead of starting a new block. */
+  inline?: boolean
 }) {
   const text = children ?? ''
+  const Wrapper = inline ? 'span' : 'div'
   return (
-    <div className={className}>
+    <Wrapper className={className}>
       <ReactMarkdown
         remarkPlugins={[remarkMath, remarkBreaks]}
         rehypePlugins={[[rehypeKatex, { throwOnError: false, strict: false }]]}
-        components={COMPONENTS}
+        components={inline ? INLINE_COMPONENTS : COMPONENTS}
         // No rehype-raw: raw HTML in question text is NOT rendered (safe).
       >
         {text}
       </ReactMarkdown>
-    </div>
+    </Wrapper>
   )
 }

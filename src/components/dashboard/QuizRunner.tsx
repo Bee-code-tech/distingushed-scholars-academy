@@ -986,14 +986,16 @@ export default function QuizRunner() {
                   onClick={() =>
                     setAnswers((a) => ({ ...a, [q.questionId]: oi }))
                   }
-                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left text-[13px] font-medium transition-colors ${
+                  className={`w-full flex items-start gap-2.5 px-3 py-2 rounded-xl text-left text-[13px] font-medium transition-colors ${
                     answers[q.questionId] === oi
                       ? 'bg-[#002EFF] text-white'
                       : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
                   }`}
                 >
-                  <span className='font-black'>{LETTERS[oi]}</span>
-                  <RichText className='inline'>{o}</RichText>
+                  <span className='font-black shrink-0'>{LETTERS[oi]}</span>
+                  <RichText inline className='flex-1 min-w-0 break-words'>
+                    {o}
+                  </RichText>
                 </button>
               ))}
             </div>
