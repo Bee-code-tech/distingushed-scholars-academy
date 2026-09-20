@@ -111,6 +111,37 @@ async function withWakeUpRetry<T>(
   throw lastError
 }
 
+/**
+ * Fetch every page of a paginated list.
+ *
+ * The API answers 20 rows unless asked for more, and never more than 100 — so
+ * a roster fetched with one request silently stopped at 20 (staff) while 399
+ * students were registered. This asks for the largest page and keeps going
+ * until one comes back short. It deliberately does not trust `count`: on some
+ * endpoints that is the total and on others just the size of the page.
+ */
+async function fetchAllPages(
+  makeUrl: (page: number, limit: number) => string,
+  token?: string,
+): Promise<Record<string, unknown>[]> {
+  const LIMIT = 100
+  const MAX_PAGES = 100 // 10,000 rows — a runaway guard, not a real ceiling
+  const all: Record<string, unknown>[] = []
+  for (let page = 1; page <= MAX_PAGES; page += 1) {
+    const res = await fetch(makeUrl(page, LIMIT), {
+      headers: getHeaders(token),
+    }).then((r) =>
+      handleResponse<
+        Record<string, unknown>[] | { data?: Record<string, unknown>[] }
+      >(r),
+    )
+    const rows = Array.isArray(res) ? res : (res?.data ?? [])
+    all.push(...rows)
+    if (rows.length < LIMIT) break
+  }
+  return all
+}
+
 /** Default headers, including the Bearer token when available. */
 const getHeaders = (token?: string, isJson = true): HeadersInit => {
   const headers: Record<string, string> = {}
@@ -609,12 +640,11 @@ export const dsaApi = {
      * docs/DSA-LMS-Backend-Spec.md §3.
      */
     listUsers: (role: 'student' | 'tutor' | 'parent' | 'staff', token?: string) =>
-      fetch(`${BASE_URL}/admin/users?role=${encodeURIComponent(role)}`, {
-        method: 'GET',
-        headers: getHeaders(token),
-      })
-        .then((r) => handleResponse<Record<string, unknown>[] | { data?: Record<string, unknown>[] }>(r))
-        .then((res) => (Array.isArray(res) ? res : (res?.data ?? []))),
+      fetchAllPages(
+        (page, limit) =>
+          `${BASE_URL}/admin/users?role=${encodeURIComponent(role)}&page=${page}&limit=${limit}`,
+        token,
+      ),
 
     // PATCH /admin/users/:id — update a user's editable fields (e.g. the exam
     // track override). See docs/backend-requests-2026-09-01.md (§5).
@@ -633,18 +663,15 @@ export const dsaApi = {
     // students.view / students.manage (admin also allowed). Same shape as the
     // admin roster; optional filters (programme, class, examTrack, department,
     // accessLevel, search, status) are passed straight through.
-    students: (token?: string, params?: Record<string, string>) => {
-      const qs = new URLSearchParams(params || {}).toString()
-      return fetch(`${BASE_URL}/staff/students${qs ? `?${qs}` : ''}`, {
-        headers: getHeaders(token),
-      })
-        .then((r) =>
-          handleResponse<
-            Record<string, unknown>[] | { data?: Record<string, unknown>[] }
-          >(r),
-        )
-        .then((res) => (Array.isArray(res) ? res : (res?.data ?? [])))
-    },
+    students: (token?: string, params?: Record<string, string>) =>
+      fetchAllPages((page, limit) => {
+        const qs = new URLSearchParams({
+          ...(params || {}),
+          page: String(page),
+          limit: String(limit),
+        }).toString()
+        return `${BASE_URL}/staff/students?${qs}`
+      }, token),
   },
 
   // Attendance — per-COURSE self check-in (docs/attendance.md). A tutor opens

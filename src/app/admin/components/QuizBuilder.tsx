@@ -620,7 +620,7 @@ export default function QuizBuilder() {
             backgroundSize: '22px 22px',
           }}
         />
-        <div className='relative flex items-start justify-between gap-3'>
+        <div className='relative flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-3'>
           <div className='flex items-start gap-3 min-w-0'>
             <div className='h-11 w-11 rounded-2xl bg-white/15 backdrop-blur flex items-center justify-center shrink-0 ring-1 ring-white/20'>
               <HelpCircle size={22} />
@@ -647,7 +647,7 @@ export default function QuizBuilder() {
                 setStep(0)
                 setShowBuilder((open) => !open)
               }}
-              className='flex items-center gap-2 h-10 px-4 rounded-xl bg-white text-[#002EFF] font-black text-[11px] uppercase tracking-wide hover:bg-blue-50 active:scale-[0.98] transition-all shrink-0 shadow-sm'
+              className='flex items-center justify-center gap-2 h-11 sm:h-10 px-4 rounded-xl bg-white text-[#002EFF] font-black text-[11px] uppercase tracking-wide hover:bg-blue-50 active:scale-[0.98] transition-all shrink-0 shadow-sm w-full sm:w-auto'
             >
               {showBuilder ? (
                 <>

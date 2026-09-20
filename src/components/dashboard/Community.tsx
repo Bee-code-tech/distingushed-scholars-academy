@@ -1165,8 +1165,8 @@ export default function Community({
   return (
     <div className='max-w-3xl mx-auto flex flex-col h-[calc(100vh-9rem)] min-h-[520px]'>
       {/* Header */}
-      <div className='flex items-center justify-between px-1 pb-3'>
-        <div>
+      <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between px-1 pb-3'>
+        <div className='min-w-0'>
           <h2 className='text-xl md:text-2xl font-black text-zinc-900 tracking-tight flex items-center gap-2'>
             DSA <span className='text-[#002EFF]'>Community</span>
             {active.id !== 'general' && (
@@ -1181,8 +1181,8 @@ export default function Community({
               : 'Chat with tutors and students. Share notes, files and updates.'}
           </p>
         </div>
-        <div className='flex items-center gap-2'>
-          {canManageMembers && (
+        <div className='flex flex-wrap items-center gap-1.5 sm:gap-2 sm:justify-end'>
+          {(
             <button
               onClick={() => setMembersOpen((o) => !o)}
               title='Members'
@@ -2146,7 +2146,7 @@ export default function Community({
                     sendText()
                   }
                 }}
-                placeholder='Write a message… use @ to mention someone'
+                placeholder='Message…  @ to mention'
                 className='flex-1 resize-none max-h-32 rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-800 placeholder:text-zinc-400 focus:outline-none focus:border-[#002EFF] focus:ring-2 focus:ring-[#002EFF]/10'
               />
 
