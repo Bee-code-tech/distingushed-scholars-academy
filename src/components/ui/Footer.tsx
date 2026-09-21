@@ -12,7 +12,6 @@ import {
 import Link from 'next/link'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import AOS from 'aos'
-import 'aos/dist/aos.css'
 
 const flyingFormulas = [
   { text: 'E = mc²', top: '10%', left: '-10%', duration: 25, delay: 0 },

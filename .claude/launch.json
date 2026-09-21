@@ -4,15 +4,37 @@
     {
       "name": "dsa-dev",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
       "port": 3000
     },
     {
       "name": "dsa-preview",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["next", "dev", "--webpack", "-p", "3100"],
-      "env": { "NEXT_PUBLIC_API_URL": "http://localhost:59998" },
+      "runtimeArgs": [
+        "next",
+        "dev",
+        "--webpack",
+        "-p",
+        "3100"
+      ],
+      "env": {
+        "NEXT_PUBLIC_API_URL": "http://localhost:59998"
+      },
       "port": 3100
+    },
+    {
+      "name": "dsa-prod",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "next",
+        "start",
+        "-p",
+        "3200"
+      ],
+      "port": 3200
     }
   ]
 }

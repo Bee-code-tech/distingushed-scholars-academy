@@ -1,6 +1,17 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/*
+ * Third-party styles live HERE, not in an `import '….css'` beside the component.
+ * For old phones the build rewrites `@layer` into heavier selectors, and it can
+ * only keep "unlayered CSS beats Tailwind's reset" true for CSS in this file.
+ * Imported from a component, KaTeX lands in a separate stylesheet, Tailwind's
+ * `* { margin: 0; padding: 0; border: 0 }` outranks it, and fractions and roots
+ * fall apart.
+ */
+@import "katex/dist/katex.min.css";
+@import "aos/dist/aos.css";
+
 @custom-variant dark (&:is(.dark *));
 
 @import "@fontsource/inter/400.css";

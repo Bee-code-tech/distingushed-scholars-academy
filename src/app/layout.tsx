@@ -53,6 +53,11 @@ export default function RootLayout({
   return (
     <html lang='en' suppressHydrationWarning>
       <head>
+        {/* Must come first and must block: fills in built-ins an old Chrome
+            lacks before the app's own scripts run, and tells the student to
+            update if the browser is beyond help. Plain ES5 — see the file. */}
+        {/* eslint-disable-next-line @next/next/no-sync-scripts */}
+        <script src='/compat.js' />
         {/* Google tag (gtag.js) */}
         <Script
           src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}

@@ -6,7 +6,6 @@
 // look identical. Content is stored as plain text — see
 // docs/backend-requests-2026-09-02.md §3.
 
-import 'katex/dist/katex.min.css'
 import ReactMarkdown from 'react-markdown'
 import remarkMath from 'remark-math'
 import remarkBreaks from 'remark-breaks'
