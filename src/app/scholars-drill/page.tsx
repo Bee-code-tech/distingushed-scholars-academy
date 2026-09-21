@@ -164,7 +164,7 @@ export default function ScholarsDrillLanding() {
             data-aos-delay='100'
             className='text-3xl md:text-5xl font-black text-gray-900 leading-[1.1] tracking-tight'
           >
-            Pass JAMB, WAEC & Post-UTME with{' '}
+            Pass JAMB, WAEC, NECO & Post-UTME with{' '}
             <span className='text-[#002EFF]'>confidence</span>.
           </h1>
 
