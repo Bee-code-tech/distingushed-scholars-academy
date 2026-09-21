@@ -31,6 +31,45 @@ const RAW_API_URL =
   'https://api.distinguishedscholarsacademy.com'
 const BASE_URL = RAW_API_URL.replace(/\/+$/, '').replace(/\/api$/, '') + '/api'
 
+/**
+ * Every request in this file goes through here, because a plain fetch() has no
+ * time limit at all. On a bad connection — and the route from Nigerian mobile
+ * networks to our host drops a good share of connections outright — the request
+ * neither succeeds nor fails, so the button spins on "Creating your account…"
+ * for as long as the student is willing to watch it. Now it gives up, says why,
+ * and the student can try again.
+ *
+ * The name shadows the global on purpose, so no call site can forget it.
+ */
+const REQUEST_TIMEOUT_MS = 30_000
+const UPLOAD_TIMEOUT_MS = 180_000
+export const SLOW_CONNECTION_MESSAGE =
+  'The server is taking too long to answer. Your connection may be weak — please check it and try again.'
+
+function fetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+  const controller = new AbortController()
+  const isUpload = typeof FormData !== 'undefined' && init.body instanceof FormData
+  const timer = setTimeout(
+    () => controller.abort(),
+    isUpload ? UPLOAD_TIMEOUT_MS : REQUEST_TIMEOUT_MS,
+  )
+  const outer = init.signal
+  if (outer) {
+    if (outer.aborted) controller.abort()
+    else outer.addEventListener('abort', () => controller.abort(), { once: true })
+  }
+  return globalThis
+    .fetch(input, { ...init, signal: controller.signal })
+    .catch((err) => {
+      // Ours, not the caller's: report it as the network failure it is.
+      if (controller.signal.aborted && !outer?.aborted) {
+        throw new TypeError(SLOW_CONNECTION_MESSAGE)
+      }
+      throw err
+    })
+    .finally(() => clearTimeout(timer))
+}
+
 const TOKEN_KEY = 'dsa_token'
 
 /** Read the stored token safely (no-op on the server). */
@@ -179,12 +218,18 @@ export const dsaApi = {
      * reference, … }`. The caller resumes that transaction (see paystack.ts),
      * the webhook confirms payment, then OTP verification issues the token.
      */
+    // Safe to try twice: registering an email that is still unverified just
+    // refreshes that pending account and sends a new code.
     register: (payload: RegisterPayload) =>
-      fetch(`${BASE_URL}/auth/register`, {
-        method: 'POST',
-        headers: getHeaders(),
-        body: JSON.stringify(payload),
-      }).then((r) => handleResponse<RegisterResponse>(r)),
+      withWakeUpRetry(
+        () =>
+          fetch(`${BASE_URL}/auth/register`, {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify(payload),
+          }).then((r) => handleResponse<RegisterResponse>(r)),
+        2,
+      ),
 
     /**
      * (Re)send the verification code (POST /auth/send-otp). Returns

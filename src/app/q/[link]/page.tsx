@@ -41,6 +41,9 @@ type RunQuestion = {
   subject: string
   questionText: string
   options: string[]
+  /** The diagram that goes with the question. The API always sent it; this
+   *  page used to throw it away, so link takers never saw a single image. */
+  imageUrl?: string
   marks: number
 }
 
@@ -66,6 +69,7 @@ function mapQuiz(full: Record<string, unknown>): {
         options: Array.isArray(qq.options)
           ? (qq.options as string[])
           : LETTERS.map((l) => labeled[l]).filter(Boolean),
+        imageUrl: qq.imageUrl || qq.image ? str(qq.imageUrl ?? qq.image) : undefined,
         marks: Number(qq.marks ?? qq.mark) || 1,
       })
     })
@@ -701,6 +705,15 @@ ${rows ? `<table border="1" cellpadding="8" cellspacing="0" style="border-collap
                     <RichText className='text-[13px] font-bold text-slate-800'>
                       {q.questionText}
                     </RichText>
+                    {q.imageUrl && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={q.imageUrl}
+                        alt='Diagram for this question'
+                        loading='lazy'
+                        className='mt-2 rounded-xl max-h-60 max-w-full h-auto'
+                      />
+                    )}
                   </div>
                 </div>
                 <div className='space-y-1.5'>

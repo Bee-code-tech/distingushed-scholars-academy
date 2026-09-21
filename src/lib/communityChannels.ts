@@ -16,6 +16,10 @@ export interface CommunityChannel {
   kind: 'general' | 'program' | 'custom'
   /** System channels (General) can't be deleted. */
   system?: boolean
+  /** Departments allowed in (science / art / commercial). Empty = everyone. */
+  departments?: string[]
+  /** Tutors the admin put in charge of this community by hand (user ids). */
+  tutors?: string[]
   /** How many messages in here you haven't read (backend-supplied). */
   unread?: number
   /** How many of those name you (or @everyone). */
@@ -77,6 +81,12 @@ export function toChannel(raw: Record<string, unknown>): CommunityChannel {
     category,
     kind,
     system: !!raw.system || raw.id === 'general',
+    departments: Array.isArray(raw.departments)
+      ? (raw.departments as unknown[]).map(String)
+      : raw.department
+        ? [String(raw.department)]
+        : [],
+    tutors: Array.isArray(raw.tutors) ? (raw.tutors as unknown[]).map(String) : [],
     unread: typeof raw.unread === 'number' ? raw.unread : 0,
     mentions: typeof raw.mentions === 'number' ? raw.mentions : 0,
     muted: !!raw.muted,

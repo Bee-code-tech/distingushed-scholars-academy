@@ -215,6 +215,55 @@ const roleTint = (r: string): string => {
   return 'bg-slate-100 text-slate-500'
 }
 
+const DEPARTMENTS = [
+  { id: 'science', label: 'Science' },
+  { id: 'art', label: 'Art' },
+  { id: 'commercial', label: 'Commercial' },
+] as const
+
+/** All / Science / Art / Commercial. None chosen — or all three — means everyone. */
+function DeptChips({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: string[]
+  onChange: (next: string[]) => void
+  disabled?: boolean
+}) {
+  const everyone = value.length === 0 || value.length === DEPARTMENTS.length
+  const chip = (on: boolean) =>
+    `px-2.5 py-1.5 rounded-full text-[10px] font-black uppercase transition-colors disabled:opacity-50 ${
+      on ? 'bg-[#002EFF] text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+    }`
+  return (
+    <div className='flex flex-wrap items-center gap-1.5' role='group' aria-label='Departments'>
+      <button type='button' disabled={disabled} onClick={() => onChange([])} aria-pressed={everyone} className={chip(everyone)}>
+        All
+      </button>
+      {DEPARTMENTS.map((d) => {
+        const on = !everyone && value.includes(d.id)
+        return (
+          <button
+            key={d.id}
+            type='button'
+            disabled={disabled}
+            aria-pressed={on}
+            onClick={() => {
+              const base = everyone ? [] : value
+              const next = on ? base.filter((v) => v !== d.id) : [...base, d.id]
+              onChange(next.length === DEPARTMENTS.length ? [] : next)
+            }}
+            className={chip(on)}
+          >
+            {d.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 export default function Community({
   mode,
   token,
@@ -277,6 +326,11 @@ export default function Community({
   const [newOpen, setNewOpen] = useState(false)
   const [newName, setNewName] = useState('')
   const [newSubject, setNewSubject] = useState('')
+  // Departments for the community being created. Empty = every department.
+  const [newDepts, setNewDepts] = useState<string[]>([])
+  // Admin: tutors to choose from when putting one in charge of a community.
+  const [tutorList, setTutorList] = useState<{ id: string; name: string }[]>([])
+  const [scopeSaving, setScopeSaving] = useState(false)
   // Admin: who may open the Community, and renaming the active channel.
   const [access, setAccess] = useState<'all' | 'paid'>('all')
   const [renameValue, setRenameValue] = useState('')
@@ -993,7 +1047,7 @@ export default function Community({
       // The backend stores the category in its `track` string field; `subject`
       // scopes it further (e.g. a Physics class community).
       await dsaApi.community.createChannel(
-        { name, track: category, subject },
+        { name, track: category, subject, departments: newDepts },
         token,
       )
     } catch {
@@ -1002,9 +1056,52 @@ export default function Community({
     setNewName('')
     setNewCategory('')
     setNewSubject('')
+    setNewDepts([])
     setNewOpen(false)
     await loadChannels()
-  }, [newName, newCategory, newSubject, token, loadChannels])
+  }, [newName, newCategory, newSubject, newDepts, token, loadChannels])
+
+  // Admin: change who may open the active community — which departments, and
+  // which tutors are in charge of it.
+  const saveScope = useCallback(
+    async (patch: { departments?: string[]; tutors?: string[] }) => {
+      setScopeSaving(true)
+      setError(null)
+      try {
+        await dsaApi.community.updateChannel(activeChannel, patch, token)
+        await loadChannels()
+      } catch (e) {
+        setError(
+          e instanceof Error ? e.message : 'Could not change who can open this community.',
+        )
+      } finally {
+        setScopeSaving(false)
+      }
+    },
+    [activeChannel, token, loadChannels],
+  )
+
+  useEffect(() => {
+    if (mode !== 'admin') return
+    let alive = true
+    dsaApi.admin
+      .listUsers('tutor', token)
+      .then((rows) => {
+        if (!alive) return
+        setTutorList(
+          (rows as Record<string, unknown>[])
+            .map((r) => ({
+              id: String(r.id ?? r._id ?? ''),
+              name: String(r.fullname ?? r.name ?? r.username ?? 'Tutor'),
+            }))
+            .filter((t) => t.id),
+        )
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [mode, token])
 
   const deleteChannel = useCallback(
     async (id: string) => {
@@ -1355,6 +1452,69 @@ export default function Community({
               {renaming ? <Loader2 size={12} className='animate-spin' /> : 'Save'}
             </button>
           </div>
+
+          {/* Who may open this community. General stays open to everyone. */}
+          {active.id !== 'general' && (
+            <div className='basis-full flex flex-col gap-2 border-t border-slate-100 pt-3'>
+              <div className='flex flex-wrap items-center gap-2'>
+                <span className='text-[10px] font-black uppercase text-slate-400 shrink-0'>
+                  Departments
+                </span>
+                <DeptChips
+                  value={active.departments ?? []}
+                  disabled={scopeSaving}
+                  onChange={(departments) => saveScope({ departments })}
+                />
+                {scopeSaving && <Loader2 size={12} className='animate-spin text-slate-400' />}
+              </div>
+              <div className='flex flex-wrap items-center gap-2'>
+                <span className='text-[10px] font-black uppercase text-slate-400 shrink-0'>
+                  Tutors
+                </span>
+                {(active.tutors ?? []).map((id) => (
+                  <span
+                    key={id}
+                    className='inline-flex items-center gap-1 rounded-full bg-blue-50 text-[#002EFF] pl-2.5 pr-1 py-1 text-[10px] font-black'
+                  >
+                    {tutorList.find((t) => t.id === id)?.name ?? 'Tutor'}
+                    <button
+                      onClick={() =>
+                        saveScope({ tutors: (active.tutors ?? []).filter((t) => t !== id) })
+                      }
+                      disabled={scopeSaving}
+                      className='rounded-full p-0.5 hover:bg-blue-100'
+                      title='Remove from this community'
+                      aria-label='Remove tutor'
+                    >
+                      <X size={11} />
+                    </button>
+                  </span>
+                ))}
+                <select
+                  value=''
+                  disabled={scopeSaving}
+                  onChange={(e) => {
+                    const id = e.target.value
+                    if (id) saveScope({ tutors: [...(active.tutors ?? []), id] })
+                  }}
+                  className='h-8 max-w-full px-2 rounded-lg bg-slate-50 border border-slate-200 outline-none text-[11px] font-black text-slate-600'
+                >
+                  <option value=''>Add a tutor…</option>
+                  {tutorList
+                    .filter((t) => !(active.tutors ?? []).includes(t.id))
+                    .map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                </select>
+              </div>
+              <p className='text-[10px] font-medium text-slate-400 leading-snug'>
+                Students see this community only if their department is chosen here. A tutor sees
+                it if they are added here, or if they teach a subject in its name.
+              </p>
+            </div>
+          )}
         </div>
       )}
 
@@ -1395,6 +1555,12 @@ export default function Community({
               title='Scope this community to a subject — e.g. a Physics class'
               className='h-9 px-3 rounded-lg bg-slate-50 border border-transparent focus:border-[#002EFF]/30 focus:bg-white outline-none text-[12px] font-bold flex-1 min-w-[150px]'
             />
+            <div className='basis-full flex flex-wrap items-center gap-2'>
+              <span className='text-[10px] font-black uppercase text-slate-400 shrink-0'>
+                Departments
+              </span>
+              <DeptChips value={newDepts} onChange={setNewDepts} />
+            </div>
             <button
               onClick={createChannel}
               disabled={!newName.trim()}

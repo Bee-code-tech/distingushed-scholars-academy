@@ -1979,6 +1979,17 @@ function AttemptsPanel({
   const [openPublic, setOpenPublic] = useState<string | null>(null)
   const [rescoring, setRescoring] = useState(false)
   const [rescoreMsg, setRescoreMsg] = useState<string | null>(null)
+  // Why a delete / withdraw did not happen. These used to fail in silence: the
+  // dialog closed, the row stayed, and the admin was left to wonder.
+  const [actionError, setActionError] = useState<string | null>(null)
+  const failed = (what: string, e: unknown) => {
+    const why = e instanceof Error ? e.message : ''
+    setActionError(
+      /not found|404|cannot (delete|patch|post)/i.test(why)
+        ? `${what} The server does not have this feature yet — the backend update is still waiting to be merged.`
+        : `${what} ${why || 'Check your connection and try again.'}`,
+    )
+  }
 
   // Load the per-question results + the quiz's question→subject map, once.
   const loadDetailData = useCallback(async () => {
@@ -2168,10 +2179,11 @@ function AttemptsPanel({
       confirmLabel: 'Delete attempt',
       onConfirm: async () => {
         try {
+          setActionError(null)
           await dsaApi.quizzes.deleteAttempt(quizId, aid, token)
           setAttempts((prev) => prev.filter((r) => rowId(r) !== aid))
-        } catch {
-          /* ignore — a reload reflects the true state */
+        } catch (e) {
+          failed(`${name}’s attempt was not deleted.`, e)
         }
       },
     })
@@ -2187,8 +2199,8 @@ function AttemptsPanel({
           setAttempts((prev) =>
             prev.map((r) => (rowId(r) === aid ? { ...r, withdrawn: true } : r)),
           )
-        } catch {
-          /* ignore */
+        } catch (e) {
+          failed(`${name}’s result was not withdrawn.`, e)
         }
       },
     })
@@ -2288,9 +2300,20 @@ function AttemptsPanel({
     try {
       const res = (await dsaApi.quizzes.rescore(quizId, token)) as {
         updated?: number
+        synced?: { answers?: number; images?: number; explanations?: number }
       }
+      const pulled = [
+        [res?.synced?.answers, 'corrected answer'],
+        [res?.synced?.images, 'image'],
+        [res?.synced?.explanations, 'explanation'],
+      ]
+        .filter(([n]) => Number(n) > 0)
+        .map(([n, label]) => `${n} ${label}${Number(n) === 1 ? '' : 's'}`)
       setRescoreMsg(
-        `Re-graded ${res?.updated ?? 0} result${res?.updated === 1 ? '' : 's'} against the current answers.`,
+        `Re-graded ${res?.updated ?? 0} result${res?.updated === 1 ? '' : 's'}` +
+          (pulled.length
+            ? `, after bringing in ${pulled.join(', ')} from the question bank.`
+            : ' against the current answers. Nothing new was found in the question bank.'),
       )
       await load()
     } catch (e) {
@@ -2369,6 +2392,14 @@ function AttemptsPanel({
           </div>
           {rescoreMsg && (
             <p className='text-[10px] font-bold text-emerald-600'>{rescoreMsg}</p>
+          )}
+          {actionError && (
+            <p
+              role='alert'
+              className='rounded-xl bg-rose-50 border border-rose-100 px-3 py-2 text-[11px] font-bold text-rose-600'
+            >
+              {actionError}
+            </p>
           )}
 
           {/* Attempts vs the cohort view */}
@@ -2459,12 +2490,13 @@ function AttemptsPanel({
                               confirmLabel: 'Delete attempt',
                               onConfirm: async () => {
                                 try {
+                                  setActionError(null)
                                   await dsaApi.quizzes.deletePublicAttempt(quizId, id, token)
                                   setPublicAttempts((prev) =>
                                     prev.filter((x) => str(x.id ?? x._id ?? x.email) !== id),
                                   )
-                                } catch {
-                                  /* a reload reflects the true state */
+                                } catch (e) {
+                                  failed('That attempt was not deleted.', e)
                                 }
                               },
                             })

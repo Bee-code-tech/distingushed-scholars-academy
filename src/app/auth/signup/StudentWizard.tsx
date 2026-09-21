@@ -219,9 +219,8 @@ export default function StudentWizard() {
     const mode: 'physical' | 'online' =
       v.learningMode === 'Physical' ? 'physical' : 'online'
 
-    // Persist the local stores + pending profile, then go to OTP. Runs after a
-    // real successful payment, and in the "backend not reachable yet" fallback
-    // so the owner can still preview the flow (OTP 1111 on the next screen).
+    // Persist the local stores + pending profile, then go to OTP. Runs ONLY
+    // after the server has confirmed the account and emailed the code.
     const proceedToOtp = () => {
       rememberEnrolmentChoice({
         track,
@@ -289,20 +288,18 @@ export default function StudentWizard() {
     try {
       await dsaApi.auth.register(payload)
     } catch (err) {
-      // A real HTTP error (e.g. "email already registered") is shown and STOPS
-      // the flow. Only a genuine "backend unreachable" (network/CORS) falls
-      // back to the local preview path (OTP 1111 on the next screen).
-      if (isBackendUnreachable(err)) {
-        setStatus('Backend not connected — continuing in preview mode…')
-        proceedToOtp()
-        return
-      }
+      // Never move on unless the server said the account exists. This used to
+      // "continue in preview mode" when the server could not be reached — which
+      // sent students to the code screen for an account that was never created
+      // and a code that was never emailed. Nothing they typed there could work.
       setBusy(false)
       setStatus('')
       setError(
-        err instanceof Error
-          ? err.message
-          : 'Registration failed. Please check your details and try again.',
+        isBackendUnreachable(err)
+          ? 'We could not reach the server, so your account has NOT been created yet. Check your connection and press Create Account again — nothing you typed is lost.'
+          : err instanceof Error
+            ? err.message
+            : 'Registration failed. Please check your details and try again.',
       )
       return
     }
