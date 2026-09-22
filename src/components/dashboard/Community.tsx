@@ -383,6 +383,38 @@ export default function Community({
   const [manageOpen, setManageOpen] = useState(false)
   // Phone: the header only has room for the bell; the rest fold under `⋯`.
   const [moreOpen, setMoreOpen] = useState(false)
+  // How tall the chat may be: from where it starts down to the bottom of the
+  // screen. A fixed "screen minus header" guess was wrong on phones — the box
+  // stopped short and the page's padding showed beneath it as a floating card.
+  // Measuring also lets the box shrink when the keyboard opens, so the
+  // composer stays in view.
+  const shellRef = useRef<HTMLDivElement | null>(null)
+  const [fillHeight, setFillHeight] = useState<number | null>(null)
+  useEffect(() => {
+    const el = shellRef.current
+    if (!el) return
+    const measure = () => {
+      let top = el.getBoundingClientRect().top
+      let gutter = 16
+      for (let n = el.parentElement; n; n = n.parentElement) {
+        const cs = getComputedStyle(n)
+        if (/(auto|scroll)/.test(cs.overflowY)) {
+          top += n.scrollTop
+          gutter = parseFloat(cs.paddingBottom) || gutter
+          break
+        }
+      }
+      const vh = window.visualViewport?.height ?? window.innerHeight
+      setFillHeight(Math.max(420, Math.round(vh - top - gutter)))
+    }
+    measure()
+    window.addEventListener('resize', measure)
+    window.visualViewport?.addEventListener('resize', measure)
+    return () => {
+      window.removeEventListener('resize', measure)
+      window.visualViewport?.removeEventListener('resize', measure)
+    }
+  }, [])
 
   // Voice-note recording (tutors only).
   const [recording, setRecording] = useState(false)
@@ -1671,7 +1703,11 @@ export default function Community({
   )
 
   return (
-    <div className='flex h-[calc(100dvh-8.5rem)] min-h-[560px] overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm'>
+    <div
+      ref={shellRef}
+      style={fillHeight ? { height: fillHeight } : undefined}
+      className='flex h-[calc(100dvh-8.5rem)] overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm'
+    >
       {/* ── Pods list ──────────────────────────────────────────────────── */}
       <aside
         className={`w-full shrink-0 flex-col border-slate-200 md:flex md:w-64 md:border-r xl:w-72 ${
