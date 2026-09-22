@@ -53,9 +53,6 @@ import { uploadToCloudinary } from '@/lib/cloudinary'
 import {
   type CommunityChannel,
   toChannel,
-  getLocalChannels,
-  addLocalChannel,
-  removeLocalChannel,
   channelsForCategories,
 } from '@/lib/communityChannels'
 import {
@@ -381,6 +378,8 @@ export default function Community({
   const [listFilter, setListFilter] = useState('')
   // Admin: the management pane, as a drawer below `lg`.
   const [manageOpen, setManageOpen] = useState(false)
+  // The last fetch of rooms or messages failed; the poll keeps trying.
+  const [offline, setOffline] = useState(false)
   // Phone: the header only has room for the bell; the rest fold under `⋯`.
   const [moreOpen, setMoreOpen] = useState(false)
   // How tall the chat may be: from where it starts down to the bottom of the
@@ -1098,11 +1097,15 @@ export default function Community({
         string,
         unknown
       >[]
-      list = rows.length ? rows.map(toChannel) : getLocalChannels()
+      list = rows.map(toChannel)
+      setOffline(false)
     } catch {
-      // Channels endpoint not live yet — fall back to the seeded local list so
-      // the switcher still works.
-      list = getLocalChannels()
+      // The server could not be reached. This used to swap in a made-up list
+      // (SS1, SS2, WAEC, JAMB…) so the switcher "still worked" — which looked
+      // exactly like a broken deployment. Keep whatever was loaded before,
+      // say so, and let the next poll try again.
+      setOffline(true)
+      return
     }
     let visible = list
     if (mode === 'student') {
@@ -1155,8 +1158,9 @@ export default function Community({
         { name, track: category, subject, departments: newDepts },
         token,
       )
-    } catch {
-      addLocalChannel({ name, category: category ?? null })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not create the community.')
+      return
     }
     setNewName('')
     setNewCategory('')
@@ -1213,8 +1217,9 @@ export default function Community({
       if (id === 'general') return
       try {
         await dsaApi.community.removeChannel(id, token)
-      } catch {
-        removeLocalChannel(id)
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Could not delete the community.')
+        return
       }
       if (activeChannel === id) setActiveChannel('general')
       await loadChannels()
@@ -1762,7 +1767,11 @@ export default function Community({
         <div className='flex-1 overflow-y-auto custom-scrollbar'>
           {listed.length === 0 ? (
             <p className='px-4 py-8 text-center text-[11px] font-bold text-slate-400'>
-              No pod matches that.
+              {channels.length === 0
+                ? offline
+                  ? 'Could not load the rooms. Retrying…'
+                  : 'Loading rooms…'
+                : 'No pod matches that.'}
             </p>
           ) : (
             listed.map((c) => {
@@ -1965,12 +1974,12 @@ export default function Community({
           </div>
         )}
 
-        {notReady && (
+        {(notReady || offline) && (
           <div className='flex items-start gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2'>
             <AlertCircle size={14} className='mt-0.5 shrink-0 text-amber-600' />
             <p className='text-[11px] font-medium text-amber-700'>
-              The community channel is being set up on the server. Messages will appear
-              here once it is live.
+              Could not reach the server just now. Check your connection — this page keeps
+              retrying on its own.
             </p>
           </div>
         )}
