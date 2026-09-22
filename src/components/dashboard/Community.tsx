@@ -388,24 +388,34 @@ export default function Community({
   // stopped short and the page's padding showed beneath it as a floating card.
   // Measuring also lets the box shrink when the keyboard opens, so the
   // composer stays in view.
+  //
+  // On a phone the chat also runs edge to edge, like Telegram: the page's own
+  // side and bottom padding is cancelled with negative margins (measured, since
+  // each dashboard shell pads differently), and the card corners go away.
   const shellRef = useRef<HTMLDivElement | null>(null)
   const [fillHeight, setFillHeight] = useState<number | null>(null)
+  const [bleed, setBleed] = useState<{ x: number; bottom: number } | null>(null)
   useEffect(() => {
     const el = shellRef.current
     if (!el) return
     const measure = () => {
+      const phone = window.innerWidth < 768
       let top = el.getBoundingClientRect().top
       let gutter = 16
+      let padX = 0
       for (let n = el.parentElement; n; n = n.parentElement) {
         const cs = getComputedStyle(n)
         if (/(auto|scroll)/.test(cs.overflowY)) {
           top += n.scrollTop
           gutter = parseFloat(cs.paddingBottom) || gutter
+          padX = parseFloat(cs.paddingLeft) || 0
           break
         }
       }
       const vh = window.visualViewport?.height ?? window.innerHeight
-      setFillHeight(Math.max(420, Math.round(vh - top - gutter)))
+      const bottomGap = phone ? 0 : gutter
+      setBleed(phone ? { x: padX, bottom: gutter } : null)
+      setFillHeight(Math.max(420, Math.round(vh - top - bottomGap)))
     }
     measure()
     window.addEventListener('resize', measure)
@@ -1705,8 +1715,17 @@ export default function Community({
   return (
     <div
       ref={shellRef}
-      style={fillHeight ? { height: fillHeight } : undefined}
-      className='flex h-[calc(100dvh-8.5rem)] overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm'
+      style={{
+        ...(fillHeight ? { height: fillHeight } : {}),
+        ...(bleed
+          ? { marginLeft: -bleed.x, marginRight: -bleed.x, marginBottom: -bleed.bottom }
+          : {}),
+      }}
+      className={`flex h-[calc(100dvh-8.5rem)] overflow-hidden bg-white ${
+        bleed
+          ? 'border-t border-slate-200'
+          : 'rounded-3xl border border-slate-200 shadow-sm'
+      }`}
     >
       {/* ── Pods list ──────────────────────────────────────────────────── */}
       <aside
