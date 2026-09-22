@@ -2543,6 +2543,30 @@ function HeaderButton({
   )
 }
 
+/** One touch-sized action under a message on a phone. */
+function ActionChip({
+  icon: Icon,
+  label,
+  onClick,
+  tone,
+}: {
+  icon: React.ComponentType<{ size?: number; className?: string }>
+  label: string
+  onClick: () => void
+  tone?: 'rose'
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`inline-flex h-9 items-center gap-1.5 rounded-xl bg-white px-3 text-[11px] font-black shadow-sm ring-1 ring-zinc-200 active:scale-95 ${
+        tone === 'rose' ? 'text-rose-600' : 'text-zinc-700'
+      }`}
+    >
+      <Icon size={14} /> {label}
+    </button>
+  )
+}
+
 function AttachItem({
   icon: Icon,
   label,
@@ -2597,6 +2621,10 @@ function MessageBubble({
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(m.text ?? '')
   const [pickerOpen, setPickerOpen] = useState(false)
+  // Phones have no hover, so the icon row that appears on desktop never shows.
+  // There, tapping the bubble opens a bar of touch-sized actions instead.
+  const [actionsOpen, setActionsOpen] = useState(false)
+  const closeActions = () => setActionsOpen(false)
   // "Seen by" — names are fetched only when the sender taps the row.
   const [seen, setSeen] = useState<{ fullname: string }[] | null>(null)
   const [seenLoading, setSeenLoading] = useState(false)
@@ -2665,7 +2693,7 @@ function MessageBubble({
           {m.pinned && (
             <Pin size={11} className='text-[#002EFF] fill-[#002EFF]/20' />
           )}
-          <span className='flex items-center gap-1.5'>
+          <span className='hidden items-center gap-1.5 sm:flex'>
             <span className='relative'>
               <button
                 onClick={() => setPickerOpen((v) => !v)}
@@ -2750,6 +2778,11 @@ function MessageBubble({
         </div>
 
         <div
+          onClick={(e) => {
+            const t = e.target as HTMLElement
+            if (t.closest('button, a, input, textarea, video, audio, img')) return
+            setActionsOpen((v) => !v)
+          }}
           className={`max-w-full overflow-hidden rounded-2xl ${
             m.own ? 'rounded-br-md' : 'rounded-bl-md'
           } ${m.mentionedMe && !m.own ? 'ring-2 ring-[#FCB900]' : ''} ${
@@ -2948,6 +2981,54 @@ function MessageBubble({
             </a>
           )}
         </div>
+
+        {/* Phone actions — opened by tapping the bubble */}
+        {actionsOpen && !editing && (
+          <div
+            className={`mt-1.5 flex max-w-full flex-col gap-1.5 sm:hidden ${
+              m.own ? 'items-end' : 'items-start'
+            }`}
+          >
+            <div className='flex gap-0.5 rounded-2xl bg-white p-1 shadow-md ring-1 ring-zinc-200'>
+              {REACTIONS.map((e) => (
+                <button
+                  key={e}
+                  onClick={() => {
+                    closeActions()
+                    onReact(e)
+                  }}
+                  className='h-9 w-9 rounded-xl text-lg leading-none active:scale-90'
+                  aria-label={`React ${e}`}
+                >
+                  {e}
+                </button>
+              ))}
+            </div>
+            <div className='flex flex-wrap gap-1.5'>
+              {canReply && (
+                <ActionChip icon={Reply} label='Reply' onClick={() => { closeActions(); onReply() }} />
+              )}
+              {canPin && (
+                <ActionChip icon={Pin} label={m.pinned ? 'Unpin' : 'Pin'} onClick={() => { closeActions(); onPin() }} />
+              )}
+              {canEdit && (
+                <ActionChip
+                  icon={Pencil}
+                  label='Edit'
+                  onClick={() => {
+                    closeActions()
+                    setDraft(m.text ?? '')
+                    setEditing(true)
+                  }}
+                />
+              )}
+              {showDelete && (
+                <ActionChip icon={Trash2} label='Delete' tone='rose' onClick={() => { closeActions(); onDelete() }} />
+              )}
+              <ActionChip icon={X} label='Close' onClick={closeActions} />
+            </div>
+          </div>
+        )}
 
         {/* Reactions — tap a chip to join it, tap again to take yours back */}
         {m.reactions.length > 0 && (
