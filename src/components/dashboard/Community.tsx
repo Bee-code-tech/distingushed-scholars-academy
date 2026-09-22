@@ -1,6 +1,9 @@
 'use client'
 
-// Community — a single shared channel for tutors and students.
+// Community — chat pods for tutors and students, laid out like Telegram:
+// the list of pods on the left, the open conversation in the middle, and (for
+// admins) a management pane on the right. On a phone the list and the
+// conversation take turns.
 //
 //  • Tutors  : text, photo, video, document (pdf/doc) and voice notes.
 //  • Students: text, photo, video and document (pdf/doc) — no voice notes.
@@ -32,13 +35,17 @@ import {
   Users,
   UserMinus,
   BarChart3,
-  Eye,
   Bell,
   BellOff,
   Reply,
   SmilePlus,
   ChevronDown,
   Search,
+  ArrowLeft,
+  MoreHorizontal,
+  Megaphone,
+  SlidersHorizontal,
+  CheckCheck,
 } from 'lucide-react'
 import { dsaApi } from '@/lib/api'
 import { getUser } from '@/lib/auth'
@@ -215,6 +222,39 @@ const roleTint = (r: string): string => {
   return 'bg-slate-100 text-slate-500'
 }
 
+/** Subject symbols a student cannot type on a phone keyboard. */
+const SYMBOLS = ['Δ', '°', '²', '³', '√', 'π', '∫', '≤', '≥', '≠', '→', '⇌', '×', '÷', '½']
+
+const POD_TINTS = [
+  'bg-[#002EFF]',
+  'bg-emerald-600',
+  'bg-violet-600',
+  'bg-amber-500',
+  'bg-rose-500',
+  'bg-cyan-600',
+]
+
+/** A stable colour for a pod's avatar, from its id. */
+function podTint(c: { id: string; kind?: string }): string {
+  if (c.kind === 'general' || c.id === 'general') return 'bg-[#0B2E8A]'
+  let h = 0
+  for (const ch of c.id) h = (h * 31 + ch.charCodeAt(0)) >>> 0
+  return POD_TINTS[h % POD_TINTS.length]
+}
+
+function podIcon(c: { id: string; kind?: string; name: string }) {
+  if (c.kind === 'general' || c.id === 'general' || /announce|bulletin/i.test(c.name))
+    return <Megaphone size={18} />
+  return <Hash size={18} />
+}
+
+/** "3:15 PM" for today, otherwise the day. */
+function rowTime(ms?: number | null): string {
+  if (!ms) return ''
+  const label = dayLabel(ms)
+  return label === 'Today' ? clock(ms) : label
+}
+
 const DEPARTMENTS = [
   { id: 'science', label: 'Science' },
   { id: 'art', label: 'Art' },
@@ -336,6 +376,13 @@ export default function Community({
   const [renameValue, setRenameValue] = useState('')
   const [renaming, setRenaming] = useState(false)
   const [newCategory, setNewCategory] = useState<CourseCategory | ''>('')
+  // Phone layout: the pod list, then the conversation you tapped.
+  const [pane, setPane] = useState<'list' | 'chat'>('list')
+  const [listFilter, setListFilter] = useState('')
+  // Admin: the management pane, as a drawer below `lg`.
+  const [manageOpen, setManageOpen] = useState(false)
+  // Phone: the header only has room for the bell; the rest fold under `⋯`.
+  const [moreOpen, setMoreOpen] = useState(false)
 
   // Voice-note recording (tutors only).
   const [recording, setRecording] = useState(false)
@@ -1259,237 +1306,122 @@ export default function Community({
   const canManageMembers = mode === 'tutor' || mode === 'admin'
   const isAdmin = mode === 'admin'
 
-  return (
-    <div className='max-w-3xl mx-auto flex flex-col h-[calc(100vh-9rem)] min-h-[520px]'>
-      {/* Header */}
-      <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between px-1 pb-3'>
-        <div className='min-w-0'>
-          <h2 className='text-xl md:text-2xl font-black text-zinc-900 tracking-tight flex items-center gap-2'>
-            DSA <span className='text-[#002EFF]'>Community</span>
-            {active.id !== 'general' && (
-              <span className='text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-violet-50 text-violet-600'>
-                {active.name}
-              </span>
-            )}
-          </h2>
-          <p className='text-[11px] font-medium text-zinc-500'>
-            {isModerator
-              ? 'Post updates, share files and voice notes — and delete any message.'
-              : 'Chat with tutors and students. Share notes, files and updates.'}
-          </p>
-        </div>
-        <div className='flex flex-wrap items-center gap-1.5 sm:gap-2 sm:justify-end'>
-          {(
-            <button
-              onClick={() => setMembersOpen((o) => !o)}
-              title='Members'
-              className={`flex items-center gap-1.5 text-[9px] font-black uppercase tracking-wider px-2.5 py-1.5 rounded-full transition-colors ${
-                membersOpen
-                  ? 'bg-[#002EFF] text-white'
-                  : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-              }`}
-            >
-              <Users size={11} /> Members
-            </button>
-          )}
-          {canManage && (
-            <button
-              onClick={toggleLock}
-              title={locked ? 'Unlock the community' : 'Lock (lesson mode)'}
-              className={`flex items-center gap-1.5 text-[9px] font-black uppercase tracking-wider px-2.5 py-1.5 rounded-full transition-colors ${
-                locked
-                  ? 'bg-rose-50 text-rose-600 hover:bg-rose-100'
-                  : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-              }`}
-            >
-              {locked ? <Lock size={11} /> : <Unlock size={11} />}
-              {locked ? 'Locked' : 'Lock'}
-            </button>
-          )}
-          {online.length > 0 && (
-            <span
-              className='inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded-full bg-emerald-50 text-emerald-600'
-              title={online.map((o) => o.fullname).join(', ')}
-            >
-              <span className='h-1.5 w-1.5 rounded-full bg-emerald-500' />
-              {online.length} online
-            </span>
-          )}
-          <button
-            onClick={() => setBellOpen((o) => !o)}
-            className={`relative inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded-full ${
-              bellOpen
-                ? 'bg-[#002EFF] text-white'
-                : 'bg-slate-100 text-slate-500 hover:text-[#002EFF]'
-            }`}
-            title='What you have missed'
-          >
-            <Bell size={11} /> Alerts
-            {alertCount > 0 && (
-              <span className='absolute -top-1 -right-1 min-w-[15px] rounded-full bg-rose-500 px-1 text-[8px] font-black text-white tabular-nums'>
-                {alertCount > 9 ? '9+' : alertCount}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => (searchOpen ? closeSearch() : setSearchOpen(true))}
-            className={`inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded-full ${
-              searchOpen
-                ? 'bg-[#002EFF] text-white'
-                : 'bg-slate-100 text-slate-500 hover:text-[#002EFF]'
-            }`}
-            title='Search the community'
-          >
-            <Search size={11} /> Search
-          </button>
-          <span className='text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded-full bg-emerald-50 text-emerald-600'>
-            {messages.length} message{messages.length === 1 ? '' : 's'}
-          </span>
-        </div>
+  // The pane shown on a phone: the pod list first, then the conversation you
+  // tapped, Telegram-style. Both sit side by side from `md` up.
+  const openChannel = (id: string) => {
+    setActiveChannel(id)
+    setPane('chat')
+  }
+
+  const listTerm = listFilter.trim().toLowerCase()
+  const listed = channels.filter((c) =>
+    listTerm ? c.name.toLowerCase().includes(listTerm) : true,
+  )
+
+  const managePanel = (
+    <div className='flex h-full flex-col'>
+      <div className='flex items-center justify-between border-b border-slate-100 px-4 py-3'>
+        <p className='flex items-center gap-1.5 text-[11px] font-black uppercase tracking-widest text-slate-500'>
+          <SlidersHorizontal size={13} /> Community management
+        </p>
+        <button
+          onClick={() => setManageOpen(false)}
+          className='rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 xl:hidden'
+          aria-label='Close management'
+        >
+          <X size={15} />
+        </button>
       </div>
 
-      {/* Channel switcher */}
-      {channels.length > 1 && (
-        <div className='mb-3 flex items-center gap-1.5 overflow-x-auto pb-1 custom-scrollbar'>
-          {channels.map((c) => {
-            const on = c.id === activeChannel
-            return (
-              <button
-                key={c.id}
-                onClick={() => setActiveChannel(c.id)}
-                className={`group inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-[11px] font-black transition-colors ${
-                  on
-                    ? 'bg-[#002EFF] text-white'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                <Hash size={11} className={on ? 'text-white/80' : 'text-slate-400'} />
-                {c.name}
-                {/* What's waiting in the channels you aren't looking at */}
-                {!on && !!c.unread && (
-                  <span
-                    className='ml-0.5 min-w-[18px] rounded-full bg-[#002EFF] px-1.5 py-0.5 text-[9px] font-black text-white tabular-nums'
-                    title={
-                      c.lastMessageSender && c.lastMessageText
-                        ? `${c.lastMessageSender}: ${c.lastMessageText}`
-                        : undefined
-                    }
-                  >
-                    {c.unread > 99 ? '99+' : c.unread}
-                  </span>
-                )}
-                {isAdmin && c.id !== 'general' && (
-                  <span
-                    role='button'
-                    tabIndex={0}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      if (
-                        window.confirm(`Delete the "${c.name}" community? Its messages will be removed.`)
-                      )
-                        deleteChannel(c.id)
-                    }}
-                    className={`ml-0.5 rounded-full p-0.5 ${on ? 'hover:bg-white/20' : 'hover:bg-rose-100 hover:text-rose-500'}`}
-                    title='Delete community'
-                  >
-                    <X size={11} />
-                  </span>
-                )}
-              </button>
-            )
-          })}
-          {isAdmin && (
-            <button
-              onClick={() => setNewOpen((o) => !o)}
-              className='inline-flex items-center gap-1 shrink-0 rounded-full px-3 py-1.5 text-[11px] font-black bg-emerald-50 text-emerald-600 hover:bg-emerald-100'
-              title='Create a community'
-            >
-              <Plus size={12} /> New
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Admin controls: who can open Community + rename the active channel */}
-      {isAdmin && (
-        <div className='mb-3 rounded-2xl border border-slate-200 bg-white p-3 flex flex-wrap items-center gap-3'>
-          <div className='flex items-center gap-2'>
-            <span className='text-[10px] font-black uppercase text-slate-400'>
-              Access
-            </span>
-            <div className='inline-flex rounded-lg bg-slate-100 p-0.5'>
-              {(['all', 'paid'] as const).map((a) => (
-                <button
-                  key={a}
-                  onClick={() => changeAccess(a)}
-                  className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase transition-colors ${
-                    access === a
-                      ? 'bg-white text-[#002EFF] shadow-sm'
-                      : 'text-slate-500 hover:text-slate-700'
-                  }`}
-                >
-                  {a === 'all' ? 'All students' : 'Paid only'}
-                </button>
-              ))}
-            </div>
+      <div className='flex-1 space-y-4 overflow-y-auto p-4 custom-scrollbar'>
+        {/* The room at a glance */}
+        <div className='rounded-2xl bg-slate-50 p-4 text-center'>
+          <div
+            className={`mx-auto mb-2 grid h-12 w-12 place-items-center rounded-2xl text-white ${podTint(active)}`}
+          >
+            {podIcon(active)}
           </div>
-
-          <div className='flex items-center gap-2 flex-1 min-w-[220px]'>
-            <span className='text-[10px] font-black uppercase text-slate-400 shrink-0'>
-              Rename
+          <p className='text-[14px] font-black text-slate-900'>{active.name}</p>
+          <p className='mt-0.5 text-[10px] font-medium text-slate-500'>
+            {members.length} member{members.length === 1 ? '' : 's'} · {online.length} online
+          </p>
+          <div className='mt-2 flex flex-wrap justify-center gap-1'>
+            {active.category && (
+              <span className='rounded-full bg-blue-50 px-2 py-0.5 text-[9px] font-black uppercase text-[#002EFF]'>
+                {categoryLabel(active.category)}
+              </span>
+            )}
+            <span className='rounded-full bg-emerald-50 px-2 py-0.5 text-[9px] font-black uppercase text-emerald-600'>
+              {access === 'all' ? 'All students' : 'Paid only'}
             </span>
+          </div>
+        </div>
+
+        {/* Name */}
+        <div>
+          <p className='mb-1.5 text-[9px] font-black uppercase tracking-widest text-slate-400'>
+            Channel name
+          </p>
+          <div className='flex items-center gap-2'>
             <input
               value={renameValue}
               onChange={(e) => setRenameValue(e.target.value)}
               placeholder={active.name}
-              className='h-9 px-3 rounded-lg bg-slate-50 border border-transparent focus:border-[#002EFF]/30 focus:bg-white outline-none text-[12px] font-bold flex-1 min-w-0'
+              className='h-10 min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 text-[12px] font-bold outline-none focus:border-[#002EFF]/40'
             />
             <button
               onClick={renameChannel}
               disabled={!renameValue.trim() || renaming}
-              className='h-9 px-3 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-black uppercase hover:text-[#002EFF] disabled:opacity-50 shrink-0'
+              className='h-10 shrink-0 rounded-xl bg-[#002EFF] px-3 text-[10px] font-black uppercase text-white hover:bg-blue-700 disabled:opacity-50'
             >
               {renaming ? <Loader2 size={12} className='animate-spin' /> : 'Save'}
             </button>
           </div>
+        </div>
 
-          {/* Who may open this community. General stays open to everyone. */}
-          {active.id !== 'general' && (
-            <div className='basis-full flex flex-col gap-2 border-t border-slate-100 pt-3'>
-              <div className='flex flex-wrap items-center gap-2'>
-                <span className='text-[10px] font-black uppercase text-slate-400 shrink-0'>
-                  Departments
-                </span>
-                <DeptChips
-                  value={active.departments ?? []}
-                  disabled={scopeSaving}
-                  onChange={(departments) => saveScope({ departments })}
-                />
-                {scopeSaving && <Loader2 size={12} className='animate-spin text-slate-400' />}
-              </div>
-              <div className='flex flex-wrap items-center gap-2'>
-                <span className='text-[10px] font-black uppercase text-slate-400 shrink-0'>
-                  Tutors
-                </span>
-                {(active.tutors ?? []).map((id) => (
-                  <span
-                    key={id}
-                    className='inline-flex items-center gap-1 rounded-full bg-blue-50 text-[#002EFF] pl-2.5 pr-1 py-1 text-[10px] font-black'
-                  >
-                    {tutorList.find((t) => t.id === id)?.name ?? 'Tutor'}
-                    <button
-                      onClick={() =>
-                        saveScope({ tutors: (active.tutors ?? []).filter((t) => t !== id) })
-                      }
-                      disabled={scopeSaving}
-                      className='rounded-full p-0.5 hover:bg-blue-100'
-                      title='Remove from this community'
-                      aria-label='Remove tutor'
-                    >
-                      <X size={11} />
-                    </button>
-                  </span>
-                ))}
+        {/* Who may open the Community at all */}
+        <div>
+          <p className='mb-1.5 text-[9px] font-black uppercase tracking-widest text-slate-400'>
+            Access permission
+          </p>
+          <div className='grid grid-cols-2 gap-2'>
+            {(['all', 'paid'] as const).map((a) => (
+              <button
+                key={a}
+                onClick={() => changeAccess(a)}
+                className={`h-10 rounded-xl border text-[10px] font-black uppercase transition-colors ${
+                  access === a
+                    ? 'border-[#002EFF] bg-blue-50 text-[#002EFF]'
+                    : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
+                }`}
+              >
+                {a === 'all' ? 'All students' : 'Paid only ⭐'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {active.id !== 'general' ? (
+          <>
+            {/* Departments */}
+            <div>
+              <p className='mb-1.5 flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-slate-400'>
+                Target departments
+                {scopeSaving && <Loader2 size={11} className='animate-spin' />}
+              </p>
+              <DeptChips
+                value={active.departments ?? []}
+                disabled={scopeSaving}
+                onChange={(departments) => saveScope({ departments })}
+              />
+            </div>
+
+            {/* Tutors */}
+            <div>
+              <div className='mb-1.5 flex items-center justify-between'>
+                <p className='text-[9px] font-black uppercase tracking-widest text-slate-400'>
+                  Assigned tutors
+                </p>
                 <select
                   value=''
                   disabled={scopeSaving}
@@ -1497,9 +1429,10 @@ export default function Community({
                     const id = e.target.value
                     if (id) saveScope({ tutors: [...(active.tutors ?? []), id] })
                   }}
-                  className='h-8 max-w-full px-2 rounded-lg bg-slate-50 border border-slate-200 outline-none text-[11px] font-black text-slate-600'
+                  className='h-7 max-w-[140px] rounded-lg bg-transparent text-[10px] font-black text-[#002EFF] outline-none'
+                  aria-label='Add a tutor'
                 >
-                  <option value=''>Add a tutor…</option>
+                  <option value=''>+ Add tutor</option>
                   {tutorList
                     .filter((t) => !(active.tutors ?? []).includes(t.id))
                     .map((t) => (
@@ -1509,866 +1442,1032 @@ export default function Community({
                     ))}
                 </select>
               </div>
-              <p className='text-[10px] font-medium text-slate-400 leading-snug'>
-                Students see this community only if their department is chosen here. A tutor sees
-                it if they are added here, or if they teach a subject in its name.
-              </p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* New-channel form (admin) */}
-      {isAdmin && newOpen && (
-        <div className='mb-3 rounded-2xl border border-slate-200 bg-white p-3 space-y-2'>
-          <p className='text-[10px] font-black uppercase text-slate-400'>
-            New community
-          </p>
-          <div className='flex flex-wrap items-center gap-2'>
-            <input
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              placeholder='Name (e.g. SS1, JAMB)'
-              className='h-9 px-3 rounded-lg bg-slate-50 border border-transparent focus:border-[#002EFF]/30 focus:bg-white outline-none text-[12px] font-bold flex-1 min-w-[160px]'
-            />
-            <select
-              value={newCategory}
-              onChange={(e) => {
-                const cat = e.target.value as CourseCategory | ''
-                setNewCategory(cat)
-                // Prefill the name from the category label if left blank.
-                if (cat && !newName.trim()) setNewName(categoryLabel(cat))
-              }}
-              className='h-9 px-2 rounded-lg bg-slate-50 border border-slate-200 outline-none text-[12px] font-black'
-            >
-              <option value=''>No class/track (everyone)</option>
-              {COURSE_CATEGORIES.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
-            <input
-              value={newSubject}
-              onChange={(e) => setNewSubject(e.target.value)}
-              placeholder='Subject (optional, e.g. Physics)'
-              title='Scope this community to a subject — e.g. a Physics class'
-              className='h-9 px-3 rounded-lg bg-slate-50 border border-transparent focus:border-[#002EFF]/30 focus:bg-white outline-none text-[12px] font-bold flex-1 min-w-[150px]'
-            />
-            <div className='basis-full flex flex-wrap items-center gap-2'>
-              <span className='text-[10px] font-black uppercase text-slate-400 shrink-0'>
-                Departments
-              </span>
-              <DeptChips value={newDepts} onChange={setNewDepts} />
-            </div>
-            <button
-              onClick={createChannel}
-              disabled={!newName.trim()}
-              className='h-9 px-4 rounded-lg bg-[#002EFF] text-white text-[10px] font-black uppercase hover:bg-blue-700 disabled:opacity-50'
-            >
-              Create
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Who is in this channel */}
-      {membersOpen && (
-        <div className='mb-3 rounded-2xl border border-slate-200 bg-white p-3'>
-          <div className='flex items-center justify-between mb-2'>
-            <p className='text-[10px] font-black uppercase text-slate-400 flex items-center gap-1'>
-              <Users size={12} /> Members of {active.name}
-            </p>
-            <button
-              onClick={() => setMembersOpen(false)}
-              className='text-slate-400 hover:text-slate-600'
-            >
-              <X size={14} />
-            </button>
-          </div>
-          {members.length === 0 ? (
-            <p className='text-[11px] font-medium text-slate-400 py-2'>
-              No members to show yet.
-            </p>
-          ) : (
-            (() => {
-              const term = memberSearch.trim().toLowerCase()
-              const shown = members.filter((m) =>
-                term ? m.name.toLowerCase().includes(term) : true,
-              )
-              const onlineIds = new Set(online.map((o) => String(o.id)))
-              const groups: { label: string; rows: typeof shown }[] = [
-                {
-                  label: 'Admins',
-                  rows: shown.filter((m) => m.role.toLowerCase().includes('admin')),
-                },
-                {
-                  label: 'Tutors',
-                  rows: shown.filter((m) => m.role.toLowerCase() === 'tutor'),
-                },
-                {
-                  label: 'Students',
-                  rows: shown.filter((m) => m.role.toLowerCase() === 'student'),
-                },
-              ].filter((g) => g.rows.length)
-
-              return (
-                <>
-                  {members.length > 6 && (
-                    <div className='relative mb-2'>
-                      <Search
-                        size={13}
-                        className='absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400'
-                      />
-                      <input
-                        value={memberSearch}
-                        onChange={(e) => setMemberSearch(e.target.value)}
-                        placeholder='Search members…'
-                        className='w-full h-8 pl-8 pr-2 rounded-xl bg-zinc-50 text-[12px] font-medium outline-none focus:bg-white focus:ring-1 focus:ring-[#002EFF]/30'
-                      />
-                    </div>
-                  )}
-                  <div className='space-y-2 max-h-60 overflow-y-auto custom-scrollbar'>
-                    {groups.length === 0 ? (
-                      <p className='py-2 text-center text-[11px] font-bold text-zinc-400'>
-                        Nobody by that name.
-                      </p>
-                    ) : (
-                      groups.map((g) => (
-                        <div key={g.label}>
-                          <p className='px-2 pb-1 text-[9px] font-black uppercase tracking-widest text-zinc-300'>
-                            {g.label} · {g.rows.length}
-                          </p>
-                          {g.rows.map((mem) => (
-                            <div
-                              key={mem.id}
-                              className='flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-50'
-                            >
-                              <span className='relative h-6 w-6 shrink-0 rounded-lg bg-zinc-100 text-[9px] font-black text-zinc-600 grid place-items-center'>
-                                {mem.name.slice(0, 2).toUpperCase()}
-                                {onlineIds.has(String(mem.id)) && (
-                                  <span
-                                    className='absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-white'
-                                    title='Online now'
-                                  />
-                                )}
-                              </span>
-                              <span className='text-[11px] font-bold text-zinc-700 flex-1 truncate'>
-                                {mem.name}
-                                {mem.id === myId && (
-                                  <span className='ml-1 text-zinc-400'>(you)</span>
-                                )}
-                              </span>
-                              <span
-                                className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded ${roleTint(mem.role)}`}
-                              >
-                                {roleLabel(mem.role)}
-                              </span>
-                              {canManageMembers &&
-                                mem.role.toLowerCase() === 'student' && (
-                                  <button
-                                    onClick={() => removeMember(mem.id)}
-                                    className='p-1 text-slate-300 hover:text-rose-500'
-                                    title='Remove from this community'
-                                  >
-                                    <UserMinus size={13} />
-                                  </button>
-                                )}
-                            </div>
-                          ))}
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </>
-              )
-            })()
-          )}
-        </div>
-      )}
-
-      {notReady && (
-        <div className='mb-3 flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3'>
-          <AlertCircle size={16} className='text-amber-600 mt-0.5 shrink-0' />
-          <p className='text-[11px] font-medium text-amber-700'>
-            The community channel is being set up on the server. Once it is live,
-            messages will appear here automatically.
-          </p>
-        </div>
-      )}
-
-      {locked && (
-        <div className='mb-3 flex items-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2.5'>
-          <Lock size={14} className='text-rose-500 shrink-0' />
-          <p className='text-[11px] font-bold text-rose-600'>
-            {canManage
-              ? 'Lesson mode — the community is locked. Students can’t post; you still can.'
-              : 'The community is locked by a tutor right now. You can read but not post.'}
-          </p>
-        </div>
-      )}
-
-      {pinned.length > 0 && (
-        <div className='mb-3 rounded-2xl border border-blue-100 bg-blue-50/50 px-3 py-2'>
-          <p className='text-[9px] font-black uppercase tracking-widest text-[#002EFF] mb-1.5 flex items-center gap-1'>
-            <Pin size={10} /> Pinned
-          </p>
-          <div className='space-y-1'>
-            {pinned.map((m) => (
-              <div key={m.id} className='flex items-center gap-2 text-[11px]'>
-                <span className='font-black text-zinc-700 shrink-0'>
-                  {m.own ? 'You' : m.senderName}:
-                </span>
-                <span className='text-zinc-600 truncate'>
-                  {m.type === 'text'
-                    ? m.text
-                    : `📎 ${m.fileName || m.type}`}
-                </span>
-                {canManage && (
-                  <button
-                    onClick={() => togglePin(m)}
-                    className='ml-auto text-[#002EFF] hover:text-rose-500 shrink-0'
-                    title='Unpin'
-                  >
-                    <X size={12} />
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* What you have missed, channel by channel — and how to quieten it */}
-      {bellOpen && (
-        <div className='mb-3 rounded-2xl border border-slate-200 bg-white p-3 space-y-1.5'>
-          <div className='flex items-center justify-between'>
-            <p className='text-[10px] font-black uppercase tracking-widest text-slate-400'>
-              Since you were last here
-            </p>
-            <button
-              onClick={() => setBellOpen(false)}
-              className='text-zinc-400 hover:text-zinc-600'
-              aria-label='Close alerts'
-            >
-              <X size={14} />
-            </button>
-          </div>
-          {channels.filter((c) => (c.unread || 0) > 0).length === 0 ? (
-            <p className='py-3 text-center text-[11px] font-bold text-zinc-400'>
-              You are all caught up.
-            </p>
-          ) : (
-            channels
-              .filter((c) => (c.unread || 0) > 0)
-              .map((c) => (
-                <div
-                  key={c.id}
-                  className='flex items-center gap-2 rounded-xl bg-zinc-50 px-3 py-2'
-                >
-                  <button
-                    onClick={() => {
-                      setActiveChannel(c.id)
-                      setBellOpen(false)
-                    }}
-                    className='min-w-0 flex-1 text-left'
-                  >
-                    <span className='flex items-center gap-1.5 text-[11px] font-black text-zinc-700'>
-                      <Hash size={10} className='text-zinc-400' />
-                      {c.name}
-                      {!!c.mentions && (
-                        <span className='rounded-full bg-amber-100 px-1.5 py-0.5 text-[8px] font-black uppercase text-amber-700'>
-                          {c.mentions} mention{c.mentions === 1 ? '' : 's'}
-                        </span>
-                      )}
-                      {c.muted && (
-                        <BellOff size={10} className='text-zinc-400' />
-                      )}
-                    </span>
-                    <span className='mt-0.5 block truncate text-[10px] font-medium text-zinc-400'>
-                      {c.unread} new
-                      {c.lastMessageSender
-                        ? ` · ${c.lastMessageSender}: ${c.lastMessageText ?? ''}`
-                        : ''}
-                    </span>
-                  </button>
-                  {c.muted ? (
-                    <button
-                      onClick={() => setMute(c.id, 0)}
-                      className='shrink-0 rounded-lg bg-white px-2 py-1 text-[9px] font-black uppercase text-[#002EFF] hover:bg-blue-50'
-                    >
-                      Unmute
-                    </button>
-                  ) : (
-                    <span className='flex shrink-0 items-center gap-1'>
-                      {[
-                        { label: '1h', minutes: 60 },
-                        { label: '8h', minutes: 480 },
-                        { label: 'Off', minutes: undefined },
-                      ].map((opt) => (
-                        <button
-                          key={opt.label}
-                          onClick={() => setMute(c.id, opt.minutes)}
-                          title={
-                            opt.minutes
-                              ? `Mute for ${opt.label}`
-                              : 'Mute until you turn it back on'
-                          }
-                          className='rounded-lg bg-white px-2 py-1 text-[9px] font-black uppercase text-zinc-400 hover:text-[#002EFF]'
-                        >
-                          {opt.label}
-                        </button>
-                      ))}
-                    </span>
-                  )}
-                </div>
-              ))
-          )}
-          <p className='pt-1 text-[9px] font-bold text-zinc-400'>
-            Muting keeps a channel quiet — it does not mark anything as read.
-          </p>
-        </div>
-      )}
-
-      {/* Search — results replace the feed until it is closed */}
-      {searchOpen && (
-        <div className='mb-3 rounded-2xl border border-slate-200 bg-white p-3 space-y-2'>
-          <div className='flex items-center gap-2'>
-            <div className='relative flex-1'>
-              <Search
-                size={13}
-                className='absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400'
-              />
-              <input
-                autoFocus
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') runSearch()
-                  if (e.key === 'Escape') closeSearch()
-                }}
-                placeholder='Search messages, files and links…'
-                className='w-full h-9 pl-8 pr-3 rounded-xl bg-zinc-50 text-[13px] font-medium outline-none focus:bg-white focus:ring-1 focus:ring-[#002EFF]/30'
-              />
-            </div>
-            <button
-              onClick={runSearch}
-              disabled={searchTerm.trim().length < 2 || searching}
-              className='h-9 px-3 rounded-xl bg-[#002EFF] text-white text-[10px] font-black uppercase tracking-wide disabled:opacity-40'
-            >
-              {searching ? <Loader2 size={13} className='animate-spin' /> : 'Find'}
-            </button>
-            <button
-              onClick={closeSearch}
-              className='h-9 w-9 grid place-items-center rounded-xl text-zinc-400 hover:bg-zinc-100'
-              aria-label='Close search'
-            >
-              <X size={14} />
-            </button>
-          </div>
-          <div className='flex items-center gap-1'>
-            {(['all', 'files', 'links'] as const).map((s) => (
-              <button
-                key={s}
-                onClick={() => setSearchScope(s)}
-                className={`px-2.5 h-7 rounded-lg text-[10px] font-black uppercase tracking-wide ${
-                  searchScope === s
-                    ? 'bg-blue-50 text-[#002EFF]'
-                    : 'text-zinc-400 hover:text-zinc-600'
-                }`}
-              >
-                {s === 'all' ? 'Messages' : s}
-              </button>
-            ))}
-          </div>
-
-          {searchHits && (
-            <div className='max-h-72 overflow-y-auto space-y-1.5 custom-scrollbar'>
-              {searchHits.length === 0 ? (
-                <p className='py-4 text-center text-[11px] font-bold text-zinc-400'>
-                  Nothing matched “{searchTerm.trim()}”.
+              {(active.tutors ?? []).length === 0 ? (
+                <p className='rounded-xl bg-slate-50 px-3 py-2 text-[11px] font-medium text-slate-400'>
+                  No tutor assigned. Tutors who teach a subject in the room&apos;s name
+                  still see it.
                 </p>
               ) : (
-                <>
-                  <p className='text-[9px] font-black uppercase tracking-widest text-zinc-400'>
-                    {searchHits.length} result
-                    {searchHits.length === 1 ? '' : 's'}
-                  </p>
-                  {searchHits.map((h) => {
-                    const where = searchChannel[h.id] || 'general'
-                    const channelName =
-                      channels.find((c) => c.id === where)?.name || where
+                <div className='space-y-1'>
+                  {(active.tutors ?? []).map((id) => {
+                    const t = tutorList.find((x) => x.id === id)
+                    const name = t?.name ?? 'Tutor'
                     return (
-                      <button
-                        key={h.id}
-                        onClick={() => {
-                          setActiveChannel(where)
-                          closeSearch()
-                        }}
-                        className='w-full text-left rounded-xl bg-zinc-50 px-3 py-2 hover:bg-blue-50/60'
+                      <div
+                        key={id}
+                        className='flex items-center gap-2 rounded-xl bg-slate-50 px-2.5 py-2'
                       >
-                        <span className='flex items-center gap-1.5 text-[10px] font-black text-[#002EFF]'>
-                          <Hash size={10} />
-                          {channelName}
-                          <span className='font-bold text-zinc-400'>
-                            · {h.senderName} ·{' '}
-                            {new Date(h.createdAt).toLocaleDateString()}
-                          </span>
+                        <span className='grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-[#002EFF] text-[9px] font-black text-white'>
+                          {name.slice(0, 2).toUpperCase()}
                         </span>
-                        <span className='mt-0.5 block text-[12px] font-medium text-zinc-700 line-clamp-2'>
-                          {previewText(h)}
+                        <span className='min-w-0 flex-1 truncate text-[11px] font-bold text-slate-700'>
+                          {name}
                         </span>
-                      </button>
+                        <button
+                          onClick={() =>
+                            saveScope({
+                              tutors: (active.tutors ?? []).filter((x) => x !== id),
+                            })
+                          }
+                          disabled={scopeSaving}
+                          className='rounded-lg p-1 text-slate-300 hover:bg-white hover:text-rose-500'
+                          title='Remove from this community'
+                          aria-label='Remove tutor'
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
                     )
                   })}
-                </>
+                </div>
               )}
+            </div>
+
+            <p className='text-[10px] font-medium leading-snug text-slate-400'>
+              Students see this community only if their department is chosen. A tutor
+              sees it if assigned here, or if they teach a subject in its name.
+            </p>
+
+            <button
+              onClick={() => {
+                if (
+                  window.confirm(
+                    `Delete the "${active.name}" community? Its messages will be removed.`,
+                  )
+                )
+                  deleteChannel(active.id)
+              }}
+              className='flex w-full items-center justify-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 py-2.5 text-[10px] font-black uppercase text-rose-600 hover:bg-rose-100'
+            >
+              <Trash2 size={13} /> Delete community
+            </button>
+          </>
+        ) : (
+          <p className='text-[10px] font-medium leading-snug text-slate-400'>
+            General is open to everyone and cannot be scoped or deleted.
+          </p>
+        )}
+
+        {/* New community */}
+        <div className='border-t border-slate-100 pt-4'>
+          <button
+            onClick={() => setNewOpen((o) => !o)}
+            className='flex w-full items-center justify-center gap-1.5 rounded-xl bg-emerald-50 py-2.5 text-[10px] font-black uppercase text-emerald-600 hover:bg-emerald-100'
+          >
+            <Plus size={13} /> New community
+          </button>
+          {newOpen && (
+            <div className='mt-3 space-y-2'>
+              <input
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder='Name (e.g. JAMB Chemistry Class)'
+                className='h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[12px] font-bold outline-none focus:border-[#002EFF]/40'
+              />
+              <select
+                value={newCategory}
+                onChange={(e) => {
+                  const cat = e.target.value as CourseCategory | ''
+                  setNewCategory(cat)
+                  if (cat && !newName.trim()) setNewName(categoryLabel(cat))
+                }}
+                className='h-10 w-full rounded-xl border border-slate-200 bg-white px-2 text-[12px] font-black outline-none'
+              >
+                <option value=''>No class/track (everyone)</option>
+                {COURSE_CATEGORIES.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+              <input
+                value={newSubject}
+                onChange={(e) => setNewSubject(e.target.value)}
+                placeholder='Subject (optional, e.g. Physics)'
+                className='h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[12px] font-bold outline-none focus:border-[#002EFF]/40'
+              />
+              <DeptChips value={newDepts} onChange={setNewDepts} />
+              <button
+                onClick={createChannel}
+                disabled={!newName.trim()}
+                className='h-10 w-full rounded-xl bg-[#002EFF] text-[10px] font-black uppercase text-white hover:bg-blue-700 disabled:opacity-50'
+              >
+                Create
+              </button>
             </div>
           )}
         </div>
-      )}
+      </div>
+    </div>
+  )
 
-      {/* Message list */}
-      <div className='relative flex-1 min-h-0'>
-      <div
-        ref={scrollRef}
-        onScroll={(e) => {
-          const el = e.currentTarget
-          setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 80)
-        }}
-        className='h-full overflow-y-auto rounded-3xl border border-zinc-200 bg-white p-4 space-y-3 custom-scrollbar'
-      >
-        {loading ? (
-          <div className='h-full flex items-center justify-center'>
-            <Loader2 className='animate-spin text-[#002EFF]' size={28} />
-          </div>
-        ) : messages.length === 0 ? (
-          <div className='h-full flex flex-col items-center justify-center text-center px-6'>
-            <div className='h-12 w-12 rounded-2xl bg-blue-50 flex items-center justify-center mb-3'>
-              <Send size={20} className='text-[#002EFF]' />
-            </div>
-            <p className='text-sm font-bold text-zinc-700'>No messages yet</p>
-            <p className='text-[11px] text-zinc-400 font-medium mt-1'>
-              {canCompose
-                ? 'Be the first to say hello 👋'
-                : 'Messages from tutors and students will show here.'}
-            </p>
-          </div>
+  const membersPanel = (
+    <div className='flex h-full flex-col'>
+      <div className='flex items-center justify-between border-b border-slate-100 px-4 py-3'>
+        <p className='flex items-center gap-1.5 text-[11px] font-black uppercase tracking-widest text-slate-500'>
+          <Users size={13} /> Members · {members.length}
+        </p>
+        <button
+          onClick={() => setMembersOpen(false)}
+          className='rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700'
+          aria-label='Close members'
+        >
+          <X size={15} />
+        </button>
+      </div>
+      {members.length > 6 && (
+        <div className='relative px-3 pt-3'>
+          <Search size={13} className='absolute left-6 top-1/2 mt-1.5 -translate-y-1/2 text-zinc-400' />
+          <input
+            value={memberSearch}
+            onChange={(e) => setMemberSearch(e.target.value)}
+            placeholder='Search members…'
+            className='h-9 w-full rounded-xl bg-slate-50 pl-8 pr-2 text-[12px] font-medium outline-none focus:bg-white focus:ring-1 focus:ring-[#002EFF]/30'
+          />
+        </div>
+      )}
+      <div className='flex-1 space-y-3 overflow-y-auto p-3 custom-scrollbar'>
+        {members.length === 0 ? (
+          <p className='py-6 text-center text-[11px] font-medium text-slate-400'>
+            No members to show yet.
+          </p>
         ) : (
           (() => {
-            let lastDay = ''
-            let dividerPlaced = false
-            return messages.map((m, i) => {
-              const day = dayKey(m.createdAt)
-              const newDay = day !== lastDay
-              lastDay = day
-              const prev = messages[i - 1]
-              // A run of messages from one person within five minutes reads as
-              // one block, the way a phone chat does.
-              const grouped =
-                !newDay &&
-                !!prev &&
-                prev.senderId === m.senderId &&
-                !m.replyTo &&
-                m.createdAt - prev.createdAt < 5 * 60 * 1000
-              const firstUnread =
-                !dividerPlaced && !!newSince && m.createdAt > newSince && !m.own
-              if (firstUnread) dividerPlaced = true
+            const term = memberSearch.trim().toLowerCase()
+            const shown = members.filter((m) =>
+              term ? m.name.toLowerCase().includes(term) : true,
+            )
+            const onlineIds = new Set(online.map((o) => String(o.id)))
+            const groups = [
+              { label: 'Admins', rows: shown.filter((m) => m.role.toLowerCase().includes('admin')) },
+              { label: 'Tutors', rows: shown.filter((m) => m.role.toLowerCase() === 'tutor') },
+              { label: 'Students', rows: shown.filter((m) => m.role.toLowerCase() === 'student') },
+            ].filter((g) => g.rows.length)
+            if (!groups.length)
               return (
-                <Fragment key={m.id}>
-                  {newDay && (
-                    <div className='flex items-center justify-center py-1'>
-                      <span className='sticky top-0 rounded-full bg-zinc-100 px-3 py-1 text-[10px] font-black uppercase tracking-wide text-zinc-500'>
-                        {dayLabel(m.createdAt)}
-                      </span>
-                    </div>
-                  )}
-                  {firstUnread && (
-                    <div className='flex items-center gap-2 py-0.5'>
-                      <span className='h-px flex-1 bg-[#002EFF]/30' />
-                      <span className='text-[9px] font-black uppercase tracking-widest text-[#002EFF]'>
-                        New messages
-                      </span>
-                      <span className='h-px flex-1 bg-[#002EFF]/30' />
-                    </div>
-                  )}
-                  <MessageBubble
-                    m={m}
-                    grouped={grouped}
-                    showDelete={isModerator || m.own}
-                    canEdit={m.own && m.type === 'text'}
-                    canPin={canManage}
-                    onDelete={() => remove(m.id)}
-                    onEdit={(newText) => editMessage(m.id, newText)}
-                    onPin={() => togglePin(m)}
-                    onVote={(option) => votePoll(m.id, option)}
-                    onSeen={() => loadReads(m.id)}
-                    canReply={canCompose && !postingBlocked}
-                    onReply={() => setReplyTarget(m)}
-                    onReact={(emoji) => react(m.id, emoji)}
-                  />
-                </Fragment>
+                <p className='py-6 text-center text-[11px] font-bold text-zinc-400'>
+                  Nobody by that name.
+                </p>
               )
-            })
+            return groups.map((g) => (
+              <div key={g.label}>
+                <p className='px-2 pb-1 text-[9px] font-black uppercase tracking-widest text-zinc-300'>
+                  {g.label} · {g.rows.length}
+                </p>
+                {g.rows.map((mem) => (
+                  <div
+                    key={mem.id}
+                    className='flex items-center gap-2 rounded-xl px-2 py-1.5 hover:bg-slate-50'
+                  >
+                    <span className='relative grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-zinc-100 text-[10px] font-black text-zinc-600'>
+                      {mem.name.slice(0, 2).toUpperCase()}
+                      {onlineIds.has(String(mem.id)) && (
+                        <span
+                          className='absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white'
+                          title='Online now'
+                        />
+                      )}
+                    </span>
+                    <span className='min-w-0 flex-1 truncate text-[11px] font-bold text-zinc-700'>
+                      {mem.name}
+                      {mem.id === myId && <span className='ml-1 text-zinc-400'>(you)</span>}
+                    </span>
+                    <span className={`rounded px-1.5 py-0.5 text-[8px] font-black uppercase ${roleTint(mem.role)}`}>
+                      {roleLabel(mem.role)}
+                    </span>
+                    {canManageMembers && mem.role.toLowerCase() === 'student' && (
+                      <button
+                        onClick={() => removeMember(mem.id)}
+                        className='p-1 text-slate-300 hover:text-rose-500'
+                        title='Remove from this community'
+                      >
+                        <UserMinus size={13} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ))
           })()
         )}
       </div>
+    </div>
+  )
 
-      {/* Jump back down — only while you are reading further up */}
-      {!atBottom && messages.length > 0 && (
-        <button
-          onClick={jumpToLatest}
-          className='absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 rounded-full bg-[#002EFF] px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-white shadow-lg hover:bg-blue-700'
-        >
-          <ChevronDown size={13} /> Latest
-        </button>
-      )}
-      </div>
-
-      {/* Someone is mid-sentence */}
-      {typingNames.length > 0 && (
-        <p className='px-2 pt-1.5 text-[11px] font-bold text-[#002EFF] flex items-center gap-1.5'>
-          <span className='flex gap-0.5' aria-hidden>
-            {[0, 150, 300].map((d) => (
-              <span
-                key={d}
-                className='h-1 w-1 rounded-full bg-[#002EFF] animate-bounce'
-                style={{ animationDelay: `${d}ms` }}
-              />
-            ))}
+  return (
+    <div className='flex h-[calc(100dvh-8.5rem)] min-h-[560px] overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm'>
+      {/* ── Pods list ──────────────────────────────────────────────────── */}
+      <aside
+        className={`w-full shrink-0 flex-col border-slate-200 md:flex md:w-64 md:border-r xl:w-72 ${
+          pane === 'chat' ? 'hidden' : 'flex'
+        }`}
+      >
+        <div className='flex items-start justify-between gap-2 px-4 pt-4 pb-2'>
+          <div className='min-w-0'>
+            <h2 className='text-[15px] font-black tracking-tight text-slate-900'>
+              Scholars Chat Pods
+            </h2>
+            <p className='text-[10px] font-medium text-slate-400'>
+              Telegram/WhatsApp style discussions
+            </p>
+          </div>
+          <span className='mt-0.5 inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[9px] font-black uppercase text-emerald-600'>
+            <span className='h-1.5 w-1.5 rounded-full bg-emerald-500' /> Live
           </span>
-          {typingNames.length === 1
-            ? `${typingNames[0]} is typing…`
-            : typingNames.length === 2
-              ? `${typingNames[0]} and ${typingNames[1]} are typing…`
-              : `${typingNames.length} people are typing…`}
-        </p>
-      )}
+        </div>
 
-      {error && (
-        <p className='text-[11px] font-semibold text-rose-600 px-1 pt-2'>{error}</p>
-      )}
-
-      {/* Composer */}
-      {postingBlocked ? (
-        <div className='pt-3'>
-          <div className='flex items-center gap-2 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-[11px] font-bold text-zinc-500'>
-            <Lock size={14} className='text-zinc-400 shrink-0' />
-            The community is locked. Only tutors can post right now.
+        <div className='px-3 pb-2'>
+          <div className='relative'>
+            <Search size={13} className='absolute left-3 top-1/2 -translate-y-1/2 text-slate-400' />
+            <input
+              value={listFilter}
+              onChange={(e) => setListFilter(e.target.value)}
+              placeholder='Search pods…'
+              className='h-9 w-full rounded-xl bg-slate-50 pl-8 pr-3 text-[12px] font-medium outline-none focus:bg-white focus:ring-1 focus:ring-[#002EFF]/30'
+            />
           </div>
         </div>
-      ) : canCompose ? (
-        <div className='pt-3'>
-          {replyTarget && !recording && (
-            <div className='flex items-start gap-2 rounded-t-2xl border border-b-0 border-zinc-200 bg-zinc-50 px-3 py-2'>
-              <span className='mt-0.5 h-full w-0.5 rounded-full bg-[#002EFF] self-stretch' />
-              <div className='min-w-0 flex-1'>
-                <p className='text-[10px] font-black uppercase tracking-wide text-[#002EFF]'>
-                  Replying to {replyTarget.own ? 'yourself' : replyTarget.senderName}
-                </p>
-                <p className='text-[11px] font-medium text-zinc-500 truncate'>
-                  {previewText(replyTarget)}
-                </p>
-              </div>
-              <button
-                onClick={() => setReplyTarget(null)}
-                className='shrink-0 rounded-lg p-1 text-zinc-400 hover:bg-white hover:text-zinc-700'
-                aria-label='Cancel reply'
-              >
-                <X size={13} />
-              </button>
-            </div>
-          )}
-          {recording ? (
-            <div className='flex items-center gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3'>
-              <span className='h-2.5 w-2.5 rounded-full bg-rose-500 animate-pulse' />
-              <span className='text-xs font-black text-rose-600 tabular-nums'>
-                Recording {duration(recSecs) || '0:00'}
-              </span>
-              <div className='ml-auto flex items-center gap-2'>
-                <button
-                  onClick={cancelRecording}
-                  className='px-3 py-1.5 rounded-lg text-[11px] font-bold text-zinc-500 hover:bg-white'
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={stopRecording}
-                  className='flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#002EFF] text-white text-[11px] font-bold'
-                >
-                  <Send size={12} /> Send
-                </button>
-              </div>
-            </div>
+
+        <div className='flex-1 overflow-y-auto custom-scrollbar'>
+          {listed.length === 0 ? (
+            <p className='px-4 py-8 text-center text-[11px] font-bold text-slate-400'>
+              No pod matches that.
+            </p>
           ) : (
-            <div className='relative flex items-end gap-2'>
-              {/* @mention picker */}
-              {mentionQuery !== null && mentionOptions.length > 0 && (
-                <div className='absolute bottom-14 left-0 z-30 w-64 rounded-2xl border border-zinc-200 bg-white shadow-xl p-1'>
-                  {mentionOptions.map((o) => (
+            listed.map((c) => {
+              const on = c.id === activeChannel
+              return (
+                <button
+                  key={c.id}
+                  onClick={() => openChannel(c.id)}
+                  className={`flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors ${
+                    on
+                      ? 'bg-blue-50/70 md:border-l-2 md:border-[#002EFF]'
+                      : 'hover:bg-slate-50 md:border-l-2 md:border-transparent'
+                  }`}
+                >
+                  <span
+                    className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl text-white ${podTint(c)}`}
+                  >
+                    {podIcon(c)}
+                  </span>
+                  <span className='min-w-0 flex-1'>
+                    <span className='flex items-center gap-2'>
+                      <span className='min-w-0 flex-1 truncate text-[12px] font-black text-slate-800'>
+                        {c.name}
+                      </span>
+                      <span className='shrink-0 text-[9px] font-medium text-slate-400'>
+                        {rowTime(c.lastMessageAt)}
+                      </span>
+                    </span>
+                    <span className='mt-0.5 flex items-center gap-2'>
+                      <span className='min-w-0 flex-1 truncate text-[10px] font-medium text-slate-400'>
+                        {c.lastMessageText
+                          ? `${c.lastMessageSender ? `${c.lastMessageSender}: ` : ''}${c.lastMessageText}`
+                          : 'No messages yet'}
+                      </span>
+                      {!on && !!c.unread && (
+                        <span className='min-w-[18px] shrink-0 rounded-full bg-[#002EFF] px-1.5 py-0.5 text-center text-[9px] font-black tabular-nums text-white'>
+                          {c.unread > 99 ? '99+' : c.unread}
+                        </span>
+                      )}
+                      {c.muted && <BellOff size={10} className='shrink-0 text-slate-300' />}
+                    </span>
+                  </span>
+                </button>
+              )
+            })
+          )}
+        </div>
+
+        {isAdmin && (
+          <div className='border-t border-slate-100 p-3'>
+            <button
+              onClick={() => {
+                setNewOpen(true)
+                setManageOpen(true)
+              }}
+              className='flex w-full items-center justify-center gap-1.5 rounded-xl bg-[#002EFF] py-2.5 text-[10px] font-black uppercase text-white hover:bg-blue-700'
+            >
+              <Plus size={13} /> New room
+            </button>
+          </div>
+        )}
+      </aside>
+
+      {/* ── Conversation ───────────────────────────────────────────────── */}
+      <section
+        className={`min-w-0 flex-1 flex-col md:flex ${pane === 'list' ? 'hidden' : 'flex'}`}
+      >
+        {/* Room header */}
+        <div className='relative flex items-center gap-2 border-b border-slate-100 px-3 py-2.5 sm:px-4'>
+          <button
+            onClick={() => setPane('list')}
+            className='grid h-9 w-9 shrink-0 place-items-center rounded-xl text-slate-500 hover:bg-slate-100 md:hidden'
+            aria-label='Back to pods'
+          >
+            <ArrowLeft size={18} />
+          </button>
+          <span
+            className={`hidden h-9 w-9 shrink-0 place-items-center rounded-xl text-white sm:grid ${podTint(active)}`}
+          >
+            {podIcon(active)}
+          </span>
+          <div className='min-w-0 flex-1'>
+            <h2 className='truncate text-[13px] font-black text-slate-900 sm:text-[14px]'>
+              {active.name}
+            </h2>
+            <p className='truncate text-[10px] font-medium text-slate-400'>
+              {members.length} scholar{members.length === 1 ? '' : 's'} ·{' '}
+              <span className='font-bold text-emerald-600'>{online.length} online</span>
+              {locked && <span className='ml-1 font-bold text-rose-500'>· locked</span>}
+            </p>
+          </div>
+          <div className='flex shrink-0 items-center gap-1'>
+            <HeaderButton
+              on={bellOpen}
+              onClick={() => {
+                setBellOpen((o) => !o)
+                setMembersOpen(false)
+                setSearchOpen(false)
+              }}
+              label='Alerts'
+              badge={alertCount}
+              className='sm:hidden'
+            >
+              <Bell size={15} />
+            </HeaderButton>
+            <HeaderButton
+              on={moreOpen}
+              onClick={() => setMoreOpen((o) => !o)}
+              label='More'
+              className='sm:hidden'
+            >
+              <MoreHorizontal size={15} />
+            </HeaderButton>
+            <div
+              className={`${
+                moreOpen ? 'flex' : 'hidden'
+              } absolute right-2 top-[52px] z-30 items-center gap-1 rounded-2xl border border-slate-200 bg-white p-1 shadow-lg sm:static sm:flex sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none`}
+            >
+            <HeaderButton
+              on={membersOpen}
+              onClick={() => {
+                setMembersOpen((o) => !o)
+                setBellOpen(false)
+                setSearchOpen(false)
+              }}
+              label='Members'
+            >
+              <Users size={15} />
+            </HeaderButton>
+            <HeaderButton
+              on={searchOpen}
+              onClick={() => {
+                if (searchOpen) closeSearch()
+                else {
+                  setSearchOpen(true)
+                  setBellOpen(false)
+                  setMembersOpen(false)
+                }
+              }}
+              label='Search'
+            >
+              <Search size={15} />
+            </HeaderButton>
+            <HeaderButton
+              on={bellOpen}
+              onClick={() => {
+                setBellOpen((o) => !o)
+                setMembersOpen(false)
+                setSearchOpen(false)
+              }}
+              label='Alerts'
+              badge={alertCount}
+              className='hidden sm:grid'
+            >
+              <Bell size={15} />
+            </HeaderButton>
+            {canManage && (
+              <HeaderButton
+                on={locked}
+                onClick={toggleLock}
+                label={locked ? 'Unlock' : 'Lock (lesson mode)'}
+                tone='rose'
+              >
+                {locked ? <Lock size={15} /> : <Unlock size={15} />}
+              </HeaderButton>
+            )}
+            {isAdmin && (
+              <HeaderButton
+                on={manageOpen}
+                onClick={() => setManageOpen((o) => !o)}
+                label='Manage'
+                className='xl:hidden'
+              >
+                <SlidersHorizontal size={15} />
+              </HeaderButton>
+            )}
+            </div>
+          </div>
+        </div>
+
+        {/* Pinned strip */}
+        {pinned.length > 0 && (
+          <div className='flex items-center gap-2 border-b border-blue-100 bg-blue-50/60 px-3 py-1.5 sm:px-4'>
+            <Pin size={12} className='shrink-0 text-[#002EFF]' />
+            <p className='min-w-0 flex-1 truncate text-[11px] font-bold text-[#002EFF]'>
+              Pinned: <span className='font-medium text-slate-700'>{previewText(pinned[pinned.length - 1])}</span>
+              {pinned.length > 1 && (
+                <span className='ml-1 text-slate-400'>+{pinned.length - 1}</span>
+              )}
+            </p>
+            {canManage && (
+              <button
+                onClick={() => togglePin(pinned[pinned.length - 1])}
+                className='shrink-0 text-slate-400 hover:text-rose-500'
+                title='Unpin'
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
+        )}
+
+        {notReady && (
+          <div className='flex items-start gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2'>
+            <AlertCircle size={14} className='mt-0.5 shrink-0 text-amber-600' />
+            <p className='text-[11px] font-medium text-amber-700'>
+              The community channel is being set up on the server. Messages will appear
+              here once it is live.
+            </p>
+          </div>
+        )}
+        {locked && (
+          <div className='flex items-center gap-2 border-b border-rose-100 bg-rose-50 px-4 py-2'>
+            <Lock size={12} className='shrink-0 text-rose-500' />
+            <p className='text-[11px] font-bold text-rose-600'>
+              {canManage
+                ? 'Lesson mode — students can’t post; you still can.'
+                : 'Locked by a tutor. You can read but not post.'}
+            </p>
+          </div>
+        )}
+
+        {/* Messages, with the panels floating over them */}
+        <div className='relative min-h-0 flex-1 bg-[#F4F6FB]'>
+          {(membersOpen || bellOpen || searchOpen) && (
+            <div className='absolute inset-x-2 top-2 z-30 max-h-[85%] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl sm:inset-x-auto sm:right-3 sm:w-80'>
+              {membersOpen && membersPanel}
+              {bellOpen && (
+                <div className='max-h-[70vh] overflow-y-auto p-3 custom-scrollbar'>
+                  <div className='mb-2 flex items-center justify-between'>
+                    <p className='text-[10px] font-black uppercase tracking-widest text-slate-400'>
+                      Since you were last here
+                    </p>
+                    <button onClick={() => setBellOpen(false)} className='text-zinc-400 hover:text-zinc-600' aria-label='Close alerts'>
+                      <X size={14} />
+                    </button>
+                  </div>
+                  {channels.filter((c) => (c.unread || 0) > 0).length === 0 ? (
+                    <p className='py-4 text-center text-[11px] font-bold text-zinc-400'>
+                      You are all caught up.
+                    </p>
+                  ) : (
+                    <div className='space-y-1.5'>
+                      {channels
+                        .filter((c) => (c.unread || 0) > 0)
+                        .map((c) => (
+                          <div key={c.id} className='flex items-center gap-2 rounded-xl bg-zinc-50 px-3 py-2'>
+                            <button
+                              onClick={() => {
+                                openChannel(c.id)
+                                setBellOpen(false)
+                              }}
+                              className='min-w-0 flex-1 text-left'
+                            >
+                              <span className='flex items-center gap-1.5 text-[11px] font-black text-zinc-700'>
+                                {c.name}
+                                {!!c.mentions && (
+                                  <span className='rounded-full bg-amber-100 px-1.5 py-0.5 text-[8px] font-black uppercase text-amber-700'>
+                                    {c.mentions} mention{c.mentions === 1 ? '' : 's'}
+                                  </span>
+                                )}
+                                {c.muted && <BellOff size={10} className='text-zinc-400' />}
+                              </span>
+                              <span className='mt-0.5 block truncate text-[10px] font-medium text-zinc-400'>
+                                {c.unread} new
+                                {c.lastMessageSender ? ` · ${c.lastMessageSender}: ${c.lastMessageText ?? ''}` : ''}
+                              </span>
+                            </button>
+                            {c.muted ? (
+                              <button onClick={() => setMute(c.id, 0)} className='shrink-0 rounded-lg bg-white px-2 py-1 text-[9px] font-black uppercase text-[#002EFF] hover:bg-blue-50'>
+                                Unmute
+                              </button>
+                            ) : (
+                              <span className='flex shrink-0 items-center gap-1'>
+                                {[
+                                  { label: '1h', minutes: 60 },
+                                  { label: '8h', minutes: 480 },
+                                  { label: 'Off', minutes: undefined },
+                                ].map((opt) => (
+                                  <button
+                                    key={opt.label}
+                                    onClick={() => setMute(c.id, opt.minutes)}
+                                    title={opt.minutes ? `Mute for ${opt.label}` : 'Mute until you turn it back on'}
+                                    className='rounded-lg bg-white px-2 py-1 text-[9px] font-black uppercase text-zinc-400 hover:text-[#002EFF]'
+                                  >
+                                    {opt.label}
+                                  </button>
+                                ))}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                    </div>
+                  )}
+                  <p className='pt-2 text-[9px] font-bold text-zinc-400'>
+                    Muting keeps a channel quiet — it does not mark anything as read.
+                  </p>
+                </div>
+              )}
+              {searchOpen && (
+                <div className='space-y-2 p-3'>
+                  <div className='flex items-center gap-2'>
+                    <div className='relative flex-1'>
+                      <Search size={13} className='absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400' />
+                      <input
+                        autoFocus
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') runSearch()
+                          if (e.key === 'Escape') closeSearch()
+                        }}
+                        placeholder='Search messages, files…'
+                        className='h-9 w-full rounded-xl bg-zinc-50 pl-8 pr-3 text-[13px] font-medium outline-none focus:bg-white focus:ring-1 focus:ring-[#002EFF]/30'
+                      />
+                    </div>
                     <button
-                      key={o.id}
-                      onMouseDown={(e) => {
-                        e.preventDefault()
-                        pickMention(o)
-                      }}
-                      className='flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left hover:bg-blue-50'
+                      onClick={runSearch}
+                      disabled={searchTerm.trim().length < 2 || searching}
+                      className='h-9 rounded-xl bg-[#002EFF] px-3 text-[10px] font-black uppercase text-white disabled:opacity-40'
                     >
-                      <span className='h-6 w-6 shrink-0 rounded-lg bg-zinc-100 text-[9px] font-black text-zinc-600 grid place-items-center'>
-                        {o.id === '@everyone'
-                          ? '@'
-                          : o.name.slice(0, 2).toUpperCase()}
-                      </span>
-                      <span className='min-w-0 flex-1 truncate text-[12px] font-bold text-zinc-700'>
-                        {o.name}
-                      </span>
-                      <span
-                        className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded ${
-                          o.id === '@everyone'
-                            ? 'bg-amber-50 text-amber-600'
-                            : roleTint(o.role)
+                      {searching ? <Loader2 size={13} className='animate-spin' /> : 'Find'}
+                    </button>
+                    <button onClick={closeSearch} className='grid h-9 w-9 place-items-center rounded-xl text-zinc-400 hover:bg-zinc-100' aria-label='Close search'>
+                      <X size={14} />
+                    </button>
+                  </div>
+                  <div className='flex items-center gap-1'>
+                    {(['all', 'files', 'links'] as const).map((s) => (
+                      <button
+                        key={s}
+                        onClick={() => setSearchScope(s)}
+                        className={`h-7 rounded-lg px-2.5 text-[10px] font-black uppercase ${
+                          searchScope === s ? 'bg-blue-50 text-[#002EFF]' : 'text-zinc-400 hover:text-zinc-600'
                         }`}
                       >
-                        {o.id === '@everyone' ? 'All' : roleLabel(o.role)}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
-              {/* Poll composer */}
-              {pollOpen && (
-                <div className='absolute bottom-14 left-0 right-0 z-20 rounded-2xl border border-zinc-200 bg-white shadow-xl p-3 space-y-2'>
-                  <div className='flex items-center justify-between'>
-                    <p className='text-[11px] font-black uppercase tracking-wide text-zinc-500 flex items-center gap-1.5'>
-                      <BarChart3 size={13} className='text-[#002EFF]' /> New poll
-                    </p>
-                    <button
-                      onClick={() => setPollOpen(false)}
-                      className='text-zinc-400 hover:text-rose-500'
-                      aria-label='Close poll composer'
-                    >
-                      <X size={15} />
-                    </button>
-                  </div>
-
-                  <input
-                    value={pollQuestion}
-                    onChange={(e) => setPollQuestion(e.target.value)}
-                    placeholder='Ask a question…'
-                    className='w-full h-10 px-3 rounded-xl bg-zinc-50 border border-zinc-200 outline-none text-[13px] font-bold focus:border-[#002EFF]/40'
-                  />
-
-                  <div className='space-y-1.5'>
-                    {pollOptions.map((o, i) => (
-                      <div key={i} className='flex items-center gap-2'>
-                        {pollIsQuiz && (
-                          <input
-                            type='radio'
-                            name='poll-correct'
-                            checked={pollCorrect === i}
-                            onChange={() => setPollCorrect(i)}
-                            title='Mark as the correct answer'
-                            className='accent-emerald-600 shrink-0'
-                          />
-                        )}
-                        <input
-                          value={o}
-                          onChange={(e) =>
-                            setPollOptions((prev) =>
-                              prev.map((p, idx) => (idx === i ? e.target.value : p)),
-                            )
-                          }
-                          placeholder={`Option ${i + 1}`}
-                          className='flex-1 h-9 px-3 rounded-lg bg-zinc-50 border border-zinc-200 outline-none text-[12px] font-medium focus:border-[#002EFF]/40'
-                        />
-                        {pollOptions.length > 2 && (
-                          <button
-                            onClick={() =>
-                              setPollOptions((prev) =>
-                                prev.filter((_, idx) => idx !== i),
-                              )
-                            }
-                            className='text-zinc-300 hover:text-rose-500 shrink-0'
-                            aria-label={`Remove option ${i + 1}`}
-                          >
-                            <X size={14} />
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                    {pollOptions.length < 10 && (
-                      <button
-                        onClick={() => setPollOptions((prev) => [...prev, ''])}
-                        className='inline-flex items-center gap-1 text-[10px] font-black uppercase text-[#002EFF] hover:underline'
-                      >
-                        <Plus size={11} /> Add option
+                        {s === 'all' ? 'Messages' : s}
                       </button>
-                    )}
+                    ))}
                   </div>
-
-                  <label className='flex items-center gap-2 cursor-pointer'>
-                    <input
-                      type='checkbox'
-                      checked={pollIsQuiz}
-                      onChange={(e) => setPollIsQuiz(e.target.checked)}
-                      className='h-4 w-4 accent-[#002EFF]'
-                    />
-                    <span className='text-[11px] font-bold text-zinc-600'>
-                      Mark as a quiz (reveals the answer after voting)
-                    </span>
-                  </label>
-
-                  <button
-                    onClick={sendPoll}
-                    disabled={sending}
-                    className='w-full h-10 rounded-xl bg-[#002EFF] text-white font-black text-[11px] uppercase tracking-wide hover:bg-blue-700 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2'
-                  >
-                    {sending ? (
-                      <Loader2 size={14} className='animate-spin' />
-                    ) : (
-                      <Send size={14} />
-                    )}
-                    Post poll
-                  </button>
+                  {searchHits && (
+                    <div className='max-h-72 space-y-1.5 overflow-y-auto custom-scrollbar'>
+                      {searchHits.length === 0 ? (
+                        <p className='py-4 text-center text-[11px] font-bold text-zinc-400'>
+                          Nothing matched “{searchTerm.trim()}”.
+                        </p>
+                      ) : (
+                        searchHits.map((h) => {
+                          const where = searchChannel[h.id] || 'general'
+                          const channelName = channels.find((c) => c.id === where)?.name || where
+                          return (
+                            <button
+                              key={h.id}
+                              onClick={() => {
+                                openChannel(where)
+                                closeSearch()
+                              }}
+                              className='w-full rounded-xl bg-zinc-50 px-3 py-2 text-left hover:bg-blue-50/60'
+                            >
+                              <span className='flex items-center gap-1.5 text-[10px] font-black text-[#002EFF]'>
+                                {channelName}
+                                <span className='font-bold text-zinc-400'>
+                                  · {h.senderName} · {new Date(h.createdAt).toLocaleDateString()}
+                                </span>
+                              </span>
+                              <span className='mt-0.5 block text-[12px] font-medium text-zinc-700 line-clamp-2'>
+                                {previewText(h)}
+                              </span>
+                            </button>
+                          )
+                        })
+                      )}
+                    </div>
+                  )}
                 </div>
-              )}
-
-              {/* Attach */}
-              <div className='relative'>
-                <button
-                  type='button'
-                  onClick={() => setAttachOpen((o) => !o)}
-                  disabled={busy}
-                  className='h-11 w-11 shrink-0 rounded-2xl bg-white border border-zinc-200 flex items-center justify-center text-zinc-500 hover:text-[#002EFF] hover:border-blue-200 transition-colors disabled:opacity-50'
-                  aria-label='Attach'
-                >
-                  {uploading ? (
-                    <Loader2 size={18} className='animate-spin' />
-                  ) : (
-                    <Plus size={18} />
-                  )}
-                </button>
-                {attachOpen && (
-                  <div className='absolute bottom-14 left-0 w-44 rounded-2xl border border-zinc-200 bg-white shadow-xl p-1.5 z-10'>
-                    <AttachItem
-                      icon={ImageIcon}
-                      label='Photo'
-                      onClick={() => imageInput.current?.click()}
-                    />
-                    <AttachItem
-                      icon={VideoIcon}
-                      label='Video'
-                      onClick={() => videoInput.current?.click()}
-                    />
-                    <AttachItem
-                      icon={FileText}
-                      label='Document'
-                      onClick={() => docInput.current?.click()}
-                    />
-                    {canManage && (
-                      <AttachItem
-                        icon={BarChart3}
-                        label='Poll'
-                        onClick={() => {
-                          setAttachOpen(false)
-                          setPollOpen(true)
-                        }}
-                      />
-                    )}
-                    {canRecord && (
-                      <AttachItem
-                        icon={Mic}
-                        label='Voice note'
-                        onClick={() => {
-                          setAttachOpen(false)
-                          startRecording()
-                        }}
-                      />
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <textarea
-                rows={1}
-                value={text}
-                onChange={(e) => {
-                  const v = e.target.value
-                  setText(v)
-                  noteTyping()
-                  // An "@" with no space after it opens the picker.
-                  const at = v.match(/@([\w' -]{0,30})$/)
-                  setMentionQuery(at ? at[1] : null)
-                }}
-                onBlur={stopTyping}
-                onKeyDown={(e) => {
-                  if (e.key === 'Escape') setMentionQuery(null)
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault()
-                    if (mentionQuery !== null && mentionOptions.length) {
-                      pickMention(mentionOptions[0])
-                      return
-                    }
-                    sendText()
-                  }
-                }}
-                placeholder='Message…  @ to mention'
-                className='flex-1 resize-none max-h-32 rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-800 placeholder:text-zinc-400 focus:outline-none focus:border-[#002EFF] focus:ring-2 focus:ring-[#002EFF]/10'
-              />
-
-              {canRecord && !text.trim() ? (
-                <button
-                  type='button'
-                  onClick={startRecording}
-                  disabled={busy}
-                  className='h-11 w-11 shrink-0 rounded-2xl bg-[#002EFF] text-white flex items-center justify-center hover:bg-blue-700 transition-colors disabled:opacity-50'
-                  aria-label='Record voice note'
-                >
-                  <Mic size={18} />
-                </button>
-              ) : (
-                <button
-                  type='button'
-                  onClick={sendText}
-                  disabled={busy || !text.trim()}
-                  className='h-11 w-11 shrink-0 rounded-2xl bg-[#002EFF] text-white flex items-center justify-center hover:bg-blue-700 transition-colors disabled:opacity-40'
-                  aria-label='Send'
-                >
-                  {sending ? (
-                    <Loader2 size={18} className='animate-spin' />
-                  ) : (
-                    <Send size={18} />
-                  )}
-                </button>
               )}
             </div>
           )}
 
-          {/* Hidden file inputs */}
-          <input
-            ref={imageInput}
-            type='file'
-            accept='image/*'
-            hidden
-            onChange={(e) => handleFile(e.target.files?.[0] ?? null, 'image')}
-          />
-          <input
-            ref={videoInput}
-            type='file'
-            accept='video/*'
-            hidden
-            onChange={(e) => handleFile(e.target.files?.[0] ?? null, 'video')}
-          />
-          <input
-            ref={docInput}
-            type='file'
-            accept='.pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-            hidden
-            onChange={(e) => handleFile(e.target.files?.[0] ?? null, 'file')}
-          />
+          <div
+            ref={scrollRef}
+            onScroll={(e) => {
+              const el = e.currentTarget
+              setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 80)
+            }}
+            className='h-full space-y-3 overflow-y-auto px-3 py-4 custom-scrollbar sm:px-5'
+          >
+            {loading ? (
+              <div className='flex h-full items-center justify-center'>
+                <Loader2 className='animate-spin text-[#002EFF]' size={28} />
+              </div>
+            ) : messages.length === 0 ? (
+              <div className='flex h-full flex-col items-center justify-center px-6 text-center'>
+                <div className='mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-white shadow-sm'>
+                  <Send size={20} className='text-[#002EFF]' />
+                </div>
+                <p className='text-sm font-bold text-zinc-700'>No messages yet</p>
+                <p className='mt-1 text-[11px] font-medium text-zinc-400'>
+                  {canCompose ? 'Be the first to say hello 👋' : 'Messages from tutors and students will show here.'}
+                </p>
+              </div>
+            ) : (
+              (() => {
+                let lastDay = ''
+                let dividerPlaced = false
+                return messages.map((m, i) => {
+                  const day = dayKey(m.createdAt)
+                  const newDay = day !== lastDay
+                  lastDay = day
+                  const prev = messages[i - 1]
+                  const grouped =
+                    !newDay &&
+                    !!prev &&
+                    prev.senderId === m.senderId &&
+                    !m.replyTo &&
+                    m.createdAt - prev.createdAt < 5 * 60 * 1000
+                  const firstUnread = !dividerPlaced && !!newSince && m.createdAt > newSince && !m.own
+                  if (firstUnread) dividerPlaced = true
+                  return (
+                    <Fragment key={m.id}>
+                      {newDay && (
+                        <div className='flex items-center justify-center py-1'>
+                          <span className='rounded-full bg-white px-3 py-1 text-[10px] font-black uppercase tracking-wide text-zinc-500 shadow-sm'>
+                            {dayLabel(m.createdAt)}
+                          </span>
+                        </div>
+                      )}
+                      {firstUnread && (
+                        <div className='flex items-center gap-2 py-0.5'>
+                          <span className='h-px flex-1 bg-[#002EFF]/30' />
+                          <span className='text-[9px] font-black uppercase tracking-widest text-[#002EFF]'>New messages</span>
+                          <span className='h-px flex-1 bg-[#002EFF]/30' />
+                        </div>
+                      )}
+                      <MessageBubble
+                        m={m}
+                        grouped={grouped}
+                        showDelete={isModerator || m.own}
+                        canEdit={m.own && m.type === 'text'}
+                        canPin={canManage}
+                        onDelete={() => remove(m.id)}
+                        onEdit={(newText) => editMessage(m.id, newText)}
+                        onPin={() => togglePin(m)}
+                        onVote={(option) => votePoll(m.id, option)}
+                        onSeen={() => loadReads(m.id)}
+                        canReply={canCompose && !postingBlocked}
+                        onReply={() => setReplyTarget(m)}
+                        onReact={(emoji) => react(m.id, emoji)}
+                      />
+                    </Fragment>
+                  )
+                })
+              })()
+            )}
+          </div>
+
+          {!atBottom && messages.length > 0 && (
+            <button
+              onClick={jumpToLatest}
+              className='absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-[#002EFF] px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-white shadow-lg hover:bg-blue-700'
+            >
+              <ChevronDown size={13} /> Latest
+            </button>
+          )}
         </div>
-      ) : null}
+
+        {typingNames.length > 0 && (
+          <p className='flex items-center gap-1.5 px-4 pt-1.5 text-[11px] font-bold text-[#002EFF]'>
+            <span className='flex gap-0.5' aria-hidden>
+              {[0, 150, 300].map((d) => (
+                <span key={d} className='h-1 w-1 animate-bounce rounded-full bg-[#002EFF]' style={{ animationDelay: `${d}ms` }} />
+              ))}
+            </span>
+            {typingNames.length === 1
+              ? `${typingNames[0]} is typing…`
+              : typingNames.length === 2
+                ? `${typingNames[0]} and ${typingNames[1]} are typing…`
+                : `${typingNames.length} people are typing…`}
+          </p>
+        )}
+
+        {error && <p className='px-4 pt-2 text-[11px] font-semibold text-rose-600'>{error}</p>}
+
+        {/* Composer */}
+        {postingBlocked ? (
+          <div className='border-t border-slate-100 p-3'>
+            <div className='flex items-center gap-2 rounded-2xl bg-zinc-50 px-4 py-3 text-[11px] font-bold text-zinc-500'>
+              <Lock size={14} className='shrink-0 text-zinc-400' />
+              The community is locked. Only tutors can post right now.
+            </div>
+          </div>
+        ) : canCompose ? (
+          <div className='border-t border-slate-100 p-2.5 sm:p-3'>
+            {replyTarget && !recording && (
+              <div className='mb-2 flex items-start gap-2 rounded-xl bg-slate-50 px-3 py-2'>
+                <span className='w-0.5 self-stretch rounded-full bg-[#002EFF]' />
+                <div className='min-w-0 flex-1'>
+                  <p className='text-[10px] font-black uppercase tracking-wide text-[#002EFF]'>
+                    Replying to {replyTarget.own ? 'yourself' : replyTarget.senderName}
+                  </p>
+                  <p className='truncate text-[11px] font-medium text-zinc-500'>{previewText(replyTarget)}</p>
+                </div>
+                <button onClick={() => setReplyTarget(null)} className='shrink-0 rounded-lg p-1 text-zinc-400 hover:bg-white hover:text-zinc-700' aria-label='Cancel reply'>
+                  <X size={13} />
+                </button>
+              </div>
+            )}
+
+            {/* Subject symbols — the ΔH / ∫ row from the design, one tap to insert */}
+            {!recording && (
+              <div className='mb-2 flex items-center gap-1 overflow-x-auto pb-0.5 custom-scrollbar'>
+                <span className='shrink-0 pr-1 text-[8px] font-black uppercase tracking-widest text-slate-400'>
+                  Insert
+                </span>
+                {SYMBOLS.map((s) => (
+                  <button
+                    key={s}
+                    type='button'
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => setText((t) => t + s)}
+                    className='h-7 shrink-0 rounded-lg bg-slate-100 px-2 font-mono text-[12px] font-bold text-slate-600 hover:bg-blue-50 hover:text-[#002EFF]'
+                    aria-label={`Insert ${s}`}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {recording ? (
+              <div className='flex items-center gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3'>
+                <span className='h-2.5 w-2.5 animate-pulse rounded-full bg-rose-500' />
+                <span className='text-xs font-black tabular-nums text-rose-600'>
+                  Recording {duration(recSecs) || '0:00'}
+                </span>
+                <div className='ml-auto flex items-center gap-2'>
+                  <button onClick={cancelRecording} className='rounded-lg px-3 py-1.5 text-[11px] font-bold text-zinc-500 hover:bg-white'>
+                    Cancel
+                  </button>
+                  <button onClick={stopRecording} className='flex items-center gap-1.5 rounded-lg bg-[#002EFF] px-3 py-1.5 text-[11px] font-bold text-white'>
+                    <Send size={12} /> Send
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className='relative flex items-end gap-2'>
+                {mentionQuery !== null && mentionOptions.length > 0 && (
+                  <div className='absolute bottom-14 left-0 z-30 w-64 rounded-2xl border border-zinc-200 bg-white p-1 shadow-xl'>
+                    {mentionOptions.map((o) => (
+                      <button
+                        key={o.id}
+                        onMouseDown={(e) => {
+                          e.preventDefault()
+                          pickMention(o)
+                        }}
+                        className='flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left hover:bg-blue-50'
+                      >
+                        <span className='grid h-6 w-6 shrink-0 place-items-center rounded-lg bg-zinc-100 text-[9px] font-black text-zinc-600'>
+                          {o.id === '@everyone' ? '@' : o.name.slice(0, 2).toUpperCase()}
+                        </span>
+                        <span className='min-w-0 flex-1 truncate text-[12px] font-bold text-zinc-700'>{o.name}</span>
+                        <span className={`rounded px-1.5 py-0.5 text-[8px] font-black uppercase ${o.id === '@everyone' ? 'bg-amber-50 text-amber-600' : roleTint(o.role)}`}>
+                          {o.id === '@everyone' ? 'All' : roleLabel(o.role)}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {pollOpen && (
+                  <div className='absolute bottom-14 left-0 right-0 z-20 space-y-2 rounded-2xl border border-zinc-200 bg-white p-3 shadow-xl'>
+                    <div className='flex items-center justify-between'>
+                      <p className='flex items-center gap-1.5 text-[11px] font-black uppercase tracking-wide text-zinc-500'>
+                        <BarChart3 size={13} className='text-[#002EFF]' /> New poll
+                      </p>
+                      <button onClick={() => setPollOpen(false)} className='text-zinc-400 hover:text-rose-500' aria-label='Close poll composer'>
+                        <X size={15} />
+                      </button>
+                    </div>
+                    <input
+                      value={pollQuestion}
+                      onChange={(e) => setPollQuestion(e.target.value)}
+                      placeholder='Ask a question…'
+                      className='h-10 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 text-[13px] font-bold outline-none focus:border-[#002EFF]/40'
+                    />
+                    <div className='space-y-1.5'>
+                      {pollOptions.map((o, i) => (
+                        <div key={i} className='flex items-center gap-2'>
+                          {pollIsQuiz && (
+                            <input type='radio' name='poll-correct' checked={pollCorrect === i} onChange={() => setPollCorrect(i)} title='Mark as the correct answer' className='shrink-0 accent-emerald-600' />
+                          )}
+                          <input
+                            value={o}
+                            onChange={(e) => setPollOptions((prev) => prev.map((p, idx) => (idx === i ? e.target.value : p)))}
+                            placeholder={`Option ${i + 1}`}
+                            className='h-9 flex-1 rounded-lg border border-zinc-200 bg-zinc-50 px-3 text-[12px] font-medium outline-none focus:border-[#002EFF]/40'
+                          />
+                          {pollOptions.length > 2 && (
+                            <button onClick={() => setPollOptions((prev) => prev.filter((_, idx) => idx !== i))} className='shrink-0 text-zinc-300 hover:text-rose-500' aria-label={`Remove option ${i + 1}`}>
+                              <X size={14} />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                      {pollOptions.length < 10 && (
+                        <button onClick={() => setPollOptions((prev) => [...prev, ''])} className='inline-flex items-center gap-1 text-[10px] font-black uppercase text-[#002EFF] hover:underline'>
+                          <Plus size={11} /> Add option
+                        </button>
+                      )}
+                    </div>
+                    <label className='flex cursor-pointer items-center gap-2'>
+                      <input type='checkbox' checked={pollIsQuiz} onChange={(e) => setPollIsQuiz(e.target.checked)} className='h-4 w-4 accent-[#002EFF]' />
+                      <span className='text-[11px] font-bold text-zinc-600'>Mark as a quiz (reveals the answer after voting)</span>
+                    </label>
+                    <button
+                      onClick={sendPoll}
+                      disabled={sending}
+                      className='flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-[#002EFF] text-[11px] font-black uppercase tracking-wide text-white transition-all hover:bg-blue-700 active:scale-[0.98] disabled:opacity-50'
+                    >
+                      {sending ? <Loader2 size={14} className='animate-spin' /> : <Send size={14} />}
+                      Post poll
+                    </button>
+                  </div>
+                )}
+
+                <div className='relative'>
+                  <button
+                    type='button'
+                    onClick={() => setAttachOpen((o) => !o)}
+                    disabled={busy}
+                    className='flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-zinc-200 bg-white text-zinc-500 transition-colors hover:border-blue-200 hover:text-[#002EFF] disabled:opacity-50'
+                    aria-label='Attach'
+                  >
+                    {uploading ? <Loader2 size={18} className='animate-spin' /> : <Plus size={18} />}
+                  </button>
+                  {attachOpen && (
+                    <div className='absolute bottom-14 left-0 z-10 w-44 rounded-2xl border border-zinc-200 bg-white p-1.5 shadow-xl'>
+                      <AttachItem icon={ImageIcon} label='Photo' onClick={() => imageInput.current?.click()} />
+                      <AttachItem icon={VideoIcon} label='Video' onClick={() => videoInput.current?.click()} />
+                      <AttachItem icon={FileText} label='Document' onClick={() => docInput.current?.click()} />
+                      {canManage && (
+                        <AttachItem
+                          icon={BarChart3}
+                          label='Poll'
+                          onClick={() => {
+                            setAttachOpen(false)
+                            setPollOpen(true)
+                          }}
+                        />
+                      )}
+                      {canRecord && (
+                        <AttachItem
+                          icon={Mic}
+                          label='Voice note'
+                          onClick={() => {
+                            setAttachOpen(false)
+                            startRecording()
+                          }}
+                        />
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <textarea
+                  rows={1}
+                  value={text}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    setText(v)
+                    noteTyping()
+                    const at = v.match(/@([\w' -]{0,30})$/)
+                    setMentionQuery(at ? at[1] : null)
+                  }}
+                  onBlur={stopTyping}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') setMentionQuery(null)
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault()
+                      if (mentionQuery !== null && mentionOptions.length) {
+                        pickMention(mentionOptions[0])
+                        return
+                      }
+                      sendText()
+                    }
+                  }}
+                  placeholder='Type a message…'
+                  className='max-h-32 flex-1 resize-none rounded-2xl border border-zinc-200 bg-slate-50 px-4 py-3 text-sm text-zinc-800 placeholder:text-zinc-400 focus:border-[#002EFF] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#002EFF]/10'
+                />
+
+                {canRecord && !text.trim() ? (
+                  <button type='button' onClick={startRecording} disabled={busy} className='flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#002EFF] text-white transition-colors hover:bg-blue-700 disabled:opacity-50' aria-label='Record voice note'>
+                    <Mic size={18} />
+                  </button>
+                ) : (
+                  <button type='button' onClick={sendText} disabled={busy || !text.trim()} className='flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#002EFF] text-white transition-colors hover:bg-blue-700 disabled:opacity-40' aria-label='Send'>
+                    {sending ? <Loader2 size={18} className='animate-spin' /> : <Send size={18} />}
+                  </button>
+                )}
+              </div>
+            )}
+
+            <input ref={imageInput} type='file' accept='image/*' hidden onChange={(e) => handleFile(e.target.files?.[0] ?? null, 'image')} />
+            <input ref={videoInput} type='file' accept='video/*' hidden onChange={(e) => handleFile(e.target.files?.[0] ?? null, 'video')} />
+            <input
+              ref={docInput}
+              type='file'
+              accept='.pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+              hidden
+              onChange={(e) => handleFile(e.target.files?.[0] ?? null, 'file')}
+            />
+          </div>
+        ) : null}
+      </section>
+
+      {/* ── Management (admin) ─────────────────────────────────────────── */}
+      {isAdmin && (
+        <>
+          <aside className='hidden w-72 shrink-0 border-l border-slate-200 xl:flex xl:flex-col'>
+            {managePanel}
+          </aside>
+          {manageOpen && (
+            <div className='fixed inset-0 z-50 xl:hidden'>
+              <button
+                className='absolute inset-0 bg-slate-900/40'
+                onClick={() => setManageOpen(false)}
+                aria-label='Close management'
+              />
+              <div className='absolute inset-y-0 right-0 flex w-full max-w-sm flex-col bg-white shadow-2xl'>
+                {managePanel}
+              </div>
+            </div>
+          )}
+        </>
+      )}
     </div>
+  )
+}
+
+/** One of the icon buttons in the room header. */
+function HeaderButton({
+  on,
+  onClick,
+  label,
+  badge,
+  tone,
+  className = '',
+  children,
+}: {
+  on?: boolean
+  onClick: () => void
+  label: string
+  badge?: number
+  tone?: 'rose'
+  className?: string
+  children: React.ReactNode
+}) {
+  const active =
+    tone === 'rose' ? 'bg-rose-50 text-rose-600' : 'bg-[#002EFF] text-white'
+  return (
+    <button
+      onClick={onClick}
+      title={label}
+      aria-label={label}
+      aria-pressed={!!on}
+      className={`relative h-9 w-9 place-items-center rounded-xl transition-colors ${
+        on ? active : 'text-slate-500 hover:bg-slate-100 hover:text-[#002EFF]'
+      } ${className.includes('hidden') ? className : `grid ${className}`}`}
+    >
+      {children}
+      {!!badge && (
+        <span className='absolute -right-0.5 -top-0.5 min-w-[15px] rounded-full bg-rose-500 px-1 text-[8px] font-black tabular-nums text-white'>
+          {badge > 9 ? '9+' : badge}
+        </span>
+      )}
+    </button>
   )
 }
 
@@ -2456,35 +2555,39 @@ function MessageBubble({
 
   return (
     <div
-      className={`flex gap-2.5 group ${m.own ? 'flex-row-reverse' : ''} ${
-        grouped ? '-mt-2' : ''
+      className={`flex gap-2 group sm:gap-2.5 ${m.own ? 'flex-row-reverse' : ''} ${
+        grouped ? '-mt-1.5' : ''
       }`}
     >
-      {grouped ? (
+      {/* Avatar: only for other people, and only on the first of a run */}
+      {m.own ? null : grouped ? (
         <div className='h-8 w-8 shrink-0' aria-hidden />
       ) : (
-        <div className='h-8 w-8 shrink-0 rounded-xl bg-zinc-100 border border-zinc-200 flex items-center justify-center text-[10px] font-black text-zinc-600'>
+        <div className='grid h-8 w-8 shrink-0 place-items-center self-end rounded-xl bg-white text-[10px] font-black text-zinc-600 shadow-sm ring-1 ring-zinc-200'>
           {initials || '?'}
         </div>
       )}
 
-      <div className={`max-w-[76%] ${m.own ? 'items-end' : 'items-start'} flex flex-col`}>
-        <div className='flex items-center gap-2 mb-1 px-1'>
+      <div className={`max-w-[85%] sm:max-w-[76%] ${m.own ? 'items-end' : 'items-start'} flex flex-col`}>
+        {/* Name, role, time and the hover actions */}
+        <div className={`mb-0.5 flex items-center gap-2 px-1 ${m.own ? 'flex-row-reverse' : ''}`}>
           {!grouped && (
             <>
-              <span className='text-[11px] font-black text-zinc-700'>
-                {m.own ? 'You' : m.senderName}
+              <span className={`text-[11px] font-black ${m.own ? 'text-[#002EFF]' : 'text-zinc-800'}`}>
+                {m.own ? `${m.senderName} (You)` : m.senderName}
               </span>
-              <span
-                className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded ${roleTint(
-                  m.senderRole,
-                )}`}
-              >
-                {roleLabel(m.senderRole)}
-              </span>
+              {!m.own && (
+                <span
+                  className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded ${roleTint(
+                    m.senderRole,
+                  )}`}
+                >
+                  {roleLabel(m.senderRole)}
+                </span>
+              )}
             </>
           )}
-          <span className='text-[9px] font-medium text-zinc-400'>
+          <span className='font-mono text-[9px] font-medium text-zinc-400'>
             {clock(m.createdAt)}
           </span>
           {m.pinned && (
@@ -2575,16 +2678,16 @@ function MessageBubble({
         </div>
 
         <div
-          className={`rounded-2xl overflow-hidden ${
-            m.mentionedMe && !m.own ? 'ring-2 ring-[#FCB900]' : ''
-          } ${
+          className={`overflow-hidden rounded-2xl ${
+            m.own ? 'rounded-br-md' : 'rounded-bl-md'
+          } ${m.mentionedMe && !m.own ? 'ring-2 ring-[#FCB900]' : ''} ${
             m.type === 'text'
               ? m.own
-                ? 'bg-[#002EFF] text-white px-4 py-2.5'
-                : 'bg-zinc-100 text-zinc-800 px-4 py-2.5'
+                ? 'bg-[#0B2E8A] px-4 py-2.5 text-white shadow-sm'
+                : 'bg-white px-4 py-2.5 text-zinc-800 shadow-sm ring-1 ring-zinc-200/70'
               : m.type === 'poll'
-                ? 'bg-white border border-zinc-200 p-3 min-w-[250px]'
-                : 'bg-white border border-zinc-200 p-1.5'
+                ? 'min-w-[250px] bg-white p-3 shadow-sm ring-1 ring-zinc-200/70'
+                : 'bg-white p-1.5 shadow-sm ring-1 ring-zinc-200/70'
           }`}
         >
           {/* Quoted message — what this one is answering */}
@@ -2800,19 +2903,24 @@ function MessageBubble({
           </div>
         )}
 
-        {/* Seen by — only on your own messages, names on tap (WhatsApp-style) */}
-        {m.own && m.readCount > 0 && (
-          <div className='mt-1 px-1'>
+        {/* Ticks — one for delivered, two in blue once someone has read it */}
+        {m.own && (
+          <div className='mt-0.5 px-1'>
             <button
               onClick={toggleSeen}
-              className='inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wide text-zinc-400 hover:text-[#002EFF] transition-colors'
+              className={`inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wide transition-colors hover:text-[#002EFF] ${
+                m.readCount > 0 ? 'text-[#002EFF]' : 'text-zinc-400'
+              }`}
+              title={m.readCount > 0 ? `Seen by ${m.readCount}` : 'Delivered'}
             >
               {seenLoading ? (
                 <Loader2 size={10} className='animate-spin' />
+              ) : m.readCount > 0 ? (
+                <CheckCheck size={13} />
               ) : (
-                <Eye size={10} />
+                <Check size={13} />
               )}
-              Seen by {m.readCount}
+              {m.readCount > 0 && <span>{m.readCount}</span>}
             </button>
             {seen && (
               <p className='mt-0.5 text-[10px] font-medium text-zinc-500 max-w-[220px] break-words'>

@@ -54,12 +54,37 @@
     range.selectNodeContents(el)
     return range.getBoundingClientRect()
   }
+  // The part of the text a person can actually see: the glyph box, cut down
+  // by every ancestor that clips (a scrolling chat, a truncated title). Text
+  // scrolled out of view or hidden behind an ellipsis is not "under" anything.
+  const shown = (el) => {
+    let r = glyphs(el)
+    let box = { left: r.left, top: r.top, right: r.right, bottom: r.bottom }
+    for (let n = el; n && n !== document.body; n = n.parentElement) {
+      const cs = getComputedStyle(n)
+      const clips = ['hidden', 'auto', 'scroll', 'clip']
+      if (clips.includes(cs.overflowX) || clips.includes(cs.overflowY) || cs.textOverflow === 'ellipsis') {
+        const b = n.getBoundingClientRect()
+        box = {
+          left: Math.max(box.left, b.left),
+          top: Math.max(box.top, b.top),
+          right: Math.min(box.right, b.right),
+          bottom: Math.min(box.bottom, b.bottom),
+        }
+      }
+    }
+    return box
+  }
 
   const all = [...document.querySelectorAll('body *')].filter(visible)
   const out = { pastViewport: [], overlaps: [], clipped: [] }
 
+  // Inline text inside a truncated line keeps its full width; the ellipsis
+  // hides the rest, so it is not really past the edge.
+  const truncated = (el) => chain(el, (cs) => cs.textOverflow === 'ellipsis')
+
   for (const el of all) {
-    if (pinned(el) || scrollsSideways(el) || decorative(el)) continue
+    if (pinned(el) || scrollsSideways(el) || decorative(el) || truncated(el)) continue
     const r = el.getBoundingClientRect()
     if (r.right > vw + 1 || r.left < -1) out.pastViewport.push(desc(el))
   }
@@ -76,7 +101,8 @@
     const a = c.getBoundingClientRect()
     for (const t of texts) {
       if (c.contains(t) || t.contains(c) || floated(t)) continue
-      const b = glyphs(t)
+      const b = shown(t)
+      if (b.right - b.left < 3 || b.bottom - b.top < 3) continue
       const ix = Math.min(a.right, b.right) - Math.max(a.left, b.left)
       const iy = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top)
       if (ix > 3 && iy > 3) out.overlaps.push(`${desc(c)} over ${desc(t)} (${Math.round(ix)}x${Math.round(iy)}px)`)
