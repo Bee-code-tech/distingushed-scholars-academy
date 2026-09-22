@@ -4,7 +4,8 @@ import { useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { GraduationCap, ArrowLeft } from 'lucide-react'
+import { GraduationCap, ArrowLeft, Clock } from 'lucide-react'
+import { REGISTRATION_PAUSED, REGISTRATION_PAUSED_NOTE } from '@/lib/siteFlags'
 
 import { Card, CardContent } from '@/components/ui/card'
 import StudentWizard from './StudentWizard'
@@ -53,7 +54,25 @@ export default function DSASignUp() {
         <CardContent className='p-6 md:p-8 space-y-6'>
           {/* Students self-register here. Tutors and guardians/parents are
               created by an admin from the admin panel. */}
-          <StudentWizard />
+          {REGISTRATION_PAUSED ? (
+            <div className='text-center py-4' role='status'>
+              <div className='mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-amber-50 text-amber-600'>
+                <Clock size={26} />
+              </div>
+              <h2 className='text-lg font-black text-slate-900'>Registration is paused</h2>
+              <p className='mx-auto mt-2 max-w-sm text-[13px] font-medium leading-relaxed text-slate-500'>
+                {REGISTRATION_PAUSED_NOTE}
+              </p>
+              <p className='mt-4 text-[11px] font-bold text-slate-400'>
+                Already registered and got your code?{' '}
+                <Link href='/auth/verify-otp' className='text-[#002EFF] hover:underline'>
+                  Verify your account
+                </Link>
+              </p>
+            </div>
+          ) : (
+            <StudentWizard />
+          )}
 
           <div className='text-center pt-2 border-t border-slate-50'>
             <p className='text-gray-400 font-bold text-[10px] uppercase tracking-widest'>
