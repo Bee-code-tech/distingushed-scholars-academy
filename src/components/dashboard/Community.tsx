@@ -723,6 +723,22 @@ export default function Community({
       setReplyTarget(null)
   }, [messages, replyTarget])
 
+  // Drop a symbol where the cursor is (not at the end), and keep the cursor
+  // just after it so the next tap lands in the right place too.
+  const composerRef = useRef<HTMLTextAreaElement | null>(null)
+  const insertSymbol = useCallback((sym: string) => {
+    const el = composerRef.current
+    const start = el ? el.selectionStart : text.length
+    const end = el ? el.selectionEnd : text.length
+    const next = text.slice(0, start) + sym + text.slice(end)
+    setText(next)
+    requestAnimationFrame(() => {
+      if (!el) return
+      el.focus()
+      el.setSelectionRange(start + sym.length, start + sym.length)
+    })
+  }, [text])
+
   const sendText = useCallback(() => {
     const t = text.trim()
     if (!t || sending) return
@@ -2211,7 +2227,7 @@ export default function Community({
                     key={s}
                     type='button'
                     onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => setText((t) => t + s)}
+                    onClick={() => insertSymbol(s)}
                     className='h-7 shrink-0 rounded-lg bg-slate-100 px-2 font-mono text-[12px] font-bold text-slate-600 hover:bg-blue-50 hover:text-[#002EFF]'
                     aria-label={`Insert ${s}`}
                   >
@@ -2357,6 +2373,7 @@ export default function Community({
                 </div>
 
                 <textarea
+                  ref={composerRef}
                   rows={1}
                   value={text}
                   onChange={(e) => {
@@ -2678,7 +2695,7 @@ function MessageBubble({
         </div>
 
         <div
-          className={`overflow-hidden rounded-2xl ${
+          className={`max-w-full overflow-hidden rounded-2xl ${
             m.own ? 'rounded-br-md' : 'rounded-bl-md'
           } ${m.mentionedMe && !m.own ? 'ring-2 ring-[#FCB900]' : ''} ${
             m.type === 'text'
@@ -2704,7 +2721,7 @@ function MessageBubble({
                   m.type === 'text' && m.own ? 'bg-white/60' : 'bg-[#002EFF]'
                 }`}
               />
-              <span className='min-w-0'>
+              <span className='block min-w-0 flex-1'>
                 <span
                   className={`block text-[10px] font-black ${
                     m.type === 'text' && m.own ? 'text-white/80' : 'text-[#002EFF]'
