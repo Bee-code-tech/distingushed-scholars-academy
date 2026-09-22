@@ -861,6 +861,11 @@ export default function AdminAdmin() {
           icon: LayoutDashboard,
         },
         { id: 'students' as AdminTab, label: 'Students', icon: Users },
+        {
+          id: 'community' as AdminTab,
+          label: 'Community',
+          icon: MessagesSquare,
+        },
       //   { id: 'notifications' as AdminTab, label: 'Notifications', icon: Bell },
       ],
     },
@@ -900,11 +905,6 @@ export default function AdminAdmin() {
           id: 'broadcast' as AdminTab,
           label: 'Announcements',
           icon: Megaphone,
-        },
-        {
-          id: 'community' as AdminTab,
-          label: 'Community',
-          icon: MessagesSquare,
         },
         {
           id: 'support' as AdminTab,

@@ -90,6 +90,7 @@ const NAV: NavGroup[] = [
     group: 'Overview',
     items: [
       { key: 'overview', label: 'Overview', icon: LayoutDashboard },
+      { key: 'community', label: 'Community', icon: MessagesSquare },
       { key: 'students', label: 'My Students', icon: Users },
       { key: 'analytics', label: 'Analytics', icon: BarChart3 },
     ],
@@ -107,7 +108,6 @@ const NAV: NavGroup[] = [
     group: 'Engagement',
     items: [
       { key: 'announcements', label: 'Announcements', icon: Megaphone },
-      { key: 'community', label: 'Community', icon: MessagesSquare },
     ],
   },
   {

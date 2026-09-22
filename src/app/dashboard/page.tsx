@@ -517,6 +517,12 @@ export default function AcademyDashboard() {
       group: 'Overview',
       items: [
         { icon: LayoutDashboard, label: 'Overview', view: 'overview' as ViewState },
+        {
+          icon: Users,
+          label: 'Community',
+          view: 'community' as ViewState,
+          badge: communityUnread,
+        },
         { icon: BarChart3, label: 'My Performance', view: 'analytics' as ViewState },
       ],
     },
@@ -547,12 +553,6 @@ export default function AcademyDashboard() {
           label: 'Announcements',
           view: 'announcements' as ViewState,
           badge: announcementsUnread,
-        },
-        {
-          icon: Users,
-          label: 'Community',
-          view: 'community' as ViewState,
-          badge: communityUnread,
         },
       ],
     },
