@@ -541,7 +541,7 @@ export default function Community({
     async (initial = false) => {
       try {
         const rows = (await dsaApi.community.list(
-          { limit: 100, channelId: activeChannel },
+          { limit: 20, channelId: activeChannel },
           token,
         )) as Record<string, unknown>[]
         const mapped = rows.map(normalize).sort((a, b) => a.createdAt - b.createdAt)
@@ -1056,7 +1056,7 @@ export default function Community({
     const unseen = messages
       .filter((m) => !m.own && m.id)
       .map((m) => m.id)
-      .slice(-100)
+      .slice(-20)
     if (!unseen.length) return
     let cancelled = false
     const id = setTimeout(() => {
