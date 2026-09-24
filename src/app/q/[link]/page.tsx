@@ -1,8 +1,8 @@
 'use client'
 
 // Public (free) quiz taker — no login. Anyone with the link enters their name
-// email and phone, takes the quiz once per device, gets their result (also
-// emailed), then is invited to the homepage.
+// email and phone, takes the quiz once per device, sees their result on the
+// page (downloadable, never emailed), then is invited to the homepage.
 // Backed by the no-auth endpoints in docs/backend-requests-2026-09-02.md §2.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -369,7 +369,7 @@ export default function PublicQuizPage() {
       return
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      setErrorMsg('Please enter a valid email — your score is sent there.')
+      setErrorMsg('Please enter a valid email — it is how we find your result again.')
       return
     }
     if (phone.trim().replace(/\D/g, '').length < 7) {
@@ -577,7 +577,7 @@ ${rows ? `<table border="1" cellpadding="8" cellspacing="0" style="border-collap
               </div>
               <div>
                 <label className='text-[9px] font-black uppercase text-slate-400'>
-                  Email <span className='text-slate-300'>· your score is sent here</span>
+                  Email <span className='text-slate-300'>· finds you on the leaderboard</span>
                 </label>
                 <input
                   type='email'
@@ -874,7 +874,7 @@ ${rows ? `<table border="1" cellpadding="8" cellspacing="0" style="border-collap
               <p className='text-[11px] font-bold text-emerald-700'>
                 {alreadyTaken
                   ? "You've already completed this quiz — here's your result."
-                  : 'Your result has been sent to your email.'}
+                  : 'Here is your result. Download the report to keep a copy.'}
               </p>
             </div>
             {/* Score + performance analysis */}
