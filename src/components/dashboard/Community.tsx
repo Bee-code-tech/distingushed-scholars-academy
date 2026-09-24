@@ -633,10 +633,14 @@ export default function Community({
   useEffect(() => {
     load(true)
     loadSettings()
+    // Every open tab polls, so a class of a few hundred is a few hundred
+    // pollers. Skip the tick while the tab is hidden — nobody is reading it —
+    // and catch up the moment it is shown again.
     const poll = setInterval(() => {
+      if (document.hidden) return
       load(false)
       loadSettings()
-    }, 5000)
+    }, 6000)
     const onFocus = () => {
       load(false)
       loadSettings()
@@ -702,7 +706,7 @@ export default function Community({
     setOnline([])
     setTypingNames([])
     beat()
-    const timer = setInterval(() => beat(), 12000)
+    const timer = setInterval(() => { if (!document.hidden) beat() }, 20000)
     return () => clearInterval(timer)
   }, [beat])
 
@@ -1201,7 +1205,7 @@ export default function Community({
   // beat as the messages (slower — it is only a badge).
   useEffect(() => {
     loadChannels()
-    const poll = setInterval(loadChannels, 15000)
+    const poll = setInterval(() => { if (!document.hidden) loadChannels() }, 30000)
     return () => clearInterval(poll)
   }, [loadChannels])
 

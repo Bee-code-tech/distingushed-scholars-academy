@@ -136,15 +136,13 @@
   }
 
   // ---- Is this browser too old for the fixes above to be enough? -------------
-  // The styling is rewritten at build time and works a long way back. The app's
-  // scripts are another matter: the framework itself ships `static {}` class
-  // blocks, which Chrome learned in version 94 (Sept 2021). Older than that and
-  // the script is a syntax error from its first line - nothing on the page ever
-  // comes alive, forms do nothing, "Loading..." never ends. That cannot be patched
-  // from here, so say what is wrong and how to fix it.
+  // The styling is rewritten at build time, and since 2026-09-24 so are the
+  // scripts (scripts/downlevel-chunks.js brings them down to ES2018). That
+  // takes the floor to iOS 12 / Chrome 64. Below that - async iteration and
+  // object spread missing - nothing on the page can run, so say so.
   var tooOld = false
   try {
-    new Function('class A { static { A.ok = 1 } }')
+    new Function('async function f(){ for await (const x of []) {} } var o = {...{}}; class A {}')
   } catch (e) {
     tooOld = true
   }

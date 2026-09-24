@@ -6,7 +6,8 @@
     "dev": "cross-env NODE_OPTIONS=--max-old-space-size=4096 next dev --webpack",
     "build": "cross-env NODE_OPTIONS=--max-old-space-size=4096 next build --webpack",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "postbuild": "node scripts/downlevel-chunks.js"
   },
   "dependencies": {
     "@fontsource/inter": "^5.1.0",
@@ -50,6 +51,7 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@babel/preset-env": "^8.0.6",
     "@tailwindcss/postcss": "^4.0.0",
     "@types/aos": "^3.0.7",
     "@types/node": "^22.10.10",

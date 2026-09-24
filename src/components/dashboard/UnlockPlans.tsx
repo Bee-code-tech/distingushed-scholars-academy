@@ -37,35 +37,6 @@ interface Plan {
 // Shown until the admin creates plans on the backend. The old ₦2,000 "Portal
 // Access" tier is retired — signup is free and Community is open to everyone,
 // so only the tutorial plans are sold.
-const DEFAULT_PLANS: Plan[] = [
-  {
-    id: 'silver',
-    name: 'Silver — Essential Prep',
-    kind: 'tutorial',
-    amount: 8000,
-    durationMonths: 1,
-    grantsLevel: 'tutorial',
-    note: 'Tutorial classes, assessments, CBT mock',
-  },
-  {
-    id: 'gold',
-    name: 'Gold — Complete Prep',
-    kind: 'tutorial',
-    amount: 12000,
-    durationMonths: 1,
-    grantsLevel: 'tutorial',
-    note: 'Everything in Silver + parent portal & analytics',
-  },
-  {
-    id: 'elite',
-    name: 'Elite — Premium Prep',
-    kind: 'tutorial',
-    amount: 17000,
-    durationMonths: 1,
-    grantsLevel: 'tutorial',
-    note: 'Everything in Gold + premium CBT & 1-on-1 support',
-  },
-]
 
 function normalizePlan(raw: Record<string, unknown>): Plan {
   return {
@@ -106,16 +77,24 @@ export default function UnlockPlans() {
       : selected.amount
     : 0
 
+  const [loadError, setLoadError] = useState<string | null>(null)
+
   const load = useCallback(async () => {
     setLoading(true)
+    setLoadError(null)
     try {
       const rows = (await dsaApi.plans.list(token)) as Record<string, unknown>[]
       // Retired: never show the old one-time "Portal Access" tier, even if a
       // legacy portal plan is still seeded on the backend.
       const live = rows.map(normalizePlan).filter((p) => p.kind !== 'portal')
-      setPlans(live.length ? live : DEFAULT_PLANS)
+      // Only what the admin has actually created. This used to fall back to a
+      // built-in list when the server had none, and a student who paid for one
+      // of those was refused with "Resource not found" — the plan did not exist.
+      setPlans(live)
+      setLoadError(live.length ? null : 'No plans are on sale right now. Please check back soon.')
     } catch {
-      setPlans(DEFAULT_PLANS) // backend plans not live yet — show defaults
+      setPlans([])
+      setLoadError('Could not load the plans. Check your connection and try again.')
     } finally {
       setLoading(false)
     }
@@ -395,6 +374,14 @@ export default function UnlockPlans() {
         </div>
       )}
 
+      {!loading && loadError && (
+        <div className='rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-[12px] font-bold text-amber-700 flex items-center justify-between gap-3'>
+          <span>{loadError}</span>
+          <button onClick={load} className='shrink-0 rounded-lg bg-white px-3 py-1.5 text-[10px] font-black uppercase text-amber-700 ring-1 ring-amber-200'>
+            Retry
+          </button>
+        </div>
+      )}
       {loading ? (
         <div className='py-10 flex justify-center'>
           <Loader2 className='animate-spin text-[#002EFF]' />
