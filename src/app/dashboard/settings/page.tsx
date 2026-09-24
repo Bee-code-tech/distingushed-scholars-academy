@@ -94,9 +94,12 @@ export default function SettingsView() {
       )
       const progs = u.programmes ?? u.subjectsOfInterest
       const g = (u.guardianInfo ?? {}) as Record<string, unknown>
-      setGuardianName((g.fullname as string) || '')
-      setGuardianPhone((g.phoneNumber as string) || '')
-      setGuardianEmail((g.email as string) || '')
+      // The sign-up form may have sent a placeholder (see StudentWizard);
+      // show that as empty so the student is asked for the real details.
+      const placeholder = g.fullname === 'Not yet provided'
+      setGuardianName(placeholder ? '' : (g.fullname as string) || '')
+      setGuardianPhone(placeholder ? '' : (g.phoneNumber as string) || '')
+      setGuardianEmail(placeholder ? '' : (g.email as string) || '')
       if (Array.isArray(progs)) setProgrammes(progs as string[])
       const subs = u.subjects ?? u.subjectsOfInterest
       setSubjects(
