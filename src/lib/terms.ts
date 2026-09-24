@@ -2,9 +2,7 @@
 // the registration form (components/TermsDialog.tsx). Plain English on
 // purpose: most readers are 15–19 and on a phone.
 //
-// Two lines here are policy decisions, not wording, and should be confirmed by
-// the academy: the refund rule in "Payments", and the 7-day window for
-// reporting a duplicate charge.
+// Confirmed by the academy on 2026-09-24: fees are not refundable.
 
 export const TERMS_UPDATED = '24 September 2026'
 
@@ -40,7 +38,7 @@ export const TERMS: TermsSection[] = [
     title: '4. Payments',
     body: [
       'Online payments are handled by Paystack. We never see or store your card details. Bank transfers are confirmed by our staff after you upload proof of payment; until then your access is provisional.',
-      'All fees are in Nigerian naira. If you are charged twice or pay by mistake, tell us within 7 days and we will refund the duplicate. Apart from that, fees are not refundable once access has been granted, except where the law says otherwise.',
+      'All fees are in Nigerian naira. Fees are not refundable, so please check the plan you are choosing before you pay. If you think a payment has gone wrong, contact us and we will look into it.',
     ],
   },
   {
