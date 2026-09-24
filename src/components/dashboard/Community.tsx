@@ -13,7 +13,7 @@
 // only the hosted URL is sent to the API. Messages sync by polling the channel.
 // Role rules are also enforced server-side — this component only shapes the UI.
 
-import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
   Send,
   Image as ImageIcon,
@@ -40,6 +40,7 @@ import {
   Reply,
   SmilePlus,
   ChevronDown,
+  ChevronUp,
   Search,
   ArrowLeft,
   MoreHorizontal,
@@ -218,6 +219,9 @@ const roleTint = (r: string): string => {
   if (k.includes('admin')) return 'bg-amber-50 text-amber-600'
   return 'bg-slate-100 text-slate-500'
 }
+
+/** Messages per page. Small on purpose: most readers are on weak networks. */
+const PAGE_SIZE = 20
 
 /** Subject symbols a student cannot type on a phone keyboard. */
 const SYMBOLS = ['Δ', '°', '²', '³', '√', 'π', '∫', '≤', '≥', '≠', '→', '⇌', '×', '÷', '½']
@@ -537,15 +541,70 @@ export default function Community({
     [myId, myName],
   )
 
+  // Earlier pages, fetched on demand. `olderDone` means the channel's first
+  // message is already on screen.
+  const [olderDone, setOlderDone] = useState(false)
+  const [loadingOlder, setLoadingOlder] = useState(false)
+  // scrollHeight before a page of older messages was prepended, or null.
+  const prependRef = useRef<number | null>(null)
+  useLayoutEffect(() => {
+    const el = scrollRef.current
+    if (el && prependRef.current != null) {
+      el.scrollTop += el.scrollHeight - prependRef.current
+      prependRef.current = null
+    }
+  }, [messages])
+  const loadOlder = useCallback(async () => {
+    const oldest = messages[0]
+    if (!oldest || loadingOlder) return
+    setLoadingOlder(true)
+    // Reading history means the reader is up top; the newest-in-view effect
+    // must not drag them back down when the page arrives.
+    setAtBottom(false)
+    const box = scrollRef.current
+    const heightBefore = box ? box.scrollHeight : 0
+    try {
+      const rows = (await dsaApi.community.list(
+        { limit: PAGE_SIZE, channelId: activeChannel, before: oldest.id },
+        token,
+      )) as Record<string, unknown>[]
+      const older = rows.map(normalize).sort((a, b) => a.createdAt - b.createdAt)
+      setOlderDone(rows.length < PAGE_SIZE)
+      if (older.length) {
+        // The layout effect below puts the scroll back where it was once the
+        // older messages are in the DOM.
+        prependRef.current = heightBefore
+        setMessages((prev) => {
+          const have = new Set(prev.map((m) => m.id))
+          return [...older.filter((m) => !have.has(m.id)), ...prev]
+        })
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not load earlier messages.')
+    } finally {
+      setLoadingOlder(false)
+    }
+  }, [messages, loadingOlder, activeChannel, token, normalize])
+
   const load = useCallback(
     async (initial = false) => {
       try {
         const rows = (await dsaApi.community.list(
-          { limit: 20, channelId: activeChannel },
+          { limit: PAGE_SIZE, channelId: activeChannel },
           token,
         )) as Record<string, unknown>[]
         const mapped = rows.map(normalize).sort((a, b) => a.createdAt - b.createdAt)
-        setMessages(mapped)
+        // Only the newest page comes back. Keep any earlier pages the reader
+        // has already scrolled up into, unless this is another channel.
+        const sameChannel = msgChannelRef.current === activeChannel
+        setMessages((prev) => {
+          if (!sameChannel || !prev.length) return mapped
+          const oldestFresh = mapped[0]?.createdAt ?? 0
+          const fresh = new Set(mapped.map((m) => m.id))
+          const kept = prev.filter((m) => m.createdAt < oldestFresh && !fresh.has(m.id))
+          return [...kept, ...mapped]
+        })
+        if (!sameChannel) setOlderDone(rows.length < PAGE_SIZE)
         msgChannelRef.current = activeChannel
         setNotReady(false)
       } catch {
@@ -2174,7 +2233,20 @@ export default function Community({
                 </p>
               </div>
             ) : (
-              (() => {
+              <>
+              {!olderDone && messages.length >= PAGE_SIZE && (
+                <div className='flex justify-center pb-1'>
+                  <button
+                    onClick={loadOlder}
+                    disabled={loadingOlder}
+                    className='inline-flex h-8 items-center gap-1.5 rounded-full bg-white px-3 text-[10px] font-black uppercase tracking-wide text-[#002EFF] shadow-sm ring-1 ring-zinc-200 hover:bg-blue-50 disabled:opacity-60'
+                  >
+                    {loadingOlder ? <Loader2 size={12} className='animate-spin' /> : <ChevronUp size={12} />}
+                    Load earlier messages
+                  </button>
+                </div>
+              )}
+              {(() => {
                 let lastDay = ''
                 let dividerPlaced = false
                 return messages.map((m, i) => {
@@ -2224,7 +2296,8 @@ export default function Community({
                     </Fragment>
                   )
                 })
-              })()
+              })()}
+              </>
             )}
           </div>
 
