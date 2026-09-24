@@ -246,6 +246,16 @@ export const dsaApi = {
         }).then((r) => handleResponse<{ success?: boolean; message: string }>(r)),
       ),
 
+    // POST /auth/activate — the one-tap link an admin emails; returns a session.
+    activate: (token: string) =>
+      withWakeUpRetry(() =>
+        fetch(`${BASE_URL}/auth/activate`, {
+          method: 'POST',
+          headers: getHeaders(),
+          body: JSON.stringify({ token }),
+        }).then((r) => handleResponse<AuthResponse>(r)),
+      ),
+
     verifyOtp: (email: string, otp: string) =>
       withWakeUpRetry(() =>
         fetch(`${BASE_URL}/auth/verify-otp`, {

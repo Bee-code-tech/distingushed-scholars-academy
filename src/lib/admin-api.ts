@@ -360,6 +360,16 @@ async function adminFetch<T>(
   return response.json()
 }
 
+export interface OtpDelivery {
+  email: string
+  fullname: string
+  status: string
+  sentAt: string | null
+  codeExpired: boolean | null
+  delivery: { lastEvent: string; meaning: string; createdAt?: string } | null
+  note: string | null
+}
+
 export const adminApi = {
   // ==========================================
   // AUTHENTICATION
@@ -421,6 +431,36 @@ export const adminApi = {
         method: 'PATCH',
         body: JSON.stringify(payload),
       },
+    ),
+
+  /**
+   * Did the last verification code reach this student? (delivered / bounced / in transit)
+   * Endpoint: GET /api/admin/users/{id}/otp-delivery
+   */
+  getOtpDelivery: (id: string) =>
+    adminFetch<{ success: boolean; data: OtpDelivery }>(
+      `/api/admin/users/${encodeURIComponent(id)}/otp-delivery`,
+    ),
+
+  /**
+   * Email one unverified student a fresh code and a one-tap activation link.
+   * Endpoint: POST /api/admin/users/{id}/resend-activation
+   */
+  resendActivation: (id: string) =>
+    adminFetch<{ success: boolean; data: { email: string; sentAt: string } }>(
+      `/api/admin/users/${encodeURIComponent(id)}/resend-activation`,
+      { method: 'POST', body: '{}' },
+    ),
+
+  /**
+   * Email every unverified student an activation link, 40 per call; `remaining`
+   * says how many are still waiting — call again until it is 0.
+   * Endpoint: POST /api/admin/users/resend-activation
+   */
+  resendActivationAll: () =>
+    adminFetch<{ success: boolean; data: { total: number; sent: number; remaining: number; failed: { email: string; reason: string }[] } }>(
+      '/api/admin/users/resend-activation',
+      { method: 'POST', body: '{}' },
     ),
 
   /**

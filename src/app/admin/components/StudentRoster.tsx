@@ -335,6 +335,7 @@
 //               const isRowLoading = actionLoadingId === rowId
 //               const isSuspended = p.status === 'suspended'
 
+
 //               return (
 //                 <div
 //                   key={p.key}
@@ -360,10 +361,12 @@
 //                         className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full shrink-0 ${
 //                           isSuspended
 //                             ? 'bg-amber-50 text-amber-600 border border-amber-200'
-//                             : 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+//                             : isUnverified
+//                            ? 'bg-rose-50 text-rose-600 border border-rose-200'
+//                            : 'bg-emerald-50 text-emerald-600 border border-emerald-200'
 //                         }`}
 //                       >
-//                         {isSuspended ? 'Suspended' : 'Active'}
+//                         {isSuspended ? 'Suspended' : isUnverified ? 'Unverified' : 'Active'}
 //                       </Badge>
 //                     </div>
 
@@ -450,6 +453,7 @@
 //               const isRowLoading = actionLoadingId === rowId
 //               const isSuspended = p.status === 'suspended'
 
+
 //               return (
 //                 <div
 //                   key={p.key}
@@ -485,10 +489,12 @@
 //                       className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${
 //                         isSuspended
 //                           ? 'bg-amber-50 text-amber-600 border border-amber-200'
-//                           : 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+//                           : isUnverified
+//                            ? 'bg-rose-50 text-rose-600 border border-rose-200'
+//                            : 'bg-emerald-50 text-emerald-600 border border-emerald-200'
 //                       }`}
 //                     >
-//                       {isSuspended ? 'Suspended' : 'Active'}
+//                       {isSuspended ? 'Suspended' : isUnverified ? 'Unverified' : 'Active'}
 //                     </Badge>
 //                   </span>
 
@@ -608,6 +614,7 @@
 // }) {
 //   const isSuspended = student.status === 'suspended'
 
+
 //   return (
 //     <div className='fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200'>
 //       <div className='w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden'>
@@ -647,10 +654,12 @@
 //               className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-full ${
 //                 isSuspended
 //                   ? 'bg-amber-50 text-amber-600 border border-amber-200'
-//                   : 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+//                   : isUnverified
+//                            ? 'bg-rose-50 text-rose-600 border border-rose-200'
+//                            : 'bg-emerald-50 text-emerald-600 border border-emerald-200'
 //               }`}
 //             >
-//               {isSuspended ? 'Suspended' : 'Active'}
+//               {isSuspended ? 'Suspended' : isUnverified ? 'Unverified' : 'Active'}
 //             </Badge>
 //           </div>
 
@@ -1014,9 +1023,10 @@ import {
   ShieldAlert,
   ChevronLeft,
   ChevronRight,
+  Send,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import { adminApi, type AdminUserListItem } from '@/lib/admin-api'
+import { adminApi, type AdminUserListItem, type OtpDelivery } from '@/lib/admin-api'
 import {
   PROGRAMMES,
   CLASS_LEVELS,
@@ -1088,6 +1098,10 @@ export default function StudentRoster() {
   const [programmeFilter, setProgrammeFilter] = useState('')
   const [classFilter, setClassFilter] = useState('')
   const [accessFilter, setAccessFilter] = useState('')
+  // '' = everyone, 'pending_otp' = registered but never entered their code.
+  const [statusFilter, setStatusFilter] = useState('')
+  const [bulkSending, setBulkSending] = useState(false)
+  const [bulkMsg, setBulkMsg] = useState('')
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1)
@@ -1131,7 +1145,7 @@ export default function StudentRoster() {
 
   // Data Fetching logic with Pagination support
   const fetchStudents = useCallback(
-    async (query = '', page = 1, programme = '', cls = '', access = '') => {
+    async (query = '', page = 1, programme = '', cls = '', access = '', status = '') => {
     setLoading(true)
     try {
       const response = await adminApi.getUsers({
@@ -1140,6 +1154,7 @@ export default function StudentRoster() {
         programme: programme || undefined,
         class: cls || undefined,
         accessLevel: access || undefined,
+        status: status || undefined,
         page,
         limit,
       })
@@ -1197,15 +1212,50 @@ export default function StudentRoster() {
   }, [])
 
   useEffect(() => {
-    fetchStudents(searchQuery, currentPage, programmeFilter, classFilter, accessFilter)
+    fetchStudents(searchQuery, currentPage, programmeFilter, classFilter, accessFilter, statusFilter)
     // Re-fetch on page change or when a filter changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fetchStudents, currentPage, programmeFilter, classFilter, accessFilter])
+  }, [fetchStudents, currentPage, programmeFilter, classFilter, accessFilter, statusFilter])
+
+  // Email every student still waiting on verification a fresh code and a
+  // one-tap activation link. The server does 40 per call; keep calling until
+  // nobody is left, and show the running total.
+  const resendToAllUnverified = async () => {
+    if (
+      !window.confirm(
+        'Email every unverified student a fresh code and an activation link? Each one gets a single email.',
+      )
+    )
+      return
+    setBulkSending(true)
+    setBulkMsg('Sending…')
+    let sent = 0
+    const failed: { email: string; reason: string }[] = []
+    try {
+      for (let round = 0; round < 25; round += 1) {
+        const res = await adminApi.resendActivationAll()
+        sent += res.data.sent
+        failed.push(...res.data.failed)
+        setBulkMsg(`Sent ${sent}… ${res.data.remaining} to go`)
+        if (res.data.remaining === 0 || (res.data.failed.length && res.data.sent === 0)) break
+      }
+      setBulkMsg(
+        `Sent ${sent} activation email${sent === 1 ? '' : 's'}.` +
+          (failed.length
+            ? ` ${failed.length} could not be sent — first: ${failed[0].email} (${failed[0].reason})`
+            : ''),
+      )
+    } catch (err) {
+      setBulkMsg(err instanceof Error ? err.message : 'Sending stopped early.')
+    } finally {
+      setBulkSending(false)
+    }
+  }
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
     setCurrentPage(1)
-    fetchStudents(searchQuery, 1, programmeFilter, classFilter, accessFilter)
+    fetchStudents(searchQuery, 1, programmeFilter, classFilter, accessFilter, statusFilter)
   }
 
   /* ------------------------------------------------------------------ */
@@ -1423,13 +1473,41 @@ export default function StudentRoster() {
           <option value='paid'>Paid (portal + tutorial)</option>
           <option value='free'>Free</option>
         </select>
-        {(programmeFilter || classFilter || accessFilter) && (
+        <select
+          value={statusFilter}
+          onChange={(e) => {
+            setStatusFilter(e.target.value)
+            setCurrentPage(1)
+          }}
+          title='Students who registered but never entered their code'
+          className={`h-9 px-2 bg-white border rounded-lg text-[11px] font-black outline-none focus:border-[#002EFF] ${
+            statusFilter ? 'border-amber-300 text-amber-700' : 'border-slate-200 text-slate-700'
+          }`}
+        >
+          <option value=''>All statuses</option>
+          <option value='pending_otp'>Unverified (never entered code)</option>
+          <option value='active'>Active</option>
+          <option value='suspended'>Suspended</option>
+        </select>
+        {statusFilter === 'pending_otp' && (
+          <button
+            type='button'
+            onClick={resendToAllUnverified}
+            disabled={bulkSending || loading || students.length === 0}
+            className='h-9 px-3 rounded-lg bg-[#002EFF] text-white text-[10px] font-black uppercase hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-1.5'
+          >
+            {bulkSending ? <Loader2 size={12} className='animate-spin' /> : <Send size={12} />}
+            Resend activation link to all unverified ({totalStudents})
+          </button>
+        )}
+        {(programmeFilter || classFilter || accessFilter || statusFilter) && (
           <button
             type='button'
             onClick={() => {
               setProgrammeFilter('')
               setClassFilter('')
               setAccessFilter('')
+              setStatusFilter('')
               setCurrentPage(1)
             }}
             className='h-9 px-3 rounded-lg bg-slate-100 text-slate-500 text-[10px] font-black uppercase hover:text-[#002EFF]'
@@ -1438,6 +1516,11 @@ export default function StudentRoster() {
           </button>
         )}
       </div>
+      {bulkMsg && (
+        <p className='rounded-xl bg-blue-50 px-3 py-2 text-[11px] font-bold text-[#002EFF]' role='status'>
+          {bulkMsg}
+        </p>
+      )}
 
       {/* Content View */}
       {loading ? (
@@ -1456,6 +1539,8 @@ export default function StudentRoster() {
               const rowId = p.id || p.key
               const isRowLoading = actionLoadingId === rowId
               const isSuspended = p.status === 'suspended'
+              const isUnverified = p.status === 'pending_otp'
+
 
               return (
                 <div
@@ -1482,10 +1567,12 @@ export default function StudentRoster() {
                         className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full shrink-0 ${
                           isSuspended
                             ? 'bg-amber-50 text-amber-600 border border-amber-200'
+                            : isUnverified
+                            ? 'bg-rose-50 text-rose-600 border border-rose-200'
                             : 'bg-emerald-50 text-emerald-600 border border-emerald-200'
                         }`}
                       >
-                        {isSuspended ? 'Suspended' : 'Active'}
+                        {isSuspended ? 'Suspended' : isUnverified ? 'Unverified' : 'Active'}
                       </Badge>
                     </div>
 
@@ -1593,6 +1680,8 @@ export default function StudentRoster() {
               const rowId = p.id || p.key
               const isRowLoading = actionLoadingId === rowId
               const isSuspended = p.status === 'suspended'
+              const isUnverified = p.status === 'pending_otp'
+
 
               return (
                 <div
@@ -1633,10 +1722,12 @@ export default function StudentRoster() {
                       className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${
                         isSuspended
                           ? 'bg-amber-50 text-amber-600 border border-amber-200'
-                          : 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+                          : isUnverified
+                            ? 'bg-rose-50 text-rose-600 border border-rose-200'
+                            : 'bg-emerald-50 text-emerald-600 border border-emerald-200'
                       }`}
                     >
-                      {isSuspended ? 'Suspended' : 'Active'}
+                      {isSuspended ? 'Suspended' : isUnverified ? 'Unverified' : 'Active'}
                     </Badge>
                   </span>
 
@@ -1997,6 +2088,93 @@ function ActionConfirmModal({
 /* ------------------------------------------------------------------ */
 /* Modal Component: Student Details                                   */
 /* ------------------------------------------------------------------ */
+/**
+ * For a student who registered but never entered their code: did the last
+ * email reach them, and a button to send a fresh code plus a one-tap link.
+ */
+function VerificationPanel({ id, email }: { id: string; email: string }) {
+  const [delivery, setDelivery] = useState<OtpDelivery | null>(null)
+  const [checking, setChecking] = useState(true)
+  const [sending, setSending] = useState(false)
+  const [msg, setMsg] = useState('')
+
+  const check = useCallback(async () => {
+    setChecking(true)
+    try {
+      const res = await adminApi.getOtpDelivery(id)
+      setDelivery(res.data)
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : 'Could not check delivery.')
+    } finally {
+      setChecking(false)
+    }
+  }, [id])
+
+  useEffect(() => {
+    check()
+  }, [check])
+
+  const resend = async () => {
+    setSending(true)
+    setMsg('')
+    try {
+      await adminApi.resendActivation(id)
+      setMsg(`Sent to ${email}. It carries a fresh code and a one-tap activation link.`)
+      // Give the email service a moment to record the receipt.
+      setTimeout(check, 2500)
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : 'Could not send.')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  const ev = delivery?.delivery?.lastEvent
+  const tone =
+    ev === 'delivered'
+      ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+      : ev === 'bounced' || ev === 'complained'
+        ? 'bg-rose-50 text-rose-700 border-rose-100'
+        : 'bg-amber-50 text-amber-700 border-amber-100'
+
+  return (
+    <div className='border-b border-slate-100 bg-amber-50/40 px-5 py-4 space-y-2'>
+      <p className='text-[9px] font-black uppercase tracking-widest text-amber-700'>
+        Not verified yet
+      </p>
+      {checking ? (
+        <p className='flex items-center gap-1.5 text-[11px] font-bold text-slate-500'>
+          <Loader2 size={12} className='animate-spin' /> Checking whether the code reached them…
+        </p>
+      ) : delivery?.delivery ? (
+        <div className={`rounded-xl border px-3 py-2 ${tone}`}>
+          <p className='text-[10px] font-black uppercase'>
+            Last email: {String(ev).replace('_', ' ')}
+            {delivery.sentAt && (
+              <span className='ml-1 font-bold normal-case opacity-70'>
+                · {new Date(delivery.sentAt).toLocaleString()}
+              </span>
+            )}
+          </p>
+          <p className='text-[11px] font-medium'>{delivery.delivery.meaning}</p>
+        </div>
+      ) : (
+        <p className='text-[11px] font-medium text-slate-500'>{delivery?.note ?? msg}</p>
+      )}
+      <button
+        type='button'
+        onClick={resend}
+        disabled={sending}
+        className='inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#002EFF] px-3 text-[10px] font-black uppercase text-white hover:bg-blue-700 disabled:opacity-50'
+      >
+        {sending ? <Loader2 size={12} className='animate-spin' /> : <Send size={12} />}
+        Resend activation link
+      </button>
+      {msg && !checking && <p className='text-[11px] font-bold text-slate-600'>{msg}</p>}
+    </div>
+  )
+}
+
 function StudentDetailsModal({
   student,
   onClose,
@@ -2014,10 +2192,15 @@ function StudentDetailsModal({
   isLoading: boolean
 }) {
   const isSuspended = student.status === 'suspended'
+  const isUnverified = student.status === 'pending_otp'
+
 
   return (
     <div className='fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200'>
-      <div className='w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden'>
+      <div className='w-full max-w-md max-h-[92dvh] overflow-y-auto bg-white rounded-3xl shadow-2xl border border-slate-100'>
+        {student.status === 'pending_otp' && student.id && (
+          <VerificationPanel id={student.id} email={student.email} />
+        )}
         <div className='flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50'>
           <div className='flex items-center gap-2.5'>
             <div className='h-8 w-8 rounded-xl bg-[#002EFF] text-white flex items-center justify-center shadow-md shadow-blue-200'>
@@ -2054,10 +2237,12 @@ function StudentDetailsModal({
               className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-full ${
                 isSuspended
                   ? 'bg-amber-50 text-amber-600 border border-amber-200'
-                  : 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+                  : isUnverified
+                            ? 'bg-rose-50 text-rose-600 border border-rose-200'
+                            : 'bg-emerald-50 text-emerald-600 border border-emerald-200'
               }`}
             >
-              {isSuspended ? 'Suspended' : 'Active'}
+              {isSuspended ? 'Suspended' : isUnverified ? 'Unverified' : 'Active'}
             </Badge>
           </div>
 
