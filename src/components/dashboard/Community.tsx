@@ -49,7 +49,15 @@ import {
   CheckCheck,
 } from 'lucide-react'
 import { dsaApi } from '@/lib/api'
-import { getUser } from '@/lib/auth'
+import { getToken, getUser } from '@/lib/auth'
+import {
+  acquireRealtime,
+  releaseRealtime,
+  type JoinAck,
+  type PresenceEvent,
+  type TypingEvent,
+} from '@/lib/realtime'
+import type { Socket } from 'socket.io-client'
 import { uploadToCloudinary } from '@/lib/cloudinary'
 import {
   type CommunityChannel,
@@ -329,6 +337,14 @@ export default function Community({
   >([])
   const [typingNames, setTypingNames] = useState<string[]>([])
   const typingRef = useRef(false)
+  // Push instead of poll: while the socket is joined to this channel the
+  // server sends every change and the 6-second poll stands down. `liveRef`
+  // is what the timers read; `live` is for anything that wants to render it.
+  const socketRef = useRef<Socket | null>(null)
+  const liveRef = useRef(false)
+  const [live, setLive] = useState(false)
+  // Who the socket says is typing → the moment their "typing" fades.
+  const typersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
   const typingStopRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // @mention picker state, driven by what you are typing.
   const [mentionQuery, setMentionQuery] = useState<string | null>(null)
@@ -460,6 +476,8 @@ export default function Community({
     | null
   const myId = str(me?.id || me?._id)
   const myName = str(me?.fullName || (me as { username?: string })?.username)
+  // The socket needs the bearer token explicitly (no cookies on a WebSocket).
+  const authToken = token || getToken() || ''
 
   const normalize = useCallback(
     (raw: Record<string, unknown>): Msg => {
@@ -524,7 +542,14 @@ export default function Community({
               }))
               .filter((r) => r.emoji && r.count > 0)
           : [],
-        mentionedMe: !!raw.mentionedMe,
+        // A pushed copy is formatted for nobody, so work it out from the ids.
+        mentionedMe:
+          !!raw.mentionedMe ||
+          (!own &&
+            !!myId &&
+            (!!raw.mentionsEveryone ||
+              (Array.isArray(raw.mentions) &&
+                (raw.mentions as unknown[]).map(str).includes(myId)))),
         replyTo: raw.replyTo
           ? (() => {
               const p = raw.replyTo as Record<string, unknown>
@@ -637,7 +662,7 @@ export default function Community({
     // pollers. Skip the tick while the tab is hidden — nobody is reading it —
     // and catch up the moment it is shown again.
     const poll = setInterval(() => {
-      if (document.hidden) return
+      if (document.hidden || liveRef.current) return
       load(false)
       loadSettings()
     }, 6000)
@@ -705,31 +730,194 @@ export default function Community({
   useEffect(() => {
     setOnline([])
     setTypingNames([])
-    beat()
-    const timer = setInterval(() => { if (!document.hidden) beat() }, 20000)
+    if (!liveRef.current) beat()
+    const timer = setInterval(() => {
+      if (!document.hidden && !liveRef.current) beat()
+    }, 20000)
     return () => clearInterval(timer)
   }, [beat])
+
+  // Merge a pushed copy of a message over the one on screen. The room copy
+  // knows nothing about me, so what only I know stays: which reactions are
+  // mine, how I voted, the quiz answer once it was shown to me.
+  const mergeIncoming = useCallback(
+    (prev: Msg | undefined, raw: Record<string, unknown>): Msg => {
+      const next = normalize(raw)
+      if (!prev) return next
+      const mine = new Set(prev.reactions.filter((r) => r.mine).map((r) => r.emoji))
+      const reactions = next.reactions.map((r) => ({ ...r, mine: mine.has(r.emoji) }))
+      let poll = next.poll
+      if (poll && prev.poll) {
+        const myVote = prev.poll.myVote
+        poll = {
+          ...poll,
+          myVote,
+          options: poll.options.map((o) => ({ ...o, voted: o.index === myVote })),
+          correctOption: poll.correctOption ?? prev.poll.correctOption,
+        }
+      }
+      return {
+        ...next,
+        reactions,
+        poll,
+        mentionedMe: prev.mentionedMe || next.mentionedMe,
+        readCount: Math.max(prev.readCount, next.readCount),
+      }
+    },
+    [normalize],
+  )
+
+  // One socket for as long as the Community is open.
+  useEffect(() => {
+    const s = acquireRealtime(authToken)
+    socketRef.current = s
+    return () => {
+      socketRef.current = null
+      releaseRealtime()
+    }
+  }, [authToken])
+
+  // Join the room for the channel on screen and act on what the server pushes.
+  useEffect(() => {
+    const s = socketRef.current
+    if (!s) return
+    const channel = activeChannel
+    const typers = typersRef.current
+    let joined = false
+
+    const goLive = (on: boolean) => {
+      liveRef.current = on
+      setLive(on)
+    }
+    const join = (catchUp: boolean) => {
+      s.emit('join', channel, (ack: JoinAck) => {
+        if (!ack || !ack.ok) {
+          goLive(false)
+          return
+        }
+        joined = true
+        goLive(true)
+        setOnline(ack.online ?? [])
+        setTypingNames((ack.typing ?? []).map((t) => t.fullname))
+        if (catchUp) {
+          // Whatever happened while the line was down.
+          load(false)
+          loadSettings()
+        }
+      })
+    }
+    const onConnect = () => join(true)
+    const onDisconnect = () => goLive(false)
+    const onNew = (raw: Record<string, unknown>) => {
+      if (str(raw.channelId) !== channel) return
+      const id = str(raw.id ?? raw._id)
+      setMessages((prev) =>
+        prev.some((m) => m.id === id)
+          ? prev.map((m) => (m.id === id ? mergeIncoming(m, raw) : m))
+          : [...prev, normalize(raw)],
+      )
+    }
+    const onUpdate = (raw: Record<string, unknown>) => {
+      if (str(raw.channelId) !== channel) return
+      const id = str(raw.id ?? raw._id)
+      setMessages((prev) => prev.map((m) => (m.id === id ? mergeIncoming(m, raw) : m)))
+    }
+    const onDelete = (p: { id: string; channelId: string }) => {
+      if (str(p.channelId) !== channel) return
+      setMessages((prev) => prev.filter((m) => m.id !== str(p.id)))
+    }
+    const onRead = (p: { channelId: string; counts: Record<string, number> }) => {
+      if (str(p.channelId) !== channel || !p.counts) return
+      setMessages((prev) =>
+        prev.map((m) =>
+          typeof p.counts[m.id] === 'number'
+            ? { ...m, readCount: Math.max(m.readCount, p.counts[m.id]) }
+            : m,
+        ),
+      )
+    }
+    const onSettings = (p: { channelId: string; locked?: boolean }) => {
+      if (str(p.channelId) !== channel) return
+      setLockedState(!!p.locked)
+    }
+    const onPresence = (p: PresenceEvent) => {
+      if (str(p.channelId) !== channel) return
+      setOnline(p.online ?? [])
+    }
+    const publishTypers = () => setTypingNames(Array.from(typers.keys()))
+    const onTyping = (p: TypingEvent) => {
+      if (str(p.channelId) !== channel || !p.user) return
+      const name = p.user.fullname || 'Someone'
+      const old = typers.get(name)
+      if (old) clearTimeout(old)
+      if (p.typing) {
+        // If the "stopped" never arrives (they closed the tab mid-word), fade
+        // it on our own.
+        typers.set(name, setTimeout(() => { typers.delete(name); publishTypers() }, 8000))
+      } else {
+        typers.delete(name)
+      }
+      publishTypers()
+    }
+
+    s.on('connect', onConnect)
+    s.on('disconnect', onDisconnect)
+    s.on('message:new', onNew)
+    s.on('message:update', onUpdate)
+    s.on('message:delete', onDelete)
+    s.on('message:read', onRead)
+    s.on('settings', onSettings)
+    s.on('presence', onPresence)
+    s.on('typing', onTyping)
+    if (s.connected) join(false)
+
+    return () => {
+      s.off('connect', onConnect)
+      s.off('disconnect', onDisconnect)
+      s.off('message:new', onNew)
+      s.off('message:update', onUpdate)
+      s.off('message:delete', onDelete)
+      s.off('message:read', onRead)
+      s.off('settings', onSettings)
+      s.off('presence', onPresence)
+      s.off('typing', onTyping)
+      if (joined && s.connected) s.emit('leave')
+      for (const t of typers.values()) clearTimeout(t)
+      typers.clear()
+      goLive(false)
+    }
+  }, [activeChannel, authToken, normalize, mergeIncoming, load, loadSettings])
+
+  /** "I am typing" — over the socket when it is up, else the presence ping. */
+  const sayTyping = useCallback(
+    (typing: boolean) => {
+      const s = socketRef.current
+      if (liveRef.current && s && s.connected) s.emit('typing', typing)
+      else beat(typing)
+    },
+    [beat],
+  )
 
   /** Called as you type: says "typing" once, and stops on its own. */
   const noteTyping = useCallback(() => {
     if (!typingRef.current) {
       typingRef.current = true
-      beat(true)
+      sayTyping(true)
     }
     if (typingStopRef.current) clearTimeout(typingStopRef.current)
     typingStopRef.current = setTimeout(() => {
       typingRef.current = false
-      beat(false)
+      sayTyping(false)
     }, 4000)
-  }, [beat])
+  }, [sayTyping])
 
   const stopTyping = useCallback(() => {
     if (typingStopRef.current) clearTimeout(typingStopRef.current)
     if (typingRef.current) {
       typingRef.current = false
-      beat(false)
+      sayTyping(false)
     }
-  }, [beat])
+  }, [sayTyping])
 
   const runSearch = useCallback(async () => {
     const q = searchTerm.trim()
@@ -1922,7 +2110,16 @@ export default function Community({
             </h2>
             <p className='truncate text-[10px] font-medium text-slate-400'>
               {members.length} scholar{members.length === 1 ? '' : 's'} ·{' '}
-              <span className='font-bold text-emerald-600'>{online.length} online</span>
+              <span className='font-bold text-emerald-600'>
+                {live && (
+                  <span
+                    className='mr-1 inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 align-middle'
+                    title='Live — new messages arrive on their own'
+                    aria-label='Live'
+                  />
+                )}
+                {online.length} online
+              </span>
               {locked && <span className='ml-1 font-bold text-rose-500'>· locked</span>}
             </p>
           </div>
