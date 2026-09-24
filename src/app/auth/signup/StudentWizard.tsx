@@ -1,5 +1,10 @@
 'use client'
 
+// Student sign-up in two pages: who you are, then what you are studying. The
+// guardian's details are asked for later, in the portal, so nobody is held up
+// at the door. The Terms & Conditions are a checkbox on page two, with the
+// full text one tap away in a pop-up for anyone who wants to read it.
+
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -35,6 +40,7 @@ import {
   usernameFromEmail,
 } from '@/lib/registration'
 import { addStudent } from '@/lib/studentsStore'
+import TermsDialog from '@/components/TermsDialog'
 
 const DEPARTMENTS = [
   { value: 'science', label: 'Science' },
@@ -52,7 +58,7 @@ function needsDepartment(classLevel?: string, programmes?: string[]): boolean {
 
 const schema = z
   .object({
-    // Step 1
+    // Page 1 — about you
     fullname: z.string().min(2, 'Full name is required'),
     email: z.string().email('Enter a valid email'),
     whatsapp: z
@@ -60,35 +66,23 @@ const schema = z
       .regex(/^\d+$/, 'Numbers only')
       .min(10, 'Enter a valid number')
       .max(11, 'Maximum 11 digits'),
-    password: z.string().min(6, 'Min. 6 characters'),
-    confirmPassword: z.string(),
-    // Step 2
     gender: z.string().min(1, 'Select your gender'),
     dob: z.string().min(1, 'Select your date of birth'),
     state: z.string().min(1, 'Select your state'),
+    passport: z.string().optional(),
+    password: z.string().min(6, 'Min. 6 characters'),
+    confirmPassword: z.string(),
+    // Page 2 — your studies
     school: z.string().min(2, 'Enter your school'),
     classLevel: z.string().min(1, 'Select your class/level'),
     learningMode: z.string().min(1, 'Select a learning mode'),
-    passport: z.string().optional(),
-    // Step 3
     programmes: z
       .array(z.string())
       .min(1, 'Select at least one programme')
       .max(2, 'You can pick up to 2 programmes'),
-    // Department (Science/Art/Commercial) — required for SS1–SS3, WAEC, JAMB,
-    // Post-UTME students; ignored for others.
     department: z.string().optional(),
-    // Step 4
-    guardianName: z.string().min(2, 'Parent/Guardian name is required'),
-    guardianPhone: z
-      .string()
-      .regex(/^\d+$/, 'Numbers only')
-      .min(10, 'Enter a valid number')
-      .max(11, 'Maximum 11 digits'),
-    guardianEmail: z.string().email('Enter a valid email').or(z.literal('')).optional(),
-    // Step 5
     acceptTerms: z.literal(true, {
-      errorMap: () => ({ message: 'You must accept the Terms & Conditions' }),
+      errorMap: () => ({ message: 'Please tick the box to accept the Terms & Conditions' }),
     }),
   })
   .refine((d) => d.password === d.confirmPassword, {
@@ -102,21 +96,12 @@ const schema = z
 
 type FormValues = z.infer<typeof schema>
 
-const STEP_FIELDS: Record<number, (keyof FormValues)[]> = {
-  1: ['fullname', 'email', 'whatsapp', 'password', 'confirmPassword'],
-  2: ['gender', 'dob', 'state', 'school', 'classLevel', 'learningMode'],
-  3: ['programmes', 'department'],
-  4: ['guardianName', 'guardianPhone', 'guardianEmail'],
-  5: ['acceptTerms'],
+const PAGE_FIELDS: Record<number, (keyof FormValues)[]> = {
+  1: ['fullname', 'email', 'whatsapp', 'gender', 'dob', 'state', 'password', 'confirmPassword'],
+  2: ['school', 'classLevel', 'learningMode', 'programmes', 'department', 'acceptTerms'],
 }
 
-const STEPS = [
-  'Account',
-  'Profile',
-  'Programmes',
-  'Guardian',
-  'Terms',
-]
+const STEPS = ['About you', 'Your studies']
 
 export default function StudentWizard() {
   const router = useRouter()
@@ -126,15 +111,16 @@ export default function StudentWizard() {
   const [status, setStatus] = useState('')
   const [error, setError] = useState('')
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
+  const [termsOpen, setTermsOpen] = useState(false)
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     mode: 'onTouched',
     defaultValues: {
-      fullname: '', email: '', whatsapp: '', password: '', confirmPassword: '',
-      gender: '', dob: '', state: '', school: '', classLevel: '', learningMode: '',
-      passport: '', programmes: [], department: '', guardianName: '',
-      guardianPhone: '', guardianEmail: '', acceptTerms: false as unknown as true,
+      fullname: '', email: '', whatsapp: '', gender: '', dob: '', state: '', passport: '',
+      password: '', confirmPassword: '',
+      school: '', classLevel: '', learningMode: '', programmes: [], department: '',
+      acceptTerms: false as unknown as true,
     },
   })
   const { register, watch, setValue, trigger, getValues, formState } = form
@@ -146,15 +132,20 @@ export default function StudentWizard() {
   const learningMode = watch('learningMode')
   const classLevel = watch('classLevel')
   const department = watch('department')
+  const acceptTerms = watch('acceptTerms')
 
   const next = async () => {
     setError('')
-    const ok = await trigger(STEP_FIELDS[step], { shouldFocus: true })
-    if (ok) setStep((s) => Math.min(5, s + 1))
+    const ok = await trigger(PAGE_FIELDS[1], { shouldFocus: true })
+    if (ok) {
+      setStep(2)
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
   }
   const back = () => {
     setError('')
-    setStep((s) => Math.max(1, s - 1))
+    setStep(1)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const handlePassport = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -188,8 +179,7 @@ export default function StudentWizard() {
     reader.readAsDataURL(file)
   }
 
-  // Toggle a programme, enforcing the 1–2 selection cap: clicking an already-
-  // selected one removes it; a new one is added only while under the max of 2.
+  // Toggle a programme, enforcing the 1–2 selection cap.
   const toggleProgramme = (p: string) => {
     const curr = getValues('programmes')
     if (curr.includes(p)) {
@@ -197,13 +187,10 @@ export default function StudentWizard() {
     } else if (curr.length < 2) {
       setValue('programmes', [...curr, p], { shouldValidate: true })
     }
-    // else: already at 2 — ignore the click (cap reached)
   }
 
-  // Final action: register the student for FREE. The server creates the account
-  // and emails an OTP straight away — no payment at signup. After verifying the
-  // OTP they can log in; paying to unlock a track/tier happens later from the
-  // dashboard (Unlock plans).
+  // Register the student for FREE. The server creates the account and emails an
+  // OTP straight away; paying to unlock a plan happens later from the dashboard.
   const completeRegistration = async () => {
     setError('')
     const ok = await trigger()
@@ -219,8 +206,7 @@ export default function StudentWizard() {
     const mode: 'physical' | 'online' =
       v.learningMode === 'Physical' ? 'physical' : 'online'
 
-    // Persist the local stores + pending profile, then go to OTP. Runs ONLY
-    // after the server has confirmed the account and emailed the code.
+    // Runs ONLY after the server has confirmed the account and emailed the code.
     const proceedToOtp = () => {
       rememberEnrolmentChoice({
         track,
@@ -228,8 +214,6 @@ export default function StudentWizard() {
         programmes: v.programmes,
         classLevel: v.classLevel,
       })
-      // Record the student so the tutor/admin roster shows them (browser-local
-      // until the backend links students to tutors — see studentsStore.ts).
       addStudent({
         key: username,
         name: v.fullname,
@@ -256,10 +240,7 @@ export default function StudentWizard() {
       router.push('/auth/verify-otp')
     }
 
-    // Payload shaped to the live API contract (POST /api/auth/register):
-    // whatsappNumber, currentLevel, learningMode enum, nested guardianInfo.
-    // No price / payment — signup is free. `username`/`role` are harmless
-    // extras for our local stores.
+    // POST /api/auth/register. No guardianInfo: that is collected in the portal.
     const payload = {
       fullname: v.fullname,
       email: v.email.toLowerCase(),
@@ -270,28 +251,19 @@ export default function StudentWizard() {
       stateOfResidence: v.state,
       institution: v.school,
       currentLevel: v.classLevel,
-      learningMode: mode, // 'online' | 'physical'
+      learningMode: mode,
       programmes: v.programmes,
       ...(v.department ? { department: v.department } : {}),
-      guardianInfo: {
-        fullname: v.guardianName,
-        phoneNumber: v.guardianPhone,
-        ...(v.guardianEmail ? { email: v.guardianEmail } : {}),
-      },
       profilePic: v.passport || undefined,
       username,
       role: 'student',
     }
 
-    // Register (free) — the server creates the account and emails an OTP.
     setStatus('Creating your account…')
     try {
       await dsaApi.auth.register(payload)
     } catch (err) {
-      // Never move on unless the server said the account exists. This used to
-      // "continue in preview mode" when the server could not be reached — which
-      // sent students to the code screen for an account that was never created
-      // and a code that was never emailed. Nothing they typed there could work.
+      // Never move on unless the server said the account exists.
       setBusy(false)
       setStatus('')
       setError(
@@ -303,8 +275,6 @@ export default function StudentWizard() {
       )
       return
     }
-
-    // Account created — go verify the OTP that was just emailed.
     proceedToOtp()
   }
 
@@ -364,17 +334,17 @@ export default function StudentWizard() {
 
   return (
     <div className='space-y-6'>
-      {/* Progress */}
-      <div className='flex items-center justify-between'>
+      {/* Progress: two pages */}
+      <div className='flex items-center gap-3'>
         {STEPS.map((label, i) => {
           const n = i + 1
           const done = n < step
           const active = n === step
           return (
-            <div key={label} className='flex flex-col items-center flex-1'>
+            <div key={label} className='flex flex-1 items-center gap-2'>
               <div
                 className={cn(
-                  'h-8 w-8 rounded-full flex items-center justify-center text-[11px] font-black transition-all',
+                  'h-8 w-8 shrink-0 rounded-full flex items-center justify-center text-[11px] font-black transition-all',
                   active
                     ? 'bg-[#002EFF] text-white'
                     : done
@@ -386,12 +356,13 @@ export default function StudentWizard() {
               </div>
               <span
                 className={cn(
-                  'text-[8px] font-black uppercase mt-1 tracking-wide',
+                  'text-[10px] font-black uppercase tracking-wide',
                   active ? 'text-[#002EFF]' : 'text-slate-400',
                 )}
               >
                 {label}
               </span>
+              {i === 0 && <span className='mx-1 h-px flex-1 bg-slate-200' />}
             </div>
           )
         })}
@@ -413,36 +384,10 @@ export default function StudentWizard() {
         >
           {step === 1 && (
             <>
-              <h3 className='text-sm font-black text-slate-800'>Create Your Account</h3>
-              {input('fullname', 'Full Name *', 'John Doe', 'text', User)}
-              {input('email', 'Email Address *', 'you@example.com', 'email', AtSign)}
-              {input('whatsapp', 'WhatsApp Number *', '08012345678', 'text', Phone, { numeric: true, maxLength: 11 })}
-              <div className='space-y-1.5'>
-                <label className='text-[10px] font-bold text-slate-500 uppercase'>Password *</label>
-                <div className='relative'>
-                  <Lock className='absolute left-3 top-1/2 -translate-y-1/2 text-slate-400' size={14} />
-                  <input
-                    type={showPass ? 'text' : 'password'}
-                    {...register('password')}
-                    placeholder='••••••••'
-                    className='w-full h-11 pl-9 pr-10 rounded-lg bg-slate-50 border border-transparent focus:bg-white outline-none text-sm font-medium'
-                  />
-                  <button type='button' onClick={() => setShowPass(!showPass)} className='absolute right-3 top-1/2 -translate-y-1/2 text-slate-400'>
-                    {showPass ? <EyeOff size={15} /> : <Eye size={15} />}
-                  </button>
-                </div>
-                {errors.password && <p className='text-[10px] font-bold text-rose-500'>{errors.password.message}</p>}
-              </div>
-              {input('confirmPassword', 'Confirm Password *', '••••••••', 'password')}
-            </>
-          )}
+              <h3 className='text-sm font-black text-slate-800'>About you</h3>
 
-          {step === 2 && (
-            <>
-              <h3 className='text-sm font-black text-slate-800'>Complete Your Profile</h3>
-
-              {/* Passport */}
-              <div className='flex flex-col items-center gap-2 pb-2'>
+              {/* Passport (optional) */}
+              <div className='flex flex-col items-center gap-2 pb-1'>
                 <label htmlFor='wiz-passport' className='relative h-24 w-24 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 flex items-center justify-center cursor-pointer overflow-hidden hover:border-[#002EFF] group'>
                   {passport ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -450,11 +395,12 @@ export default function StudentWizard() {
                   ) : (
                     <div className='flex flex-col items-center text-slate-400 group-hover:text-[#002EFF]'>
                       <Camera size={20} />
-                      <span className='text-[8px] font-black uppercase mt-1'>Passport</span>
+                      <span className='text-[8px] font-black uppercase mt-1'>Photo</span>
                     </div>
                   )}
                   <input id='wiz-passport' type='file' accept='image/*' className='hidden' onChange={handlePassport} />
                 </label>
+                <p className='text-[9px] font-bold uppercase tracking-wide text-slate-400'>Passport photo (optional)</p>
                 {passport && (
                   <button type='button' onClick={() => setValue('passport', '')} className='flex items-center gap-1 text-[9px] font-black uppercase text-rose-500'>
                     <Trash2 size={11} /> Remove
@@ -464,7 +410,10 @@ export default function StudentWizard() {
                 {errors.passport && <p className='text-[10px] font-bold text-rose-500'>{errors.passport.message as string}</p>}
               </div>
 
-              {/* Gender */}
+              {input('fullname', 'Full Name *', 'John Doe', 'text', User)}
+              {input('email', 'Email Address *', 'you@example.com', 'email', AtSign)}
+              {input('whatsapp', 'WhatsApp Number *', '08012345678', 'text', Phone, { numeric: true, maxLength: 11 })}
+
               <div className='space-y-1.5'>
                 <label className='text-[10px] font-bold text-slate-500 uppercase'>Gender *</label>
                 <div className='grid grid-cols-2 gap-2'>
@@ -477,24 +426,47 @@ export default function StudentWizard() {
                 {errors.gender && <p className='text-[10px] font-bold text-rose-500'>{errors.gender.message}</p>}
               </div>
 
-              {input('dob', 'Date of Birth *', '', 'date')}
-
-              {/* State */}
-              <div className='space-y-1.5'>
-                <label className='text-[10px] font-bold text-slate-500 uppercase'>State of Residence *</label>
-                <select {...register('state')} className='w-full h-11 px-3 rounded-lg bg-slate-50 border border-transparent focus:bg-white outline-none text-sm font-medium'>
-                  <option value=''>Select your state</option>
-                  {NIGERIAN_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
-                {errors.state && <p className='text-[10px] font-bold text-rose-500'>{errors.state.message}</p>}
+              <div className='grid grid-cols-1 gap-4 sm:grid-cols-2'>
+                {input('dob', 'Date of Birth *', '', 'date')}
+                <div className='space-y-1.5'>
+                  <label className='text-[10px] font-bold text-slate-500 uppercase'>State of Residence *</label>
+                  <select {...register('state')} className='w-full h-11 px-3 rounded-lg bg-slate-50 border border-transparent focus:bg-white outline-none text-sm font-medium'>
+                    <option value=''>Select your state</option>
+                    {NIGERIAN_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                  {errors.state && <p className='text-[10px] font-bold text-rose-500'>{errors.state.message}</p>}
+                </div>
               </div>
 
-              {input('school', 'Current School/Institution *', 'e.g. Government College', 'text')}
-
-              {/* Class level */}
               <div className='space-y-1.5'>
-                <label className='text-[10px] font-bold text-slate-500 uppercase'>Current Class/Level *</label>
-                <div className='grid grid-cols-2 sm:grid-cols-4 gap-2'>
+                <label className='text-[10px] font-bold text-slate-500 uppercase'>Password *</label>
+                <div className='relative'>
+                  <Lock className='absolute left-3 top-1/2 -translate-y-1/2 text-slate-400' size={14} />
+                  <input
+                    type={showPass ? 'text' : 'password'}
+                    {...register('password')}
+                    placeholder='••••••••'
+                    className='w-full h-11 pl-9 pr-10 rounded-lg bg-slate-50 border border-transparent focus:bg-white outline-none text-sm font-medium'
+                  />
+                  <button type='button' onClick={() => setShowPass(!showPass)} className='absolute right-3 top-1/2 -translate-y-1/2 text-slate-400' aria-label={showPass ? 'Hide password' : 'Show password'}>
+                    {showPass ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
+                {errors.password && <p className='text-[10px] font-bold text-rose-500'>{errors.password.message}</p>}
+              </div>
+              {input('confirmPassword', 'Confirm Password *', '••••••••', 'password')}
+            </>
+          )}
+
+          {step === 2 && (
+            <>
+              <h3 className='text-sm font-black text-slate-800'>Your studies</h3>
+
+              {input('school', 'Current School / Institution *', 'e.g. Government College', 'text')}
+
+              <div className='space-y-1.5'>
+                <label className='text-[10px] font-bold text-slate-500 uppercase'>Current Class / Level *</label>
+                <div className='grid grid-cols-2 sm:grid-cols-3 gap-2'>
                   {CLASS_LEVELS.map((c) => (
                     <div key={c} onClick={() => setValue('classLevel', c, { shouldValidate: true })} className={pill(classLevel === c)}>
                       {c}
@@ -504,7 +476,6 @@ export default function StudentWizard() {
                 {errors.classLevel && <p className='text-[10px] font-bold text-rose-500'>{errors.classLevel.message}</p>}
               </div>
 
-              {/* Learning mode */}
               <div className='space-y-1.5'>
                 <label className='text-[10px] font-bold text-slate-500 uppercase'>Preferred Learning Mode *</label>
                 <div className='grid grid-cols-2 gap-2'>
@@ -516,104 +487,80 @@ export default function StudentWizard() {
                 </div>
                 {errors.learningMode && <p className='text-[10px] font-bold text-rose-500'>{errors.learningMode.message}</p>}
               </div>
-            </>
-          )}
 
-          {step === 3 && (
-            <>
-              <h3 className='text-sm font-black text-slate-800'>Programme Enrollment</h3>
-              <p className='text-[11px] text-slate-500 font-medium'>Select the programme(s) you want to enrol in — choose 1 or 2.</p>
-              <div className='grid grid-cols-1 sm:grid-cols-2 gap-2'>
-                {PROGRAMMES.map((p) => {
-                  const active = programmes.includes(p)
-                  const atMax = programmes.length >= 2 && !active
-                  return (
-                    <div
-                      key={p}
-                      onClick={() => toggleProgramme(p)}
-                      className={cn(
-                        'p-3 rounded-xl border flex items-center gap-2 transition-all',
-                        active
-                          ? 'bg-blue-50 border-[#002EFF] cursor-pointer'
-                          : atMax
-                            ? 'bg-slate-50 border-slate-100 opacity-50 cursor-not-allowed'
-                            : 'bg-white border-slate-100 hover:bg-slate-50 cursor-pointer',
-                      )}
-                    >
-                      <div className={cn('h-4 w-4 rounded flex items-center justify-center shrink-0', active ? 'bg-[#002EFF] text-white' : 'border border-slate-300')}>
-                        {active && <CheckCircle2 size={12} />}
+              <div className='space-y-1.5'>
+                <label className='text-[10px] font-bold text-slate-500 uppercase'>Programme(s) * <span className='normal-case font-medium text-slate-400'>— choose 1 or 2</span></label>
+                <div className='grid grid-cols-1 sm:grid-cols-2 gap-2'>
+                  {PROGRAMMES.map((p) => {
+                    const active = programmes.includes(p)
+                    const atMax = programmes.length >= 2 && !active
+                    return (
+                      <div
+                        key={p}
+                        onClick={() => toggleProgramme(p)}
+                        className={cn(
+                          'p-3 rounded-xl border flex items-center gap-2 transition-all',
+                          active
+                            ? 'bg-blue-50 border-[#002EFF] cursor-pointer'
+                            : atMax
+                              ? 'bg-slate-50 border-slate-100 opacity-50 cursor-not-allowed'
+                              : 'bg-white border-slate-100 hover:bg-slate-50 cursor-pointer',
+                        )}
+                      >
+                        <div className={cn('h-4 w-4 rounded flex items-center justify-center shrink-0', active ? 'bg-[#002EFF] text-white' : 'border border-slate-300')}>
+                          {active && <CheckCircle2 size={12} />}
+                        </div>
+                        <span className={cn('text-[11px] font-bold', active ? 'text-[#002EFF]' : 'text-slate-600')}>{p}</span>
                       </div>
-                      <span className={cn('text-[11px] font-bold', active ? 'text-[#002EFF]' : 'text-slate-600')}>{p}</span>
-                    </div>
-                  )
-                })}
+                    )
+                  })}
+                </div>
+                <p className='text-[10px] font-bold text-slate-400'>
+                  {programmes.length}/2 selected{programmes.length >= 2 && ' — maximum reached'}
+                </p>
+                {errors.programmes && <p className='text-[10px] font-bold text-rose-500'>{errors.programmes.message as string}</p>}
               </div>
-              <p className='text-[10px] font-bold text-slate-400'>
-                {programmes.length}/2 selected
-                {programmes.length >= 2 && ' — maximum reached'}
-              </p>
-              {errors.programmes && <p className='text-[10px] font-bold text-rose-500'>{errors.programmes.message as string}</p>}
 
               {needsDepartment(classLevel, programmes) && (
-                <div className='pt-2'>
-                  <h3 className='text-sm font-black text-slate-800'>Department *</h3>
-                  <p className='text-[11px] text-slate-500 font-medium mb-2'>
-                    Pick your department so you only see your subjects &amp; timetable.
-                  </p>
+                <div className='space-y-1.5'>
+                  <label className='text-[10px] font-bold text-slate-500 uppercase'>Department *</label>
                   <div className='grid grid-cols-3 gap-2'>
                     {DEPARTMENTS.map((d) => (
-                      <div
-                        key={d.value}
-                        onClick={() =>
-                          setValue('department', d.value, { shouldValidate: true })
-                        }
-                        className={pill(department === d.value)}
-                      >
+                      <div key={d.value} onClick={() => setValue('department', d.value, { shouldValidate: true })} className={pill(department === d.value)}>
                         {d.label}
                       </div>
                     ))}
                   </div>
-                  {errors.department && (
-                    <p className='text-[10px] font-bold text-rose-500 mt-1'>
-                      {errors.department.message as string}
-                    </p>
-                  )}
+                  <p className='text-[10px] font-medium text-slate-400'>So you only see your subjects and timetable.</p>
+                  {errors.department && <p className='text-[10px] font-bold text-rose-500'>{errors.department.message as string}</p>}
                 </div>
               )}
-            </>
-          )}
 
-          {step === 4 && (
-            <>
-              <h3 className='text-sm font-black text-slate-800'>Parent/Guardian Information</h3>
-              {input('guardianName', 'Parent/Guardian Name *', 'Full name', 'text', User)}
-              {input('guardianPhone', 'Parent/Guardian Phone *', '08012345678', 'text', Phone, { numeric: true, maxLength: 11 })}
-              {input('guardianEmail', 'Parent/Guardian Email (Optional)', 'guardian@example.com', 'email', AtSign)}
-            </>
-          )}
-
-          {step === 5 && (
-            <>
-              <h3 className='text-sm font-black text-slate-800'>Terms &amp; Conditions</h3>
-              <div className='p-4 rounded-xl bg-slate-50 border border-slate-100 text-[11px] text-slate-500 font-medium leading-relaxed max-h-40 overflow-y-auto'>
-                By registering you agree to attend classes, complete assessments, and abide by the academy&apos;s code of conduct.
+              {/* Terms — a checkbox, with the full text a tap away */}
+              <div className='rounded-xl border border-slate-100 bg-slate-50 p-3'>
+                <label className='flex items-start gap-3 cursor-pointer'>
+                  <input type='checkbox' {...register('acceptTerms')} className='mt-0.5 h-5 w-5 shrink-0 accent-[#002EFF]' />
+                  <span className='text-[11px] font-bold leading-snug text-slate-600'>
+                    I accept the DSA{' '}
+                    <button
+                      type='button'
+                      onClick={() => setTermsOpen(true)}
+                      className='text-[#002EFF] underline underline-offset-2 hover:text-blue-700'
+                    >
+                      Terms &amp; Conditions
+                    </button>
+                  </span>
+                </label>
+                {errors.acceptTerms && <p className='mt-1.5 text-[10px] font-bold text-rose-500'>{errors.acceptTerms.message as string}</p>}
               </div>
-              <label className='flex items-start gap-3 cursor-pointer'>
-                <input type='checkbox' {...register('acceptTerms')} className='mt-0.5 h-4 w-4 accent-[#002EFF]' />
-                <span className='text-[11px] font-bold text-slate-600'>I accept the DSA Terms &amp; Conditions</span>
-              </label>
-              {errors.acceptTerms && <p className='text-[10px] font-bold text-rose-500'>{errors.acceptTerms.message as string}</p>}
 
-              <div className='flex items-center gap-3 p-4 rounded-xl bg-blue-50 border border-blue-100'>
-                <ShieldCheck className='text-[#002EFF] shrink-0' size={20} />
-                <div>
-                  <p className='text-[11px] font-black text-[#002EFF] uppercase'>Free to join</p>
-                  <p className='text-[10px] font-bold text-slate-500'>
-                    Create your account for free — we&apos;ll email you a code to
-                    verify it. Unlock tutorials &amp; premium features anytime
-                    from your dashboard.
-                  </p>
-                </div>
+              <div className='flex items-center gap-3 p-3 rounded-xl bg-blue-50 border border-blue-100'>
+                <ShieldCheck className='text-[#002EFF] shrink-0' size={18} />
+                <p className='text-[10px] font-bold text-slate-500'>
+                  <span className='font-black text-[#002EFF] uppercase'>Free to join.</span>{' '}
+                  We&apos;ll email you a code to verify your account. Your parent or
+                  guardian&apos;s details can be added from your portal afterwards.
+                </p>
               </div>
 
               <button
@@ -637,17 +584,25 @@ export default function StudentWizard() {
 
       {/* Nav */}
       <div className='flex items-center gap-3 pt-2'>
-        {step > 1 && (
+        {step === 2 && (
           <button type='button' onClick={back} disabled={busy} className='flex items-center gap-1 px-5 h-12 rounded-xl border border-slate-200 text-slate-500 font-black text-[11px] uppercase hover:bg-slate-50 disabled:opacity-50'>
             <ArrowLeft size={15} /> Back
           </button>
         )}
-        {step < 5 && (
+        {step === 1 && (
           <button type='button' onClick={next} className='flex-1 flex items-center justify-center gap-2 h-12 rounded-xl bg-[#002EFF] text-white font-black text-[11px] uppercase shadow-lg shadow-blue-100 hover:bg-blue-700 active:scale-[0.98] transition-all'>
-            {step === 1 ? 'Create Account' : 'Continue'} <ArrowRight size={15} />
+            Continue <ArrowRight size={15} />
           </button>
         )}
       </div>
+
+      <TermsDialog
+        open={termsOpen}
+        onClose={() => setTermsOpen(false)}
+        onAccept={() => setValue('acceptTerms', true as const, { shouldValidate: true })}
+      />
+      {/* Keeps the compiler honest about the watched value being used. */}
+      <span className='hidden' aria-hidden data-accepted={acceptTerms ? '1' : '0'} />
     </div>
   )
 }

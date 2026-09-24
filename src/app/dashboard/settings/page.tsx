@@ -54,6 +54,11 @@ export default function SettingsView() {
   const [examTrack, setExamTrack] = useState('')
   // Programmes the student enrolled for — drives the self-serve track switcher.
   const [programmes, setProgrammes] = useState<string[]>([])
+  // Parent/guardian — asked for here rather than at sign-up, so registration
+  // stays short. A student can save the rest of the form without it.
+  const [guardianName, setGuardianName] = useState('')
+  const [guardianPhone, setGuardianPhone] = useState('')
+  const [guardianEmail, setGuardianEmail] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [saveMsg, setSaveMsg] = useState('')
   const [saveErr, setSaveErr] = useState('')
@@ -88,6 +93,10 @@ export default function SettingsView() {
         (u.examTrack as string) || (u.examType as string) || '',
       )
       const progs = u.programmes ?? u.subjectsOfInterest
+      const g = (u.guardianInfo ?? {}) as Record<string, unknown>
+      setGuardianName((g.fullname as string) || '')
+      setGuardianPhone((g.phoneNumber as string) || '')
+      setGuardianEmail((g.email as string) || '')
       if (Array.isArray(progs)) setProgrammes(progs as string[])
       const subs = u.subjects ?? u.subjectsOfInterest
       setSubjects(
@@ -179,6 +188,15 @@ export default function SettingsView() {
             }
           : {}),
         ...(role === 'student' && department ? { department } : {}),
+        ...(role === 'student' && guardianName.trim() && guardianPhone.trim()
+          ? {
+              guardianInfo: {
+                fullname: guardianName.trim(),
+                phoneNumber: guardianPhone.trim(),
+                ...(guardianEmail.trim() ? { email: guardianEmail.trim() } : {}),
+              },
+            }
+          : {}),
         ...(role === 'student' && examTrack ? { examTrack } : {}),
       })
       // Refresh the cached user so the sidebar/header pick up the new name/avatar.
@@ -388,6 +406,26 @@ export default function SettingsView() {
                     <p className='text-[9px] font-bold text-slate-400 ml-1'>
                       Sets which subjects, quizzes &amp; timetable you see.
                     </p>
+                  </div>
+                )}
+
+                {role === 'student' && (
+                  <div className='space-y-3 rounded-2xl border border-slate-100 bg-slate-50/60 p-3'>
+                    <div>
+                      <p className='text-[10px] font-black uppercase tracking-wide text-slate-500'>
+                        Parent / Guardian
+                      </p>
+                      <p className='text-[9px] font-bold text-slate-400'>
+                        {guardianName && guardianPhone
+                          ? 'We use this to keep them informed about your progress and fees.'
+                          : 'Not added yet — please add a parent or guardian we can reach.'}
+                      </p>
+                    </div>
+                    <div className='grid grid-cols-1 md:grid-cols-2 gap-3'>
+                      <Field label='Guardian Name' value={guardianName} onChange={setGuardianName} placeholder='Full name' />
+                      <Field label='Guardian Phone' value={guardianPhone} onChange={setGuardianPhone} placeholder='080…' />
+                    </div>
+                    <Field label='Guardian Email (optional)' value={guardianEmail} onChange={setGuardianEmail} type='email' placeholder='guardian@example.com' />
                   </div>
                 )}
 
