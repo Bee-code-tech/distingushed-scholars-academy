@@ -42,9 +42,6 @@ import {
 import { addStudent } from '@/lib/studentsStore'
 import TermsDialog from '@/components/TermsDialog'
 
-/** See completeRegistration. Settings shows this as "not added yet". */
-export const GUARDIAN_PLACEHOLDER = { fullname: 'Not yet provided', phoneNumber: '0000000000' }
-
 const DEPARTMENTS = [
   { value: 'science', label: 'Science' },
   { value: 'art', label: 'Art' },
@@ -264,17 +261,7 @@ export default function StudentWizard() {
 
     setStatus('Creating your account…')
     try {
-      try {
-        await dsaApi.auth.register(payload)
-      } catch (first) {
-        // Until the server update that makes guardian details optional is
-        // deployed, the live API still insists on them. Rather than turn a
-        // student away, register with a clearly-marked placeholder that the
-        // portal treats as "not added yet". Remove once the backend is merged.
-        const msg = first instanceof Error ? first.message : ''
-        if (!/guardian/i.test(msg)) throw first
-        await dsaApi.auth.register({ ...payload, guardianInfo: GUARDIAN_PLACEHOLDER })
-      }
+      await dsaApi.auth.register(payload)
     } catch (err) {
       // Never move on unless the server said the account exists.
       setBusy(false)

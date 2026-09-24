@@ -94,8 +94,9 @@ export default function SettingsView() {
       )
       const progs = u.programmes ?? u.subjectsOfInterest
       const g = (u.guardianInfo ?? {}) as Record<string, unknown>
-      // The sign-up form may have sent a placeholder (see StudentWizard);
-      // show that as empty so the student is asked for the real details.
+      // For a short while on 2026-09-24 the sign-up form sent a placeholder
+      // guardian ("Not yet provided"); show that as empty so those students
+      // are still asked for the real details.
       const placeholder = g.fullname === 'Not yet provided'
       setGuardianName(placeholder ? '' : (g.fullname as string) || '')
       setGuardianPhone(placeholder ? '' : (g.phoneNumber as string) || '')
